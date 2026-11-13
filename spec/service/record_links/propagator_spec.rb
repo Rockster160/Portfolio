@@ -762,6 +762,136 @@ RSpec.describe RecordLinks::Propagator do
       expect(user.prompts.count).to eq(1)
     end
 
+    it "asks only its owner, who and when, when the chore has no settings of its own" do
+      log_event!("Whisper", notes: "Down")
+
+      expect(partner.prompts).to be_empty
+      expect(user.prompts.sole.options.pluck("question")).to eq(["Who did it?", "When?"])
+    end
+
+    describe "a chore that asks the whole household more than who" do
+      let!(:fed) {
+        chore!("Puppy Fed").tap { |c|
+          c.update!(who_did_it: {
+            ask:       :household,
+            questions: [
+              { key: :food, question: "What did she eat?" },
+              { key: :amount, question: "How much?" },
+            ],
+          })
+        }
+      }
+
+      before do
+        Prompt.where(user_id: partner.id).delete_all
+        link!(:event, "Whisper", :chore, "Puppy Fed", source_scope: "Fed", ask_who: true)
+      end
+
+      def copies
+        Prompt.where("params->>'chore_name' = ?", "Puppy Fed").where(user_id: [user.id, partner.id])
+      end
+
+      def answer_as!(person, prompt, response)
+        RecordLinks::Guard.reset!
+        prompt.update!(response: response)
+        Jil::Executor.trigger(person, :prompt, prompt.with_jil_attrs(status: :complete))
+      end
+
+      it "asks each person their own copy, with the chore's questions after who and when", :aggregate_failures do
+        event = log_event!("Whisper", notes: "Fed")
+
+        expect(copies.pluck(:user_id)).to contain_exactly(user.id, partner.id)
+        copies.each { |prompt|
+          expect(prompt.params).to include("event_id" => event.id, "asked_for" => user.id)
+          expect(prompt.options.pluck("question")).to eq(["Who did it?", "When?", "What did she eat?", "How much?"])
+          expect(prompt.options.last(2).pluck("type")).to eq(%w[text text])
+        }
+        expect(fed.chore_completions.sole.anonymous).to be(true)
+      end
+
+      it "settles it on the first answer, from anyone, and keeps what she ate on the event", :aggregate_failures do
+        event = log_event!("Whisper", notes: "Fed")
+        at = 30.minutes.ago.change(usec: 0)
+        mine = user.prompts.sole
+
+        answer_as!(partner, partner.prompts.sole, {
+          "Who did it?"       => partner.username,
+          "When?"             => at.iso8601,
+          "What did she eat?" => " Kibble ",
+          "How much?"         => "1 cup",
+        })
+
+        completion = fed.reload.chore_completions.sole
+        expect(completion).to have_attributes(anonymous: false, user_id: partner.id, completed_at: at)
+        expect(event.reload.timestamp).to eq(at)
+        expect(event.data).to eq("food" => "Kibble", "amount" => "1 cup")
+        expect(Prompt.exists?(mine.id)).to be(false)
+        expect(partner.prompts.sole.response).to be_present
+      end
+
+      it "leaves the event's data alone when the extra questions are left empty" do
+        event = log_event!("Whisper", notes: "Fed")
+
+        answer_as!(user, user.prompts.sole, {
+          "Who did it?"       => user.username,
+          "When?"             => 5.minutes.ago.iso8601,
+          "What did she eat?" => "",
+        })
+
+        expect(event.reload.data).to be_nil
+        expect(fed.reload.chore_completions.sole.user_id).to eq(user.id)
+      end
+
+      it "takes every copy back when the stand-in is undone" do
+        log_event!("Whisper", notes: "Fed")
+
+        ChoreCompletionUndoer.call(user, fed.chore_completions.sole)
+
+        expect(copies).to be_empty
+      end
+
+      it "asks only the people named, when it names them" do
+        third = create(:user).tap { |u| ChoreHouseholdMembership.create!(chore_household: household, user: u) }
+        outsider = create(:user)
+        fed.update!(who_did_it: fed.who_did_it.merge("ask" => [partner.id, outsider.id]))
+
+        log_event!("Whisper", notes: "Fed")
+
+        expect(copies.pluck(:user_id)).to contain_exactly(user.id, partner.id)
+        expect(third.prompts).to be_empty
+      end
+    end
+
+    describe "a board press for a chore that asks the whole household" do
+      let!(:fed) { chore!("Puppy Fed").tap { |c| c.update!(who_did_it: { ask: :household }) } }
+
+      before do
+        Prompt.where(user_id: partner.id).delete_all
+        link!(:event, "Whisper", :chore, "Puppy Fed", source_scope: "Fed", ask_who: true, reverse: true)
+      end
+
+      it "logs one event, and every copy points at it" do
+        prompt = ChoreWhoDidIt.ask!(user, fed, at: Time.current)
+
+        event = user.action_events.sole
+        copies = Prompt.where("params->>'completion_id' = ?", prompt.params["completion_id"].to_s)
+        expect(copies.map { |p| p.params["event_id"] }).to eq([event.id, event.id])
+      end
+
+      it "keeps the event when someone else answers" do
+        ChoreWhoDidIt.ask!(user, fed, at: Time.current)
+        event = user.action_events.sole
+
+        prompt = partner.prompts.sole
+        RecordLinks::Guard.reset!
+        prompt.update!(response: { "Who did it?" => partner.username, "When?" => 1.minute.ago.iso8601 })
+        Jil::Executor.trigger(partner, :prompt, prompt.with_jil_attrs(status: :complete))
+
+        expect(ActionEvent.exists?(event.id)).to be(true)
+        expect(user.prompts.unanswered).to be_empty
+      end
+    end
+
     # Prod, 26 Aug 22:00: two Whisper events nineteen seconds apart, 51790 and
     # 51791, put up two identical `Who did: Puppy Down?` forms. It was one press
     # for a nap corrected by a hold for sleep - the intended way to fix it - and

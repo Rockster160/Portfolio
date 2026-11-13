@@ -8,6 +8,14 @@
 # Every way in asks through here, so they all end the same way: answered, the
 # stand-in becomes a real, paid completion; undone, the stand-in goes and so
 # does the question about it.
+#
+# A chore's `who_did_it` settings widen the question:
+#
+#   ask:       "household" asks everyone in the household, a list of user ids
+#              asks those of them who are in it. Each gets their own copy; the
+#              first answer settles it and the other copies go.
+#   questions: [{ key:, question: }] free-text questions asked alongside. A
+#              non-empty answer is stored in the event's data under `key`.
 module ChoreWhoDidIt
   module_function
 
@@ -24,40 +32,93 @@ module ChoreWhoDidIt
   # Marks `chore` done by nobody yet and asks `user` who did it. The stand-in
   # goes on `stand_in_on` when that's a different row - a split chore's own
   # sub-chore - while the question stays about the chore as it's known. `extra`
-  # rides along on the prompt for the caller's own bookkeeping. Returns the
-  # prompt, or nil when there's nobody to choose between.
+  # rides along on the prompt for the caller's own bookkeeping. Every copy
+  # carries `asked_for`, the person the doing is recorded under, so an answer
+  # from anyone else still finds their event. Returns `user`'s own copy, or nil
+  # when there's nobody to choose between.
   def ask!(user, chore, at:, stand_in_on: chore, extra: {})
     names = household_names(user)
     return nil if names.empty?
 
     stand_in = stand_in!(user, stand_in_on, at)
-    prompt = user.prompts.create!(
-      question: "Who did: #{chore.name}?",
-      params:   extra.merge(
-        source:        SOURCE,
-        chore_name:    chore.name,
-        chore_id:      chore.id,
-        completion_id: stand_in.id,
-      ),
-      options:  [
-        {
-          type:     :chips,
-          question: WHO_QUESTION,
-          choices:  names,
-          default:  likely_doer(chore, names),
-          colors:   ::PromptChips.colors(names),
-        },
-        { type: :datetime, question: WHEN_QUESTION, default: local_datetime(user, at) },
-      ],
-    )
+    prompts = recipients(user, chore).map { |person|
+      person.prompts.create!(
+        question: "Who did: #{chore.name}?",
+        params:   extra.merge(
+          source:        SOURCE,
+          chore_name:    chore.name,
+          chore_id:      chore.id,
+          completion_id: stand_in.id,
+          asked_for:     user.id,
+        ),
+        options:  options_for(person, chore, names, at),
+      )
+    }
     # A press, rather than a logged event, is the chore done with no event
     # behind it yet.
-    ::RecordLinks::Propagator.log_stand_in_event(user, stand_in, prompt) if extra[:event_id].blank?
-    ::Jil.trigger(user, :prompt, prompt.with_jil_attrs(state: :create), auth: :link)
-    # Asked where they already are, too: the question is one dropdown over a
-    # time that's already right, and the app's prompt page is four steps away.
-    ::Buddy::PromptDelivery.post!(user, prompt)
-    prompt
+    ::RecordLinks::Propagator.log_stand_in_event(user, stand_in, prompts) if extra[:event_id].blank?
+    prompts.each { |prompt|
+      ::Jil.trigger(prompt.user, :prompt, prompt.with_jil_attrs(state: :create), auth: :link)
+      # Asked where they already are, too: the question is one dropdown over a
+      # time that's already right, and the app's prompt page is four steps away.
+      ::Buddy::PromptDelivery.post!(prompt.user, prompt)
+    }
+    prompts.first
+  end
+
+  def options_for(person, chore, names, at)
+    [
+      {
+        type:     :chips,
+        question: WHO_QUESTION,
+        choices:  names,
+        default:  likely_doer(chore, names),
+        colors:   ::PromptChips.colors(names),
+      },
+      { type: :datetime, question: WHEN_QUESTION, default: local_datetime(person, at) },
+      *extra_questions(chore).map { |extra| { type: :text, question: extra[:question] } },
+    ]
+  end
+
+  def settings(chore)
+    chore.try(:who_did_it).to_h.with_indifferent_access
+  end
+
+  # Only ever people in the household, and `user` first, so their copy is the
+  # one handed back.
+  def recipients(user, chore)
+    ask = settings(chore)[:ask]
+    ids = Array(user.chore_household&.member_user_ids)
+    if ask.is_a?(Array)
+      ids &= ask.map(&:to_i)
+    elsif ask.to_s != "household"
+      ids = []
+    end
+
+    [user, *::User.where(id: ids).where.not(id: user.id).order(:id)]
+  end
+
+  def extra_questions(chore)
+    Array(settings(chore)[:questions]).filter_map { |extra|
+      extra = extra.to_h.with_indifferent_access
+      extra if extra[:key].present? && extra[:question].present?
+    }
+  end
+
+  # The answers to the chore's own questions, keyed for the event's data. One
+  # left empty isn't an answer.
+  def extra_answers(chore, response)
+    extra_questions(chore).each_with_object({}) { |extra, answers|
+      value = response[extra[:question]].to_s.strip
+      answers[extra[:key].to_s] = value if value.present?
+    }
+  end
+
+  # Whoever the doing is recorded under. A question asked before copies went to
+  # anyone else carries no `asked_for`, and was always asked of them.
+  def asked_for(prompt)
+    params = prompt.params.to_h.with_indifferent_access
+    ::User.find_by(id: params[:asked_for]) if params[:asked_for].present?
   end
 
   # The anonymous completion that stands until the question is answered.
@@ -92,7 +153,8 @@ module ChoreWhoDidIt
   def answer!(user, prompt)
     params   = prompt.params.to_h.with_indifferent_access
     response = prompt.response.to_h.with_indifferent_access
-    chore = find_chore(user, params)
+    owner = asked_for(prompt) || user
+    chore = find_chore(owner, params)
     return nil if chore.nil?
 
     who = ::User.find_by(username: response[WHO_QUESTION]) || user
@@ -101,9 +163,17 @@ module ChoreWhoDidIt
 
     # The event the question is about takes the answered time first, so the
     # completion below finds it as its partner instead of logging a second one.
-    event = user.action_events.find_by(id: params[:event_id]) if params[:event_id].present?
-    event&.update!(timestamp: at)
+    event = owner.action_events.find_by(id: params[:event_id]) if params[:event_id].present?
+    if event
+      answers = extra_answers(chore, response)
+      attrs = { timestamp: at }
+      attrs[:data] = event.data.to_h.merge(answers) if answers.any?
+      event.update!(attrs)
+    end
 
+    # Before the stand-in goes: undoing it retracts every copy still open, and
+    # that takes a logged event with it.
+    close_other_copies!(prompt)
     ::ChoreCompletionUndoer.call(user, stand_in) if stand_in
     leaf = chore.completion_leaf_for(who)
     unless done_already?(leaf, at)
@@ -120,22 +190,36 @@ module ChoreWhoDidIt
   def retract!(completion)
     return unless waiting?(completion)
 
-    asked = ::Prompt.unanswered.where(user_id: completion.user_id)
-    asked = asked.where("params->>'source' = ?", SOURCE)
-    asked = asked.where("params->>'completion_id' = ?", completion.id.to_s).to_a
+    asked = copies_about(completion.id).to_a
     asked.each { |prompt| drop_logged_event!(prompt) }
     asked.each(&:destroy!)
+  end
+
+  # Every copy still open about one stand-in, whoever it was asked of.
+  def copies_about(completion_id)
+    asked = ::Prompt.unanswered.where("params->>'source' = ?", SOURCE)
+    asked.where("params->>'completion_id' = ?", completion_id.to_s)
+  end
+
+  # Someone answered, so nobody else needs to. Deleting a copy settles the form
+  # it was posted as.
+  def close_other_copies!(prompt)
+    completion_id = prompt.params.to_h.with_indifferent_access[:completion_id]
+    return if completion_id.blank?
+
+    copies_about(completion_id).where.not(id: prompt.id).find_each(&:destroy!)
   end
 
   def drop_logged_event!(prompt)
     params = prompt.params.to_h.with_indifferent_access
     return unless params[:logged_event]
 
-    event = prompt.user.action_events.find_by(id: params[:event_id])
+    owner = asked_for(prompt) || prompt.user
+    event = owner.action_events.find_by(id: params[:event_id])
     return if event.nil?
 
     event.destroy!
-    ::ActionEventNotifier.notify(prompt.user, event, :removed, auth: :link)
+    ::ActionEventNotifier.notify(owner, event, :removed, auth: :link)
   end
 
   # The answer's time, to the second. The form only holds minutes, so an

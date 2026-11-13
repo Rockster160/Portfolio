@@ -276,7 +276,7 @@ module RecordLinks
     # question before anything hears about it, so the event's own cascade sees
     # the question is already asked, the answer moves the event to the answered
     # time, and taking the stand-in back takes the event with it.
-    def log_stand_in_event(user, completion, prompt)
+    def log_stand_in_event(user, completion, prompts)
       link = uphill_link(user.id, completion.chore)
       return nil if link.nil?
 
@@ -284,7 +284,9 @@ module RecordLinks
       return nil unless event_partner(user, link.source_name, link.source_scope, at).nil?
 
       event = user.action_events.create!(uphill_event_attrs(user, link).merge(timestamp: at))
-      prompt.update!(params: prompt.params.merge("event_id" => event.id, "scope" => link.source_scope, "logged_event" => true))
+      Array(prompts).each { |prompt|
+        prompt.update!(params: prompt.params.merge("event_id" => event.id, "scope" => link.source_scope, "logged_event" => true))
+      }
       ::ActionEventNotifier.notify(user, event, :added, auth: :link)
       event
     end
