@@ -4,7 +4,7 @@
 
 import QuestRules from "./rules";
 import { bindIconStack } from "../../icon_stack";
-import { iconSelect, syncIconSelect } from "../../icon_select";
+import { createSearchPicker } from "../../prompt_search";
 
 const CONDITION_OPS = [
   ["done", "is done"], ["not_done", "isn't done"],
@@ -28,14 +28,9 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-// An option is [value, label] or [value, label, icon].
-function option([value, label, icon]) {
-  return el("option", { value, text: label, dataset: { icon: icon || "" } });
-}
-
 function select(key, options, value) {
   const node = el("select", { "data-k": key });
-  options.forEach(o => node.appendChild(option(o)));
+  options.forEach(([v, label]) => node.appendChild(el("option", { value: v, text: label })));
   if (value != null && options.some(([v]) => String(v) === String(value))) node.value = String(value);
   return node;
 }
@@ -53,26 +48,41 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
   let isNew = false;
 
   const field = name => form.querySelector(`[data-field="${name}"]`);
-  iconSelect(field("target_item"));
 
   function itemOptions() {
     const board = getBoard();
     const date = QuestRules.gameDate(new Date(), QuestRules.resetHourOf(board));
     return board.items.filter(i => i.id !== editing?.id && i.kind !== "rotation").map(i => {
-      const label = QuestRules.displayName(i, QuestRules.resolveTarget(board, i, date)) || "(unnamed)";
-      return [i.id, label, i.icon];
+      const title = QuestRules.displayName(i, QuestRules.resolveTarget(board, i, date)) || "(unnamed)";
+      return { id: i.id, title, icon: i.icon };
     });
   }
 
-  // Every rotation's options, grouped under the rotation, for "Only when".
-  function visitorGroups() {
-    return getBoard().items.filter(i => i.kind === "rotation" && i.options?.length).map(rotation => {
-      const group = el("optgroup", { label: rotation.name || "Rotation", dataset: { icon: rotation.icon || "" } });
-      rotation.options.forEach(o => {
-        group.appendChild(option([`${rotation.id}${OPTION_SEP}${o.id}`, o.name || "(unnamed)", o.icon]));
-      });
-      return group;
+  // Every rotation's options, under the rotation's name, for "Only when".
+  function visitorOptions() {
+    return getBoard().items.filter(i => i.kind === "rotation" && i.options?.length).flatMap(rotation => {
+      return rotation.options.map(o => ({
+        id:      `${rotation.id}${OPTION_SEP}${o.id}`,
+        title:   o.name || "(unnamed)",
+        icon:    o.icon,
+        section: rotation.name || "Rotation",
+      }));
     });
+  }
+
+  // The quest search, holding its pick in a hidden field named `key` so the
+  // row reads it like any other, and announcing a new pick as its `change`.
+  function questPicker(attrs, options, value) {
+    const input = el("input", { type: "hidden", ...attrs, value: value || "" });
+    const picker = createSearchPicker({
+      config:   { options, placeholder: "Search quests…" },
+      value:    value ? { id: value } : null,
+      onChange: pick => {
+        input.value = pick?.id ?? "";
+        input.dispatchEvent(new Event("change"));
+      },
+    });
+    return { input, node: el("div", { class: "quests-pick" }, [input, picker]) };
   }
 
   // ---- pills (one choice) and chips (any number of choices)
@@ -115,9 +125,10 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
   const rowBuilders = {
     conditions(c) {
       const value = el("input", { type: "number", "data-k": "value", class: "quests-num", value: c.value ?? 0 });
-      const item = select("item", itemOptions(), c.item);
-      item.append(...visitorGroups());
-      if (c.option) item.value = `${c.item}${OPTION_SEP}${c.option}`;
+      const current = c.option ? `${c.item}${OPTION_SEP}${c.option}` : c.item;
+      const { input: item, node: itemPicker } = questPicker(
+        { "data-k": "item" }, [...itemOptions(), ...visitorOptions()], current,
+      );
       const op = el("select", { "data-k": "op" });
       let shownOps = null;
       const sync = () => {
@@ -134,7 +145,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
       op.addEventListener("change", sync);
       sync();
       return [
-        iconSelect(item),
+        itemPicker,
         select("when", [["today", "today"], ["yesterday", "yesterday"]], c.when || "today"),
         op, value,
       ];
@@ -144,7 +155,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
     effects(fx) {
       const verb = el("span", { class: "field-hint" });
       const preposition = el("span", { class: "field-hint" });
-      const item = select("item", itemOptions(), fx.item);
+      const { input: item, node: itemPicker } = questPicker({ "data-k": "item" }, itemOptions(), fx.item);
       const syncVerb = () => {
         const down = !!QuestRules.findItem(getBoard(), item.value)?.countDown;
         verb.textContent = down ? "takes" : "adds";
@@ -157,7 +168,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
         verb,
         el("input", { type: "number", "data-k": "amount", class: "quests-num", value: fx.amount ?? 1 }),
         preposition,
-        iconSelect(item),
+        itemPicker,
       ];
     },
     hooks(h) {
@@ -225,10 +236,8 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
     setChips("days", s.days || []);
     setChips("months", s.months || []);
 
-    const targetSelect = field("target_item");
-    targetSelect.replaceChildren(...itemOptions().map(option));
-    if (t.item) targetSelect.value = t.item;
-    syncIconSelect(targetSelect);
+    const { node: targetPicker } = questPicker({ "data-field": "target_item" }, itemOptions(), t.item);
+    modal.querySelector("[data-target-picker]").replaceChildren(targetPicker);
 
     const sections = [...new Set(board.items.map(i => i.section).filter(Boolean))];
     modal.querySelector("[data-section-list]").replaceChildren(...sections.map(n => el("option", { value: n })));

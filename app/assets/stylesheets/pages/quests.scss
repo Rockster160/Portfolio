@@ -137,6 +137,38 @@ html.html-ctr-quests {
     font-size: 16px !important;
     line-height: 1;
   }
+  // The quest search (prompt_search.js) takes the row's full width, solid
+  // over the modal, its box looking like the form's other fields.
+  .quests-pick,
+  .quests-target-pick {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .chore-form .psearch {
+    --ps-bg: #00102B;
+    --ps-bg-focus: #00102B;
+    --ps-border: #334155;
+    --ps-border-focus: var(--chores-accent);
+    --ps-menu: #00102B;
+    --ps-hover: #1F2A44;
+    --ps-active: #1E3A8A;
+    --ps-muted: var(--chores-muted);
+    --ps-accent: var(--chores-accent);
+  }
+  .chore-form .psearch .psearch-box {
+    min-height: 40px;
+    border-radius: 8px;
+  }
+  .chore-form .psearch input.psearch-input,
+  .chore-form .psearch input.psearch-input:focus {
+    width: auto;
+    box-shadow: none;
+    outline: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
   .quests-add-row {
     border: 1px dashed #334155 !important;
     color: var(--chores-muted) !important;
