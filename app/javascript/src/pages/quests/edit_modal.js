@@ -35,7 +35,7 @@ function select(key, options, value) {
   return node;
 }
 
-export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
+export function setupEditModal({ getBoard, onSave, onDelete, onReset, onSetCount }) {
   const modal = document.querySelector("[data-edit-modal]");
   const form = modal.querySelector("[data-edit-form]");
   const title = modal.querySelector("[data-edit-title]");
@@ -46,6 +46,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
   bindIconStack(iconStack);
   let editing = null;
   let isNew = false;
+  let shownCount = "";
 
   const field = name => form.querySelector(`[data-field="${name}"]`);
 
@@ -108,6 +109,12 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
       const [name, value] = node.dataset.showFor.split(":");
       node.classList.toggle("hidden", getPills(name) !== value);
     });
+    form.querySelectorAll("[data-hide-for]").forEach(node => {
+      const [name, value] = node.dataset.hideFor.split(":");
+      node.classList.toggle("hidden", getPills(name) === value);
+    });
+    syncCountNow();
+    syncAutoMatch();
   }
 
   form.addEventListener("click", e => {
@@ -120,6 +127,17 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
     const remove = e.target.closest("[data-remove-row]");
     if (remove) remove.closest(".quests-row")?.remove();
   });
+
+  // A batch quest counts itself, and a new one has nothing to set yet.
+  function syncCountNow() {
+    const row = form.querySelector("[data-count-now]");
+    row?.classList.toggle("hidden", isNew || getPills("target_mode") === "auto");
+  }
+  function syncAutoMatch() {
+    const n = field("auto_n");
+    n?.classList.toggle("hidden", field("auto_match")?.value !== "atLeast");
+  }
+  field("auto_match").addEventListener("change", syncAutoMatch);
 
   // ---- repeating rows
   const rowBuilders = {
@@ -184,6 +202,8 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
       return [select("on", [["complete", "On complete"], ["tap", "Each tap"]], h.on || "complete"), kind, label, notes];
     },
   };
+  // A batch quest's rows are written exactly like "Only when" rows.
+  rowBuilders.auto = rowBuilders.conditions;
 
   function addRow(kind, data) {
     const row = el("div", { class: "quests-row" }, rowBuilders[kind](data));
@@ -194,7 +214,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
   function readRows(kind) {
     return Array.from(form.querySelectorAll(`[data-rows="${kind}"] .quests-row`)).map(row => {
       const v = k => row.querySelector(`[data-k="${k}"]`)?.value ?? "";
-      if (kind === "conditions") {
+      if (kind === "conditions" || kind === "auto") {
         const [item, option] = v("item").split(OPTION_SEP);
         if (option) return { item, option, when: v("when"), op: v("op") };
         return { item, when: v("when"), op: v("op"), value: Number(v("value")) || 0 };
@@ -228,6 +248,11 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
     field("target_when").value = t.when || "yesterday";
     field("target_scale").value = t.mode === "ref" && t.scale != null && t.scale !== 1 ? t.scale : "";
     field("section").value = item.section || "";
+    field("auto_match").value = t.mode === "auto" ? (t.match || "all") : "all";
+    field("auto_n").value = t.mode === "auto" && t.n ? t.n : 2;
+    const target = QuestRules.resolveTarget(board, item, date);
+    shownCount = fresh ? "" : String(QuestRules.shownCount(item, QuestRules.countOf(board, item, date), target));
+    field("count_now").value = shownCount;
     field("step").value = item.step && item.step !== 1 ? item.step : "";
     ["startDate", "endDate", "from", "to"].forEach(k => { field(k).value = s[k] || ""; });
     setPills("target_mode", t.mode || "fixed");
@@ -239,13 +264,16 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
     const { node: targetPicker } = questPicker({ "data-field": "target_item" }, itemOptions(), t.item);
     modal.querySelector("[data-target-picker]").replaceChildren(targetPicker);
 
-    const sections = [...new Set(board.items.map(i => i.section).filter(Boolean))];
+    const sections = QuestRules.sectionNames(board);
     modal.querySelector("[data-section-list]").replaceChildren(...sections.map(n => el("option", { value: n })));
 
     ["conditions", "effects", "hooks"].forEach(kind => {
       form.querySelector(`[data-rows="${kind}"]`).replaceChildren();
       (item[kind] || []).forEach(row => addRow(kind, row));
     });
+    form.querySelector('[data-rows="auto"]').replaceChildren();
+    if (t.mode === "auto") (t.conditions || []).forEach(row => addRow("auto", row));
+    syncShowFor();
 
     advanced.open = !!(
       item.section || (item.step > 1) || s.days?.length || s.months?.length ||
@@ -270,6 +298,11 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
       target.when = field("target_when").value;
       const scale = parseFloat(field("target_scale").value);
       if (Number.isFinite(scale)) target.scale = scale;
+    }
+    if (mode === "auto") {
+      target.match = field("auto_match").value || "all";
+      if (target.match === "atLeast") target.n = Math.max(1, parseInt(field("auto_n").value, 10) || 1);
+      target.conditions = readRows("auto");
     }
     return {
       ...editing,
@@ -299,7 +332,10 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
     const item = read();
     if (!item.name) { field("name").focus(); return; }
     if (item.target.mode === "ref" && !item.target.item) item.target = { mode: "fixed", value: 1 };
+    const typed = field("count_now").value.trim();
+    const setTo = !isNew && item.target.mode !== "auto" && typed !== "" && typed !== shownCount;
     onSave(item, { isNew });
+    if (setTo) onSetCount(item, parseInt(typed, 10));
     close();
   });
 

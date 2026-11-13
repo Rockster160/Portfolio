@@ -401,6 +401,43 @@ html.html-ctr-quests {
   .chore-form .quests-option-settings select {
     width: auto;
   }
+
+  // A visitor card shows its week always, and its options only while a day
+  // is focused.
+  .quests-rotation:not(.focused) .qr-options,
+  .quests-rotation:not(.focused) .qr-legend {
+    display: none;
+  }
+
+  // In edit mode an empty section is still a place to drop quests.
+  &.edit-mode .chores-circles:empty {
+    min-height: 64px;
+    border: 1px dashed #334155;
+    border-radius: 12px;
+  }
+
+  // Settings' section list: a drag handle, the name, a remove button.
+  .quests-section-rows {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .quests-section-rows:empty {
+    display: none;
+  }
+  .quests-section-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+  .quests-section-handle {
+    padding: 4px 6px;
+    color: var(--chores-muted);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
 }
 
 @keyframes quests-glow {

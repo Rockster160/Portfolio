@@ -5,6 +5,8 @@
 // count several at once. Edit mode shows every quest, on the board right now
 // or not, to tap into the editor or drag into a new order or section. A
 // rotation is drawn as a card below its section's circles instead of as one.
+// Sections are drawn in the board's order (set in settings), with quests in no
+// section above them all.
 
 import QuestRules from "./rules";
 import { createStore } from "./store";
@@ -52,6 +54,17 @@ function bootQuests(root) {
   });
   const board = () => store.board;
   const today = () => QuestRules.gameDate(new Date(), QuestRules.resetHourOf(board()));
+
+  // Saves the board, first firing (or taking back) whatever a batch quest
+  // finished (or undone) by the change does. `always: false` saves only when
+  // a batch quest moved.
+  function commit({ always = true } = {}) {
+    const { fired, reversed } = QuestRules.settleAuto(board(), new Date());
+    if (!always && !fired.length && !reversed.length) return;
+    reversed.forEach(entry => { if (entry.hooks.length) store.reverseHooks(entry); });
+    store.commit();
+    fired.forEach(entry => { if (entry.hooks.length) store.fireHooks(entry); });
+  }
 
   // ------------------------------------------------------------ rendering
 
@@ -184,20 +197,22 @@ function bootQuests(root) {
     while (parent.children.length > nodes.length) parent.lastElementChild.remove();
   }
 
-  // Sections in the order their first quest appears. In play only what's on
-  // the board right now is drawn; in edit mode everything is, the rest dimmed.
+  // In play only what's on the board right now is drawn; in edit mode
+  // everything is, the rest dimmed, and an empty section shows as somewhere to
+  // drag quests into.
   function render() {
     if (dragging) return;
     const b = board();
     const now = new Date();
-    const sections = new Map();
+    const sections = new Map([["", []], ...QuestRules.sectionNames(b).map(n => [n, []])]);
     b.items.forEach(item => {
       const rotation = QuestRotation.isRotation(item);
       const visible = rotation || QuestRules.isVisible(b, item, now);
       if (!visible && !editMode) return;
-      const key = item.section || "";
-      if (!sections.has(key)) sections.set(key, []);
-      sections.get(key).push({ item, visible, rotation });
+      sections.get(item.section || "").push({ item, visible, rotation });
+    });
+    sections.forEach((entries, name) => {
+      if (!entries.length && (!editMode || !name)) sections.delete(name);
     });
 
     const seen = new Set();
@@ -258,14 +273,14 @@ function bootQuests(root) {
       return;
     }
     navigator.vibrate?.(10);
-    store.commit();
+    commit();
     if (entry.hooks.length) store.fireHooks(entry);
   }
 
   function pickOption(item, date, optionId) {
     if (!QuestRotation.toggle(board(), item, date, optionId)) return;
     navigator.vibrate?.(10);
-    store.commit();
+    commit();
   }
 
   function undoLast(item) {
@@ -273,7 +288,7 @@ function bootQuests(root) {
     if (!entry) { flash("Nothing to undo", "warn"); return; }
     navigator.vibrate?.([10, 40, 10]);
     if (entry.hooks.length) store.reverseHooks(entry);
-    store.commit();
+    commit();
     flash(entry.reset ? "Reset undone" : "Undone");
   }
 
@@ -365,7 +380,7 @@ function bootQuests(root) {
     });
     const rest = b.items.filter(i => !placed.includes(i));
     b.items = [...placed, ...rest];
-    store.commit();
+    commit();
   }
 
   function setEditMode(on) {
@@ -384,7 +399,7 @@ function bootQuests(root) {
     if (index >= 0) b.items[index] = item;
     else b.items.push(item);
     QuestRules.dropMissingVisitors(b);
-    store.commit();
+    commit();
     if (isNew) flash("Added");
   }
 
@@ -395,7 +410,7 @@ function bootQuests(root) {
       const b = board();
       b.items = b.items.filter(i => i.id !== item.id);
       QuestRules.dropMissingVisitors(b);
-      store.commit();
+      commit();
     },
   });
 
@@ -409,16 +424,31 @@ function bootQuests(root) {
         if (i.target?.item === item.id) i.target = { mode: "fixed", value: 1 };
         i.conditions = (i.conditions || []).filter(c => c.item !== item.id);
         i.effects = (i.effects || []).filter(fx => fx.item !== item.id);
+        if (QuestRules.isAuto(i)) {
+          i.target.conditions = (i.target.conditions || []).filter(c => c.item !== item.id);
+        }
       });
-      store.commit();
+      commit();
     },
     onReset(item) {
       if (QuestRules.resetItem(board(), item, new Date())) {
-        store.commit();
+        commit();
         flash("Reset — hold it to undo");
       }
     },
+    onSetCount: setCount,
   });
+
+  function setCount(item, shown) {
+    const current = QuestRules.findItem(board(), item.id) || item;
+    if (!QuestRules.setCount(board(), current, new Date(), shown)) return;
+    commit();
+    flash("Set — hold it to undo");
+  }
+
+  // A tap anywhere that isn't a visitor card's week or options folds its
+  // options away. A scroll never makes a click, so it leaves them open.
+  document.addEventListener("click", e => rotationCards.forEach(card => card.blur(e)));
 
   // ------------------------------------------------------------ modals
 
@@ -449,7 +479,7 @@ function bootQuests(root) {
     e.preventDefault();
     if (!quickName.value.trim()) { quickName.focus(); return; }
     board().items.push(quickDraft());
-    store.commit();
+    commit();
     flash("Added");
     quickName.value = "";
     quickName.focus();
@@ -469,7 +499,30 @@ function bootQuests(root) {
   const multiModal = root.querySelector("[data-multi-modal]");
   const multiForm = multiModal.querySelector("[data-multi-form]");
   const multiCount = multiModal.querySelector("[data-multi-count]");
+  const multiModes = multiModal.querySelector("[data-multi-mode]");
   let multiItem = null;
+  let multiSet = false;
+
+  // Add counts that many more; Set to puts the circle straight at that number.
+  function setMultiSet(on) {
+    multiSet = on;
+    multiModes.querySelectorAll(".pill").forEach(p => {
+      p.classList.toggle("active", (p.dataset.value === "set") === on);
+    });
+    multiModal.querySelector("[data-multi-quicks]").classList.toggle("hidden", on);
+    multiCount.min = on ? "0" : "1";
+    multiCount.placeholder = "Count";
+    if (!on || !multiItem) return;
+    const target = QuestRules.resolveTarget(board(), multiItem, today());
+    const count = QuestRules.countOf(board(), multiItem, today());
+    multiCount.placeholder = `Now ${QuestRules.shownCount(multiItem, count, target)}`;
+  }
+  multiModes.addEventListener("click", e => {
+    const pill = e.target.closest(".pill");
+    if (!pill) return;
+    setMultiSet(pill.dataset.value === "set");
+    multiCount.focus();
+  });
   const closeMulti = () => { multiModal.classList.add("hidden"); multiItem = null; };
   wireDismiss(multiModal, closeMulti);
 
@@ -483,7 +536,9 @@ function bootQuests(root) {
   });
 
   function openMulti(item) {
+    if (QuestRules.isAuto(item)) { setMultiMode(false); complete(item); return; }
     multiItem = item;
+    setMultiSet(false);
     multiModal.querySelector("[data-multi-title]").textContent = `How many — ${QuestRules.displayName(item, QuestRules.resolveTarget(board(), item, today()))}?`;
     multiCount.value = "";
     multiModal.classList.remove("hidden");
@@ -491,9 +546,12 @@ function bootQuests(root) {
   }
   function submitMulti(n) {
     const item = multiItem;
+    const set = multiSet;
     closeMulti();
     setMultiMode(false);
-    if (item && n > 0) complete(item, n);
+    if (!item || !Number.isFinite(n)) return;
+    if (set) setCount(item, n);
+    else if (n > 0) complete(item, n);
   }
   multiModal.querySelector("[data-multi-quicks]").addEventListener("click", e => {
     const pill = e.target.closest(".pill");
@@ -501,7 +559,7 @@ function bootQuests(root) {
   });
   multiForm.addEventListener("submit", e => {
     e.preventDefault();
-    submitMulti(parseInt(multiCount.value, 10) || 0);
+    submitMulti(parseInt(multiCount.value, 10));
   });
 
   // Board settings. The reset hour lives in the board blob; the name is the
@@ -513,9 +571,49 @@ function bootQuests(root) {
   const boardPath = `/quests/${root.dataset.boardId}`;
   const closeSettings = () => settingsModal.classList.add("hidden");
   wireDismiss(settingsModal, closeSettings);
+  // Sections: rename in place, × to remove, drag the handle to reorder.
+  const sectionRows = settingsModal.querySelector("[data-settings-sections]");
+  const newSectionInput = settingsModal.querySelector("[data-settings-new-section]");
+  const sectionTemplate = settingsModal.querySelector('[data-template="section-row"]');
+  let sectionSortable = null;
+
+  function sectionRow({ id, name }) {
+    const row = sectionTemplate.content.firstElementChild.cloneNode(true);
+    row.dataset.sectionId = id || "";
+    row.querySelector("input").value = name;
+    return row;
+  }
+
+  function addSectionFromInput() {
+    const name = newSectionInput.value.trim();
+    if (!name) return;
+    sectionRows.appendChild(sectionRow({ id: "", name }));
+    newSectionInput.value = "";
+  }
+  settingsModal.querySelector("[data-settings-add-section]").addEventListener("click", () => {
+    addSectionFromInput();
+    newSectionInput.focus();
+  });
+  newSectionInput.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    addSectionFromInput();
+  });
+  sectionRows.addEventListener("click", e => {
+    e.target.closest("[data-remove-section]")?.closest("[data-section-id]")?.remove();
+  });
+
   root.querySelector("[data-settings-open]").addEventListener("click", () => {
     resetHourSelect.value = String(QuestRules.resetHourOf(board()));
     nameInput.value = nameEl.textContent.trim();
+    QuestRules.syncSections(board());
+    sectionRows.replaceChildren(...board().sections.map(sectionRow));
+    newSectionInput.value = "";
+    if (!sectionSortable && typeof window.Sortable !== "undefined") {
+      sectionSortable = window.Sortable.create(sectionRows, {
+        handle: "[data-section-handle]", animation: 150, forceFallback: true, fallbackOnBody: true,
+      });
+    }
     settingsModal.classList.remove("hidden");
   });
   settingsModal.querySelector("[data-settings-form]").addEventListener("submit", e => {
@@ -523,7 +621,12 @@ function bootQuests(root) {
     const name = nameInput.value.trim();
     if (!name) { nameInput.focus(); return; }
     board().settings = { ...(board().settings || {}), resetHour: parseInt(resetHourSelect.value, 10) };
-    store.commit();
+    addSectionFromInput();
+    QuestRules.setSections(board(), Array.from(sectionRows.children).map(row => ({
+      id:   row.dataset.sectionId,
+      name: row.querySelector("input").value,
+    })));
+    commit();
     closeSettings();
     if (name !== nameEl.textContent.trim()) rename(name);
   });
@@ -567,10 +670,12 @@ function bootQuests(root) {
     if (document.visibilityState !== "visible") return;
     store.pull();
     store.flush();
+    commit({ always: false });
     render();
   });
-  // Time windows open and close, and the day rolls over, with nobody tapping.
-  setInterval(render, TICK_MS);
+  // Time windows open and close, and the day rolls over, with nobody tapping
+  // (a batch quest reading yesterday can finish on its own).
+  setInterval(() => { commit({ always: false }); render(); }, TICK_MS);
 
   // A `hicon:` icon is a pointer into the household's uploads; repaint the
   // circles once those are known, and whenever they change.
@@ -582,6 +687,7 @@ function bootQuests(root) {
   onIconPoolChanged(repaintIcons);
 
   syncConn();
+  commit({ always: false });
   render();
   store.pull();
   store.flush();

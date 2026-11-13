@@ -182,4 +182,114 @@ cases.game_day_after_reset = Q.dayKey(Q.gameDate(at(2026, 11, 5, 4, 0), 4));
   cases.down_empty = { shown: shown(), done: Q.isDone(b, shovel, day) };
 }
 
+// Setting a count: straight to the number, the shown one for a count-down
+// quest, held to the target, logged so a hold walks it back.
+{
+  const b = { settings: { resetHour: 4 }, counts: {}, log: [], items: [] };
+  const shovel = Q.newItem({ id: "down", target: { mode: "fixed", value: 100 }, reset: "never", countDown: true });
+  const stars = Q.newItem({ id: "stars", target: { mode: "fixed", value: 20 } });
+  b.items.push(shovel, stars);
+  const day = Q.gameDate(NOV4, 4);
+  const shown = () => Q.shownCount(shovel, Q.countOf(b, shovel, day), Q.resolveTarget(b, shovel, day));
+  const entry = Q.setCount(b, shovel, NOV4, 90);
+  const afterSet = shown();
+  Q.undo(b, shovel, NOV4);
+  Q.setCount(b, stars, NOV4, 500);
+  cases.set_count = {
+    shown: afterSet, hooks: entry.hooks.length, undone: shown(),
+    capped: Q.countOf(b, stars, day), same: Q.setCount(b, stars, NOV4, 20),
+  };
+}
+
+// Talk to every villager around today, fifty days over: a batch quest over
+// the talks, whose finishing adds one to a never-resetting counter. Bea only
+// lives here on Wednesdays, so she's left out on Thursday.
+{
+  const talk = (id, days = []) => Q.newItem({
+    id, name: `Talk to ${id}`, schedule: { days, months: [], startDate: "", endDate: "", from: "", to: "" },
+  });
+  const all = Q.newItem({
+    id: "all", name: "Talk to everyone",
+    target: { mode: "auto", match: "all", conditions: ["ann", "bea", "cal"].map(item => ({ item, when: "today", op: "done" })) },
+    effects: [{ on: "complete", kind: "add", item: "fifty", amount: 1 }],
+    hooks: [{ on: "complete", kind: "trigger", trigger: "talked_to_all" }],
+  });
+  const fifty = Q.newItem({ id: "fifty", name: "Talk to all for {n} days", reset: "never", target: { mode: "fixed", value: 50 } });
+  const b = { settings: { resetHour: 4 }, counts: {}, log: [], items: [talk("ann"), talk("bea", [3]), talk("cal"), all, fifty] };
+  const day = Q.gameDate(NOV4, 4);
+  const item = id => Q.findItem(b, id);
+  const fiftyCount = d => Q.countOf(b, item("fifty"), d);
+
+  Q.tap(b, item("ann"), NOV4);
+  Q.tap(b, item("bea"), NOV4);
+  const partway = { count: Q.countOf(b, all, day), target: Q.resolveTarget(b, all, day), settle: Q.settleAuto(b, NOV4).fired.length };
+  Q.tap(b, item("cal"), NOV4);
+  const fired = Q.settleAuto(b, NOV4);
+  const again = Q.settleAuto(b, NOV4);
+  const tapAuto = Q.tap(b, all, NOV4);
+  const doneDay = { done: Q.isDone(b, all, day), fifty: fiftyCount(day) };
+
+  Q.undo(b, item("cal"), NOV4);
+  const reversed = Q.settleAuto(b, NOV4).reversed;
+  const afterUndo = fiftyCount(day);
+  Q.tap(b, item("cal"), NOV4);
+  Q.settleAuto(b, NOV4);
+
+  const NOV5 = at(2026, 11, 5, 12);
+  const thu = Q.gameDate(NOV5, 4);
+  Q.tap(b, item("ann"), NOV5);
+  Q.tap(b, item("cal"), NOV5);
+  Q.settleAuto(b, NOV5);
+
+  const empty = Q.newItem({ id: "nobody", target: { mode: "auto", match: "all", conditions: [{ item: "bea", when: "today", op: "done" }] } });
+  b.items.push(empty);
+  const some = Q.newItem({ id: "some", target: { mode: "auto", match: "atLeast", n: 2, conditions: ["ann", "bea", "cal"].map(i => ({ item: i, when: "today", op: "done" })) } });
+  const any = Q.newItem({ id: "any", target: { mode: "auto", match: "any", conditions: [{ item: "bea", when: "today", op: "done" }, { item: "ann", when: "today", op: "done" }] } });
+  b.items.push(some, any);
+
+  cases.batch = {
+    partway, doneDay,
+    fired: fired.fired.map(e => e.hooks.map(h => [h.trigger, h.data.action])),
+    again: again.fired.length + again.reversed.length,
+    tap_auto: tapAuto,
+    reversed: reversed.length, after_undo: afterUndo,
+    thursday: { target: Q.resolveTarget(b, all, thu), done: Q.isDone(b, all, thu), fifty: fiftyCount(thu) },
+    nobody_visible: Q.isVisible(b, empty, NOV5),
+    at_least: { count: Q.countOf(b, some, thu), target: Q.resolveTarget(b, some, thu), done: Q.isDone(b, some, thu) },
+    any: { target: Q.resolveTarget(b, any, thu), done: Q.isDone(b, any, thu) },
+  };
+}
+
+// Two batch quests reading each other don't go round forever.
+{
+  const a = Q.newItem({ id: "a", target: { mode: "auto", match: "all", conditions: [{ item: "b", when: "today", op: "done" }] } });
+  const bq = Q.newItem({ id: "b", target: { mode: "auto", match: "all", conditions: [{ item: "a", when: "today", op: "done" }] } });
+  const b = { settings: { resetHour: 4 }, counts: {}, log: [], items: [a, bq] };
+  cases.batch_loop = { done: Q.isDone(b, a, Q.gameDate(NOV4, 4)), fired: Q.settleAuto(b, NOV4).fired.length };
+}
+
+// Sections: the existing names in the order their quests sit, then renamed,
+// reordered and one removed from settings.
+{
+  const b = { settings: { resetHour: 4 }, counts: {}, log: [], items: [
+    Q.newItem({ id: "x", section: "Visitors" }),
+    Q.newItem({ id: "y", section: "Dailies" }),
+    Q.newItem({ id: "z", section: "Old" }),
+    Q.newItem({ id: "w" }),
+  ] };
+  Q.syncSections(b);
+  const first = Q.sectionNames(b);
+  const ids = Object.fromEntries(b.sections.map(s => [s.name, s.id]));
+  Q.setSections(b, [
+    { id: ids.Dailies, name: "Dailies" },
+    { id: ids.Visitors, name: "Villagers" },
+    { id: "", name: "Long term" },
+  ]);
+  cases.sections = {
+    first,
+    after: Q.sectionNames(b),
+    items: b.items.map(i => i.section),
+  };
+}
+
 process.stdout.write(JSON.stringify({ cases }));

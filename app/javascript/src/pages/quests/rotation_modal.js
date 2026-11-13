@@ -2,6 +2,7 @@
 // option — its own icon, a name, and whether it's a daily pick (on any day or
 // a fixed one) or an extra that can turn up alongside.
 
+import QuestRules from "./rules";
 import QuestRotation from "./rotation";
 import { bindIconStack } from "../../icon_stack";
 import { loadIconPool } from "../../icon_picker";
@@ -84,7 +85,7 @@ export function setupRotationModal({ getBoard, onSave, onDelete }) {
     rowsEl.replaceChildren();
     (item.options || []).forEach(addRow);
     if (!item.options?.length) addRow(QuestRotation.newOption());
-    const sections = [...new Set(getBoard().items.map(i => i.section).filter(Boolean))];
+    const sections = QuestRules.sectionNames(getBoard());
     modal.querySelector("[data-rotation-sections]").replaceChildren(...sections.map(n => el("option", { value: n })));
     modal.classList.remove("hidden");
     if (fresh) nameInput.focus();
