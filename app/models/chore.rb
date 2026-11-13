@@ -22,6 +22,7 @@
 #  starts_on           :date
 #  target_count        :integer          default(1), not null
 #  threshold_seconds   :integer
+#  who_did_it          :jsonb            not null
 #  created_at          :datetime         not null
 #  dismissed_until     :date
 #  tags                :text             default([]), not null, is an Array
