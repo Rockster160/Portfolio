@@ -10,6 +10,11 @@ const CONDITION_OPS = [
   [">", "more than"], [">=", "at least"], ["=", "exactly"],
   ["<=", "at most"], ["<", "fewer than"], ["!=", "not"],
 ];
+const VISITOR_OPS = [["here", "is here"], ["not_here", "isn't here"]];
+
+// A rotation's option is picked as "rotationId/optionId", under its rotation's
+// name, so the same row can name a quest or a visitor.
+const OPTION_SEP = "/";
 
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
@@ -49,6 +54,17 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
     return board.items.filter(i => i.id !== editing?.id && i.kind !== "rotation").map(i => {
       const label = QuestRules.displayName(i, QuestRules.resolveTarget(board, i, date)) || "(unnamed)";
       return [i.id, `${i.icon ? `${i.icon} ` : ""}${label}`];
+    });
+  }
+
+  // Every rotation's options, grouped under the rotation, for "Only when".
+  function visitorGroups() {
+    return getBoard().items.filter(i => i.kind === "rotation" && i.options?.length).map(rotation => {
+      const group = el("optgroup", { label: rotation.name || "Rotation" });
+      rotation.options.forEach(o => {
+        group.appendChild(el("option", { value: `${rotation.id}${OPTION_SEP}${o.id}`, text: o.name || "(unnamed)" }));
+      });
+      return group;
     });
   }
 
@@ -92,12 +108,26 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
   const rowBuilders = {
     conditions(c) {
       const value = el("input", { type: "number", "data-k": "value", class: "quests-num", value: c.value ?? 0 });
-      const op = select("op", CONDITION_OPS, c.op || "done");
-      const syncValue = () => value.classList.toggle("hidden", op.value === "done" || op.value === "not_done");
-      op.addEventListener("change", syncValue);
-      syncValue();
+      const item = select("item", itemOptions(), c.item);
+      item.append(...visitorGroups());
+      if (c.option) item.value = `${c.item}${OPTION_SEP}${c.option}`;
+      const op = el("select", { "data-k": "op" });
+      let shownOps = null;
+      const sync = () => {
+        const ops = item.value.includes(OPTION_SEP) ? VISITOR_OPS : CONDITION_OPS;
+        if (ops !== shownOps) {
+          const keep = op.value || c.op;
+          op.replaceChildren(...ops.map(([v, label]) => el("option", { value: v, text: label })));
+          if (ops.some(([v]) => v === keep)) op.value = keep;
+          shownOps = ops;
+        }
+        value.classList.toggle("hidden", ops === VISITOR_OPS || op.value === "done" || op.value === "not_done");
+      };
+      item.addEventListener("change", sync);
+      op.addEventListener("change", sync);
+      sync();
       return [
-        select("item", itemOptions(), c.item),
+        item,
         select("when", [["today", "today"], ["yesterday", "yesterday"]], c.when || "today"),
         op, value,
       ];
@@ -146,7 +176,11 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
   function readRows(kind) {
     return Array.from(form.querySelectorAll(`[data-rows="${kind}"] .quests-row`)).map(row => {
       const v = k => row.querySelector(`[data-k="${k}"]`)?.value ?? "";
-      if (kind === "conditions") return { item: v("item"), when: v("when"), op: v("op"), value: Number(v("value")) || 0 };
+      if (kind === "conditions") {
+        const [item, option] = v("item").split(OPTION_SEP);
+        if (option) return { item, option, when: v("when"), op: v("op") };
+        return { item, when: v("when"), op: v("op"), value: Number(v("value")) || 0 };
+      }
       if (kind === "effects") return { on: v("on"), kind: "add", item: v("item"), amount: Number(v("amount")) || 0 };
       const hook = { on: v("on"), kind: v("kind") };
       if (hook.kind === "trigger") hook.trigger = v("label").trim();

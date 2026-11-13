@@ -383,6 +383,7 @@ function bootQuests(root) {
     const index = b.items.findIndex(i => i.id === item.id);
     if (index >= 0) b.items[index] = item;
     else b.items.push(item);
+    QuestRules.dropMissingVisitors(b);
     store.commit();
     if (isNew) flash("Added");
   }
@@ -391,7 +392,9 @@ function bootQuests(root) {
     getBoard: board,
     onSave:   saveItem,
     onDelete(item) {
-      board().items = board().items.filter(i => i.id !== item.id);
+      const b = board();
+      b.items = b.items.filter(i => i.id !== item.id);
+      QuestRules.dropMissingVisitors(b);
       store.commit();
     },
   });

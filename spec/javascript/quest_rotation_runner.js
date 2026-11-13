@@ -62,4 +62,44 @@ R.toggle(board, item, day(8, 1), "a");
 R.prune(board, WED);
 cases.pruned = { days: Object.keys(board.rotations.visitors).sort(), rotations: Object.keys(board.rotations) };
 
+// Quests that only show while a visitor is in town: picked as the day's main,
+// turned up as an extra, or coming on its fixed day. Noon on each game day.
+{
+  const wisp = option("wisp");
+  const visitors = R.newRotation({
+    id: "town", name: "Visitors", options: [wisp, option("sat", { day: 6 }), option("x", { slot: "extra" })],
+  });
+  const spirits = Q.newItem({
+    id: "spirits", name: "Collect {n} spirits", target: { mode: "fixed", value: 5 },
+    conditions: [{ item: "town", option: "wisp", when: "today", op: "here" }],
+  });
+  const quiet = Q.newItem({ id: "quiet", conditions: [{ item: "town", option: "wisp", when: "today", op: "not_here" }] });
+  const after = Q.newItem({ id: "after", conditions: [{ item: "town", option: "wisp", when: "yesterday", op: "here" }] });
+  const onSat = Q.newItem({ id: "on_sat", conditions: [{ item: "town", option: "sat", when: "today", op: "here" }] });
+  const withX = Q.newItem({ id: "with_x", conditions: [{ item: "town", option: "x", when: "today", op: "here" }] });
+  const town = { settings: { resetHour: 4 }, items: [visitors, spirits, quiet, after, onSat, withX], counts: {}, log: [] };
+  const noon = d => new Date(2026, 10, d, 12);
+  const shown = d => town.items.filter(i => !R.isRotation(i) && Q.isVisible(town, i, noon(d))).map(i => i.id);
+
+  const before = shown(12);
+  R.toggle(town, visitors, day(11, 12), "wisp");
+  R.toggle(town, visitors, day(11, 14), "x");
+  cases.visitor = {
+    before,
+    wisp_day:   shown(12),
+    next_day:   shown(13),
+    saturday:   shown(14),
+  };
+  R.toggle(town, visitors, day(11, 12), "wisp");
+  cases.visitor.wisp_taken_back = shown(12);
+
+  R.toggle(town, visitors, day(11, 12), "wisp");
+  visitors.options = visitors.options.filter(o => o.id !== "wisp");
+  Q.dropMissingVisitors(town);
+  cases.visitor.removed = {
+    spirits: Q.findItem(town, "spirits").conditions,
+    on_sat:  Q.findItem(town, "on_sat").conditions.length,
+  };
+}
+
 process.stdout.write(JSON.stringify({ cases }));
