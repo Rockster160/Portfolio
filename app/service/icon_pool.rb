@@ -153,8 +153,9 @@ module IconPool
     }
   end
 
+  # Everything but letters and digits goes, so "kk" finds K.K.
   def normalize(query)
-    query.to_s.downcase.gsub(/[\s\-_:]+/, "")
+    query.to_s.downcase.gsub(/[^\p{L}\p{N}]+/, "")
   end
 
   # Generate the set of forms to try against the keyword index. Three

@@ -128,10 +128,10 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset, onSetCount
     if (remove) remove.closest(".quests-row")?.remove();
   });
 
-  // A batch quest counts itself, and a new one has nothing to set yet.
+  // A batch quest counts itself. A new one starts at what's typed, or at 0.
   function syncCountNow() {
     const row = form.querySelector("[data-count-now]");
-    row?.classList.toggle("hidden", isNew || getPills("target_mode") === "auto");
+    row?.classList.toggle("hidden", getPills("target_mode") === "auto");
   }
   function syncAutoMatch() {
     const n = field("auto_n");
@@ -333,9 +333,9 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset, onSetCount
     if (!item.name) { field("name").focus(); return; }
     if (item.target.mode === "ref" && !item.target.item) item.target = { mode: "fixed", value: 1 };
     const typed = field("count_now").value.trim();
-    const setTo = !isNew && item.target.mode !== "auto" && typed !== "" && typed !== shownCount;
+    const setTo = item.target.mode !== "auto" && typed !== "" && typed !== shownCount;
     onSave(item, { isNew });
-    if (setTo) onSetCount(item, parseInt(typed, 10));
+    if (setTo) onSetCount(item, parseInt(typed, 10), { isNew });
     close();
   });
 

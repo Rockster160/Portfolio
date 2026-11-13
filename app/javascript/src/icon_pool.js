@@ -107,8 +107,9 @@ const IconPool = (function () {
     return (q || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   }
 
+  // Everything but letters and digits goes, so "kk" finds K.K.
   function normalize(q) {
-    return fold(q).replace(/[\s\-_:]+/g, "");
+    return fold(q).replace(/[^\p{L}\p{N}]+/gu, "");
   }
 
   const IRREGULARS = {

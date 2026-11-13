@@ -40,6 +40,13 @@ RSpec.describe IconPool do
     end
   end
 
+  describe ".normalize" do
+    it "keeps only letters and digits, so punctuation never stands between a search and a name" do
+      expect(described_class.normalize("K.K.")).to eq("kk")
+      expect(described_class.normalize("Jack-o'-Lantern 2")).to eq("jackolantern2")
+    end
+  end
+
   describe ".best_match_value" do
     it "returns the icon character string directly, or nil" do
       expect(described_class.best_match_value("brush teeth")).to eq("🪥")
