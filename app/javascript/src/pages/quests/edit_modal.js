@@ -4,6 +4,7 @@
 
 import QuestRules from "./rules";
 import { bindIconStack } from "../../icon_stack";
+import { iconSelect, syncIconSelect } from "../../icon_select";
 
 const CONDITION_OPS = [
   ["done", "is done"], ["not_done", "isn't done"],
@@ -27,9 +28,14 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
+// An option is [value, label] or [value, label, icon].
+function option([value, label, icon]) {
+  return el("option", { value, text: label, dataset: { icon: icon || "" } });
+}
+
 function select(key, options, value) {
   const node = el("select", { "data-k": key });
-  options.forEach(([v, label]) => node.appendChild(el("option", { value: v, text: label })));
+  options.forEach(o => node.appendChild(option(o)));
   if (value != null && options.some(([v]) => String(v) === String(value))) node.value = String(value);
   return node;
 }
@@ -47,22 +53,23 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
   let isNew = false;
 
   const field = name => form.querySelector(`[data-field="${name}"]`);
+  iconSelect(field("target_item"));
 
   function itemOptions() {
     const board = getBoard();
     const date = QuestRules.gameDate(new Date(), QuestRules.resetHourOf(board));
     return board.items.filter(i => i.id !== editing?.id && i.kind !== "rotation").map(i => {
       const label = QuestRules.displayName(i, QuestRules.resolveTarget(board, i, date)) || "(unnamed)";
-      return [i.id, `${i.icon ? `${i.icon} ` : ""}${label}`];
+      return [i.id, label, i.icon];
     });
   }
 
   // Every rotation's options, grouped under the rotation, for "Only when".
   function visitorGroups() {
     return getBoard().items.filter(i => i.kind === "rotation" && i.options?.length).map(rotation => {
-      const group = el("optgroup", { label: rotation.name || "Rotation" });
+      const group = el("optgroup", { label: rotation.name || "Rotation", dataset: { icon: rotation.icon || "" } });
       rotation.options.forEach(o => {
-        group.appendChild(el("option", { value: `${rotation.id}${OPTION_SEP}${o.id}`, text: o.name || "(unnamed)" }));
+        group.appendChild(option([`${rotation.id}${OPTION_SEP}${o.id}`, o.name || "(unnamed)", o.icon]));
       });
       return group;
     });
@@ -127,7 +134,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
       op.addEventListener("change", sync);
       sync();
       return [
-        item,
+        iconSelect(item),
         select("when", [["today", "today"], ["yesterday", "yesterday"]], c.when || "today"),
         op, value,
       ];
@@ -150,7 +157,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
         verb,
         el("input", { type: "number", "data-k": "amount", class: "quests-num", value: fx.amount ?? 1 }),
         preposition,
-        item,
+        iconSelect(item),
       ];
     },
     hooks(h) {
@@ -219,8 +226,9 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset }) {
     setChips("months", s.months || []);
 
     const targetSelect = field("target_item");
-    targetSelect.replaceChildren(...itemOptions().map(([v, label]) => el("option", { value: v, text: label })));
+    targetSelect.replaceChildren(...itemOptions().map(option));
     if (t.item) targetSelect.value = t.item;
+    syncIconSelect(targetSelect);
 
     const sections = [...new Set(board.items.map(i => i.section).filter(Boolean))];
     modal.querySelector("[data-section-list]").replaceChildren(...sections.map(n => el("option", { value: n })));
