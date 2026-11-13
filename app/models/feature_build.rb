@@ -116,6 +116,19 @@ class FeatureBuild < ApplicationRecord
     "[See it on the Mini page](#{Rails.application.routes.url_helpers.system_claude_url})"
   end
 
+  # The production scripts it sent, each linked to the page it's approved on,
+  # for the messages that say the build is done. Blank when it sent none.
+  def scripts_markdown
+    scripts = production_scripts.where.not(status: :skipped).order(:created_at).to_a
+    return "" if scripts.empty?
+
+    helpers = Rails.application.routes.url_helpers
+    lines = scripts.map { |script|
+      "- [#{script.title}](#{helpers.system_production_script_url(script)}) (#{script.status_label})"
+    }
+    "Production scripts to approve:\n#{lines.join("\n")}"
+  end
+
   # The phrase a person typed, cut to something that reads as a name in the
   # Claude app's session list and on a branch.
   # Titles were once cut at 60 characters; this is the whole line one was cut

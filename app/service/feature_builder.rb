@@ -222,7 +222,7 @@ module FeatureBuilder
     repaint!(build)
     announce!(
       build,
-      "**#{build.full_title}** closed itself: #{build.closed_reason}",
+      with_scripts(build, "**#{build.full_title}** closed itself: #{build.closed_reason}"),
       "Closed: #{build.full_title}",
     )
     refresh_chip!(build.user)
@@ -275,7 +275,11 @@ module FeatureBuilder
   def announce_pr!(build)
     pr = "[PR ##{build.pr_number}](#{build.pr_url})"
     text = "**#{build.full_title}** is ready for review: #{pr}. #{build.link_markdown}"
-    announce!(build, text, "PR ready: #{build.full_title}")
+    announce!(build, with_scripts(build, text), "PR ready: #{build.full_title}")
+  end
+
+  def with_scripts(build, text)
+    [text, build.scripts_markdown].compact_blank.join("\n\n")
   end
 
   def announce_waiting!(build)
