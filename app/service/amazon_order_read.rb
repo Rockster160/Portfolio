@@ -69,32 +69,45 @@ module AmazonOrderRead
       stand_in = AmazonOrder.find(order[:order_id], order[:order_id])
       entries = items_of(order)
       next if stand_in.nil? || entries.length != 1
-      next if stand_in.name.blank? || stand_in.name == stand_in.listed_name
+      next if stand_in.name == stand_in.listed_name
 
-      asin = entries.first.last[:asin]
-      next if AmazonItemCatalog.get(asin)&.dig(:name).present?
+      item = entries.first.last
+      next unless own_name?(stand_in.name, item[:title])
+      next if label_for(item[:asin], item[:title])
 
-      AmazonItemCatalog.set(asin, name: stand_in.name)
+      AmazonItemCatalog.set(item[:asin], name: stand_in.name, source: :typed)
     }
   end
 
-  # One model call for every product that has no name yet. A name already in
-  # the catalog is either an earlier one of these or one given by hand, and
-  # either way it stays.
+  # One model call for every product without a label yet. A label already in
+  # the catalog stays (label_for); anything else there is replaced. When the
+  # call fails nothing is stored, so the next read asks again.
   def name!(orders, user)
     items = orders.flat_map { |order| items_of(order).map(&:last) }
     titles = items.to_h { |item| [item[:asin], item[:title].to_s] }
-    unnamed = titles.select { |asin, title|
-      title.present? && AmazonItemCatalog.get(asin)&.dig(:name).blank?
-    }
+    unnamed = titles.select { |asin, title| title.present? && label_for(asin, title).nil? }
     return if unnamed.empty?
 
     names = AmazonFriendlyName.call(unnamed.values, user: user)
     unnamed.keys.each_with_index { |asin, index|
-      title = unnamed[asin]
-      name = names[index].presence || AmazonProductName.tidy(title)
-      AmazonItemCatalog.set(asin, name: name, full_name: title)
+      next if names[index].blank?
+
+      AmazonItemCatalog.set(asin, name: names[index], full_name: unnamed[asin], source: :named)
     }
+  end
+
+  # A catalog name typed by the person or given by AmazonFriendlyName. One
+  # from before either is kept only when it reads as the person's own.
+  def label_for(asin, title)
+    entry = AmazonItemCatalog.get(asin) || {}
+    return entry[:name] if entry[:source].present? && entry[:name].present?
+
+    entry[:name] if own_name?(entry[:name], title)
+  end
+
+  # Short, and not just words lifted from the title.
+  def own_name?(name, title)
+    AmazonFriendlyName.label?(name) && !AmazonFriendlyName.from_title?(name, title)
   end
 
   def apply_order(order)
@@ -112,7 +125,13 @@ module AmazonOrderRead
     row.order_id_confirmed = true
     row.full_name = item[:title] if item[:title].present?
     row.listed_name ||= item[:title]
-    row.name = AmazonItemCatalog.get(asin)&.dig(:name).presence || row.name.presence || item[:title]
+    # Without a label yet, the tidied title until the next read names it: long,
+    # but it still says what the thing is, where a cut to fit would often not.
+    row.name = (
+      label_for(asin, item[:title]) ||
+      (row.name if own_name?(row.name, item[:title])) ||
+      AmazonProductName.tidy(item[:title])
+    )
     row.email_ids = (Array(row.email_ids) + Array(stand_in&.email_ids)).uniq
     row.tracking_number = shipment[:tracking_id] if shipment[:tracking_id].present?
     row.errors = []

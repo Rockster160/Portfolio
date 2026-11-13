@@ -32,13 +32,17 @@ class AmazonItemCatalog
     all[asin.to_s]
   end
 
-  def self.set(asin, name: nil, listed_name: nil, full_name: nil)
+  # `source` says where a name came from: :typed by the person, or :named by
+  # AmazonFriendlyName. A name without one is from before either, and is
+  # usually a cut-down title.
+  def self.set(asin, name: nil, listed_name: nil, full_name: nil, source: nil)
     return if asin.blank?
     return unless asin?(asin)
 
     catalog = all
     entry = catalog[asin.to_s] || {}
     entry[:name]        = name.to_s        if name.present?
+    entry[:source]      = source           if name.present? && source.present?
     entry[:listed_name] = listed_name.to_s if listed_name.present?
     entry[:full_name]   = full_name.to_s   if full_name.present?
     catalog[asin.to_s] = entry

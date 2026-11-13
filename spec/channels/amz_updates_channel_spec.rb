@@ -92,6 +92,34 @@ RSpec.describe AmzUpdatesChannel, type: :channel do
     end
   end
 
+  describe "rename action" do
+    let(:title) { "INBIKE Breathable Mesh Motorcycle Gloves Touchscreen…" }
+
+    before {
+      AmazonOrder.create(order_id: "111-9715284-9035439", item_id: "B0861WJ3CY", name: title)
+    }
+
+    def rename(text)
+      perform :change, {
+        "order_id" => "111-9715284-9035439",
+        "item_id"  => "B0861WJ3CY",
+        "rename"   => text,
+      }
+    end
+
+    it "keeps a name typed for the item, for the next order of it" do
+      rename("Bike Gloves")
+
+      expect(AmazonItemCatalog.get("B0861WJ3CY")[:name]).to eq("Bike Gloves")
+    end
+
+    it "leaves the catalog alone when only the date moved" do
+      travel_to(Time.zone.local(2026, 11, 13, 12)) { rename("Nov 20") }
+
+      expect(AmazonItemCatalog.get("B0861WJ3CY")).to be_nil
+    end
+  end
+
   describe "merge keeps the target's custom url" do
     it "does not overwrite the target's link when merging a carrier shipment in" do
       target = AmazonOrder.create(order_id: "CUSTOM", item_id: "CUSTOM-9", name: "Computer Desk", carrier: :manual, custom_url: "https://wayfair.com/x")

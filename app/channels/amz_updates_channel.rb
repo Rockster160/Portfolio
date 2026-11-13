@@ -44,9 +44,10 @@ class AmzUpdatesChannel < ApplicationCable::Channel
       # back as due tomorrow the moment it saved.
       order.delivery_date ||= User.me.perceived_today
 
-      # Persist the (possibly user-edited) name to the per-ASIN catalog so the
-      # next order of the same SKU reuses it without another GPT call.
-      AmazonItemCatalog.set(order.item_id, name: order.name) if order.name.present?
+      # A name typed here goes to the per-ASIN catalog so the next order of the
+      # same SKU reuses it. Only a typed one: a date change alone would
+      # otherwise store whatever name the row had, title and all.
+      AmazonItemCatalog.set(order.item_id, name: name.squish, source: :typed) if name.present?
     end
 
     AmazonOrder.save

@@ -60,19 +60,51 @@ RSpec.describe "Reading Amazon orders on the Mini" do
   end
 
   describe AmazonFriendlyName do
-    it "gives one name per title, and nothing for one the model skipped" do
-      allow_any_instance_of(Buddy::GPT::Client).to receive(:stream).and_return(
-        { ok: true, text: %({"names": ["Kitty Litter", ""]}) },
-      )
+    let(:client) { instance_double(Buddy::GPT::Client) }
+
+    before {
+      allow(Buddy::GPT::Client).to receive(:new).and_return(client)
       allow(BuddyUsage).to receive(:record!)
+    }
+
+    def answers(*names)
+      names.map { |batch| { ok: true, text: { names: batch }.to_json } }
+    end
+
+    it "gives one name per title, asking again for any that came back unusable" do
+      allow(client).to receive(:stream).and_return(
+        *answers(["Kitty Litter", "", "Breathable Mesh Motorcycle Gloves"], ["Bike Gloves", nil]),
+      )
 
       names = described_class.call(["Precious Cat Litter, 40 lb", "INBIKE Gloves", "Third"])
 
-      expect(names).to eq(["Kitty Litter", nil, nil])
+      expect(names).to eq(["Kitty Litter", "Bike Gloves", nil])
+    end
+
+    it "shows the model the names typed for earlier orders" do
+      AmazonItemCatalog.set("B01ICAI44S", name: "Bike Phone Mount", source: :typed)
+      AmazonItemCatalog.set("B000PKSW2I", name: "Precious Cat Classic", source: :named)
+      sent = nil
+      allow(client).to receive(:stream) { |input:, **|
+        sent = input.first[:content].first[:text]
+        answers(["Bike Gloves"]).first
+      }
+
+      described_class.call(["INBIKE Motorcycle Gloves"])
+
+      expect(sent).to include("Bike Phone Mount")
+      expect(sent).not_to include("Precious")
+    end
+
+    it "tells an old name lifted from the title from one in the person's own words" do
+      title = "INBIKE Motorcycle Gloves Breathable Mesh"
+
+      expect(described_class.from_title?("INBIKE Breathable Mesh", title)).to be(true)
+      expect(described_class.from_title?("Bike Gloves", title)).to be(false)
     end
 
     it "gives nothing when the call fails, so the caller falls back" do
-      allow_any_instance_of(Buddy::GPT::Client).to receive(:stream).and_raise(Faraday::TimeoutError)
+      allow(client).to receive(:stream).and_raise(Faraday::TimeoutError)
 
       expect(described_class.call(["Precious Cat Litter, 40 lb"])).to eq([nil])
     end

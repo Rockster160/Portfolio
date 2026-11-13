@@ -117,7 +117,9 @@ module SimpleFin
         # this SKU reuses the name instead of asking GPT for one. Guarded on
         # the id really being an ASIN: a row whose SKU isn't known yet uses its
         # ORDER id as the item id, and those must stay out of the catalog.
-        ::AmazonItemCatalog.set(order.item_id, name: name) if ::AmazonItemCatalog.asin?(order.item_id)
+        if ::AmazonItemCatalog.asin?(order.item_id)
+          ::AmazonItemCatalog.set(order.item_id, name: name, source: :typed)
+        end
         true
       rescue ::StandardError => e
         # Called straight from the banking page's memo edit, where the memo is

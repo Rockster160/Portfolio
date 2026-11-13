@@ -60,12 +60,40 @@ RSpec.describe AmazonOrderRead do
   end
 
   it "names a product once, and keeps a name it was given by hand" do
-    AmazonItemCatalog.set("B000PKSW2I", name: "Cat Litter")
+    AmazonItemCatalog.set("B000PKSW2I", name: "Cat Litter", source: :typed)
 
     read({ order_id: order_id, shipments: [shipment("Arriving tomorrow", [litter])] })
 
     expect(row("B000PKSW2I").name).to eq("Cat Litter")
     expect(AmazonFriendlyName).not_to have_received(:call)
+  end
+
+  it "renames a product whose old name is only a cut-down title" do
+    AmazonItemCatalog.set("B0861WJ3CY", name: "INBIKE Breathable Mesh")
+    allow(AmazonFriendlyName).to receive(:call).and_return(["Bike Gloves"])
+
+    read({ order_id: order_id, shipments: [shipment("Arriving tomorrow", [gloves])] })
+
+    expect(row("B0861WJ3CY").name).to eq("Bike Gloves")
+    expect(AmazonItemCatalog.get("B0861WJ3CY")[:name]).to eq("Bike Gloves")
+  end
+
+  it "keeps an old name in the person's own words" do
+    AmazonItemCatalog.set("B0861WJ3CY", name: "Riding Gloves")
+
+    read({ order_id: order_id, shipments: [shipment("Arriving tomorrow", [gloves])] })
+
+    expect(row("B0861WJ3CY").name).to eq("Riding Gloves")
+    expect(AmazonFriendlyName).not_to have_received(:call)
+  end
+
+  it "shows the whole thing when naming fails, rather than a cut, and asks again next time" do
+    allow(AmazonFriendlyName).to receive(:call).and_return([nil])
+
+    read({ order_id: order_id, shipments: [shipment("Arriving tomorrow", [gloves])] })
+
+    expect(row("B0861WJ3CY").name).to include("Gloves")
+    expect(AmazonItemCatalog.get("B0861WJ3CY")).to be_nil
   end
 
   it "replaces the stand-in an email made for the order, keeping a name given to it by hand" do
