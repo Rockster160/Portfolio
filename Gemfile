@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 gem "pg", "1.3.5"
-gem "rails", "7.1.2"
+gem "rails", "8.0.5.2"
 
 gem "bootsnap", "1.12.0"
 gem "coffee-rails", "5.0.0"
@@ -16,7 +16,7 @@ gem "uglifier", ">= 1.3.0"
 
 gem "autoprefixer-rails", "10.4.7.0"
 gem "faker", "2.21.0"
-gem "font-awesome-rails", "4.7.0.8"
+gem "font-awesome-rails", "4.7.0.9"
 gem "gmaps4rails", "2.1.2"
 gem "httparty", "0.21.0"
 gem "json", "~> 2.3"
@@ -37,7 +37,7 @@ gem "capybara", "3.37.1"
 gem "chroma", "0.2.0"
 gem "chronic", "0.10.2"
 gem "erubis", "2.7.0"
-gem "exception_notification", "4.5.0"
+gem "exception_notification", "5.0.1"
 gem "fugit", "1.5.3"
 # Normalizes Byte image uploads (HEIC -> JPEG, downscale). Needs ImageMagick
 # with the heic delegate on the box; ByteImageNormalizer degrades gracefully
@@ -90,7 +90,7 @@ gem "capistrano-rbenv",   require: false
 gem "capistrano-sidekiq", require: false
 
 group :development, :test do
-  gem "annotate", "3.2.0"
+  gem "annotaterb"
   gem "better_errors", "2.9.1"
   gem "factory_bot_rails"
   gem "listen", "3.7.1"

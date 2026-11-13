@@ -34,7 +34,7 @@ bundle exec rubocop -A                 # Auto-correct
 # Database (ALWAYS use RAILS_ENV=test — never run in dev)
 RAILS_ENV=test bx rails g migration AddFooToBar   # ALWAYS generate; never hand-name
 RAILS_ENV=test bx rails db:migrate
-bundle exec annotate                   # Update model annotations
+RAILS_ENV=test bundle exec annotaterb models   # Update model annotations
 
 # Deployment (auto-deploys on master push via GitHub Actions)
 bundle exec cap production deploy
