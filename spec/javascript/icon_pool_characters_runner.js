@@ -55,6 +55,7 @@ const first = async (q) => (await IconPool.search(q, { characters: true, limit: 
 cases.cece = (({ n, c }) => ({ n, c }))(await first("cece"));
 cases.viche_unaccented = (await first("viche")).n;
 cases.pave_accented = (await first("Pavé")).n;
+cases.kk_punctuation = await Promise.all(["kk", "k.k", "K.K."].map(async (q) => (await first(q)).n));
 cases.cookie_first =(await IconPool.search("cookie", { characters: true, limit: 1 }))[0]._kind;
 
 process.stdout.write(JSON.stringify({ cases }));

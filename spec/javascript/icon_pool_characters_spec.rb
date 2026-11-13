@@ -44,6 +44,10 @@ RSpec.describe "character faces in the icon pool (JS-side)" do
     expect(missing.pluck("n")).to eq([])
   end
 
+  it "finds a name with punctuation whether or not the search types it" do
+    expect(cases[:kk_punctuation]).to eq(["K.K.", "K.K.", "K.K."])
+  end
+
   it "puts an emoji ahead of a character who shares its name" do
     expect(cases[:cookie_first]).to eq("emoji")
   end
