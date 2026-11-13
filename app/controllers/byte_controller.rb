@@ -638,7 +638,7 @@ class ByteController < ApplicationController
     # natural on mobile (period is closer to the space bar than slash);
     # the dispatcher strips whichever one was used. A command has no bubble to
     # hang an image on, so an attachment sent alongside one is dropped, except
-    # by `/feature`, which hands it to the build. A blob left behind is
+    # by `/feature`, which keeps it on its request and hands it to the build. A blob left behind is
     # ActiveStorageSweepWorker's problem.
     #
     # A "." only counts as a slash command for a verb we know — in a Buddy
@@ -2004,6 +2004,8 @@ class ByteController < ApplicationController
         user:                  current_user,
         conversation:          conversation,
         text:                  arg,
+        typed:                 body,
+        local_id:              params[:local_id].to_s.presence,
         attachment_signed_ids: attachment_signed_ids,
       )
     when "today"

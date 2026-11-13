@@ -32,6 +32,7 @@
 // back. Clearing says "stop showing me this", not "stop doing that".
 
 import { onChipTap } from "./chip_taps";
+import { openOutside } from "../external_links";
 
 const BASE_URL = "/api/v1/background_processes";
 
@@ -266,7 +267,7 @@ export function initBuddyProcesses({ container, isBuddyActiveFn }) {
 
       const current = processes.get(p.key) || p;
       const url = destination(current);
-      if (url) window.open(url, "_blank", "noopener");
+      if (url) openOutside(url);
       else if (current.tappable) tapProcess(current.key);
     });
   }

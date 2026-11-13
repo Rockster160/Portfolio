@@ -211,6 +211,7 @@ module BuddyEvalNeeds
     # and the probe would pass for the wrong reason.
     before_bed_trigger:   { label: "a trigger hung off a list",    check: ->(u) { jil(u, /before bed/i, kind: :trigger) } },
     open_relay_question:  { label: "an open question from someone else", check: ->(u) { BuddyRelay.open_questions_for(u).exists? } },
+    pasta_timer_running:  { label: "a pasta timer counting down", check: ->(u) { Buddy::Timers.live_for(u).exists?(["name ILIKE ?", "%pasta%"]) } },
     build_asking:         { label: "a Feature Builder asking them something", check: ->(u) { FeatureBuilder.asking(u).exists? } },
     # Prompt-resident by definition - `always_loaded` IS `kind_preference` - so
     # the probe that needs it is asking whether a fact in the prompt gets read.

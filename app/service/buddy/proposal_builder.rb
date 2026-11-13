@@ -330,21 +330,58 @@ module Buddy
     # countdown fires. The queue is claimed under a lock, so a re-delivered fire
     # job can't run the follow-up twice.
     #
-    # Nothing releases it early and nothing releases it if the timer is dismissed
-    # before it rings — same escape hatch a checklist has, where walking away
-    # mid-chain just leaves the rest unposted.
+    # Nothing releases it early. A timer stopped before it rings releases
+    # nothing either, and says so (see abandon_after_stop!).
+    #
+    # A timer can hold more than one queue: a wait Buddy started, then
+    # something chained onto it later, or two things chained onto one of their
+    # own countdowns. Every one of them goes, oldest first.
     def resume_after!(timer)
-      action = timer_gate(timer)
-      return false if action.nil?
+      gates = timer_gates(timer)
+      return false if gates.empty?
 
-      queue = nil
-      action.with_lock do
-        queue = claim_deferred(action)
-        action.update!(state: :decided, decided_at: Time.current)
-      end
-      return false if queue.blank?
+      gates.map { |action|
+        queue = nil
+        action.with_lock do
+          queue = claim_deferred(action)
+          action.update!(state: :decided, decided_at: Time.current)
+        end
+        queue.present? && advance_queue!(action, queue, executed: true)
+      }.any?
+    end
 
-      advance_queue!(action, queue, executed: true)
+    # The timer was stopped before it went off, so whatever was riding it will
+    # never run. Say what, rather than leave them assuming it happened.
+    def abandon_after_stop!(timer)
+      timer_gates(timer).each { |action|
+        queue = nil
+        action.with_lock do
+          queue = claim_deferred(action)
+          action.update!(state: :decided, decided_at: Time.current)
+        end
+        named = Buddy::Tools::SetTimer.called(timer).upcase_first
+        abandon_queue!(action, queue, because: "#{named} was stopped") if queue.present?
+      }
+    end
+
+    # One timer standing in for another - a timer that starts later becoming
+    # the real countdown - takes over everything that was riding the first.
+    def move_gates!(from, to)
+      timer_gates(from).each { |action|
+        action.update!(tool_input: action.tool_input.to_h.merge("timer_id" => to.id))
+      }
+    end
+
+    # What's riding this timer, in words, for the timers Buddy can see.
+    def queued_after(timer)
+      gates = timer_gates(timer)
+      return nil if gates.empty?
+
+      gates.filter_map { |action|
+        input = action.tool_input.is_a?(Hash) ? action.tool_input : {}
+        steps = rehydrate_steps(input["deferred"])
+        queue_summary(action.user, steps, vars_on(action)) if steps.any?
+      }.join("; ").presence
     end
 
     # Is this relay a question a sequence is lined up behind? Buddy::CompanionRelay
@@ -829,13 +866,17 @@ module Buddy
       # [whether the timer ran, whether it's now holding the queue].
       def run_wait!(user, byte_message, calls, deferred: [], vars: {})
         timer_id = nil
+        attached = false
         ran = run_auto(user, byte_message, calls) { |result|
           data = result[:data]
-          timer_id ||= data[:timer_id] if result[:ok] && data.is_a?(Hash)
+          next unless result[:ok] && data.is_a?(Hash) && timer_id.nil?
+
+          timer_id = data[:timer_id]
+          attached = data[:attached].present?
         }
 
         holding = timer_id.present? && deferred.any?
-        hold_for_timer!(user, byte_message, timer_id, deferred, vars) if holding
+        hold_for_timer!(user, byte_message, timer_id, deferred, vars, attached: attached) if holding
         [ran, holding]
       end
 
@@ -898,7 +939,10 @@ module Buddy
         scope.order(:id).last
       end
 
-      def hold_for_timer!(user, byte_message, timer_id, deferred, vars)
+      # `attached` is a countdown that was already running - one of theirs, set
+      # for its own sake. It keeps ringing like any other: the steps ride its
+      # end without turning it into a wait.
+      def hold_for_timer!(user, byte_message, timer_id, deferred, vars, attached: false)
         action = ByteAction.create!(
           user:              user,
           byte_conversation: byte_message.byte_conversation,
@@ -914,16 +958,20 @@ module Buddy
         # From here the chip is a WAIT rather than a countdown they set, and it
         # stops ringing. Marked after the gate exists, so a flag can never end
         # up on a timer with nothing behind it.
-        Buddy::Timers.mark_wait!(user.timers.find_by(id: timer_id))
+        Buddy::Timers.mark_wait!(user.timers.find_by(id: timer_id)) unless attached
         action
       end
 
       def timer_gate(timer)
-        return nil if timer.nil?
+        timer_gates(timer).last
+      end
+
+      def timer_gates(timer)
+        return [] if timer.nil?
 
         scope = ByteAction.where(user_id: timer.user_id, tool_name: TIMER_GATE, state: :pending)
         scope = scope.where("tool_input->>'timer_id' = ?", timer.id.to_s)
-        scope.order(:id).last
+        scope.order(:id).to_a
       end
 
       def post_forms(user, conversation, forms, deferred: [], vars: {})
