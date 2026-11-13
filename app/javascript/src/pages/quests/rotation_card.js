@@ -1,7 +1,7 @@
 // A rotation quest's card: the week, Monday first, with each day's pick and
-// any extras under it, and below it every option. Tap a day to choose it
-// (today to start with), then tap an option to record it on that day; tap the
-// same option again to take it back.
+// any extras under it. Tapping a day focuses it and opens every option below;
+// tap an option to record it on that day, the same one again to take it back.
+// A tap anywhere else on the page (the page calls `blur`) folds them away.
 
 import QuestRules from "./rules";
 import QuestRotation from "./rotation";
@@ -33,6 +33,7 @@ export function createRotationCard({ item, getBoard, getToday, onToggle, onEdit 
   let current = item;
   let selectedKey = null;
   let shownToday = null;
+  let focused = false;
 
   const card = el("section", "quests-rotation");
   card.dataset.rotationId = item.id;
@@ -52,6 +53,7 @@ export function createRotationCard({ item, getBoard, getToday, onToggle, onEdit 
     const day = e.target.closest("[data-day]");
     if (!day) return;
     selectedKey = day.dataset.day;
+    focused = true;
     render(current);
   });
 
@@ -75,13 +77,13 @@ export function createRotationCard({ item, getBoard, getToday, onToggle, onEdit 
       column.dataset.day = key;
       column.classList.toggle("today", key === todayKey);
       column.classList.toggle("future", key > todayKey);
-      column.classList.toggle("selected", key === selected);
+      column.classList.toggle("selected", focused && key === selected);
       column.appendChild(el("span", "qr-letter", LETTERS[date.getDay()]));
 
       const slot = el("span", "qr-main");
       const main = QuestRotation.findOption(current, QuestRotation.mainOn(board, current, date));
       if (main) slot.appendChild(optionMark(main));
-      else if (key === selected) slot.appendChild(el("span", "qr-waiting", "•••"));
+      else if (focused && key === selected) slot.appendChild(el("span", "qr-waiting", "•••"));
       else slot.appendChild(el("span", "qr-dot"));
       column.appendChild(slot);
 
@@ -129,6 +131,7 @@ export function createRotationCard({ item, getBoard, getToday, onToggle, onEdit 
     if (todayKey !== shownToday) selectedKey = todayKey;
     shownToday = todayKey;
 
+    card.classList.toggle("focused", focused);
     headIcon.dataset.value = current.icon || "";
     renderIconValue(headIcon, current.icon || "");
     headName.textContent = current.name || "Rotation";
@@ -136,5 +139,15 @@ export function createRotationCard({ item, getBoard, getToday, onToggle, onEdit 
     renderOptions(board, today);
   }
 
-  return { node: card, render };
+  // The path is read as dispatched: picking an option repaints the options,
+  // so the button tapped is no longer in the card by the time this runs.
+  function blur(event) {
+    if (!focused) return;
+    const path = event.composedPath();
+    if (path.includes(week) || path.includes(options)) return;
+    focused = false;
+    render(current);
+  }
+
+  return { node: card, render, blur };
 }

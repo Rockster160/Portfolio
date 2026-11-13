@@ -100,6 +100,7 @@
             <button type="button" class="pill" data-value="fixed">Times</button>
             <button type="button" class="pill" data-value="ref">From another quest</button>
             <button type="button" class="pill" data-value="none">No limit</button>
+            <button type="button" class="pill" data-value="auto">When others are</button>
           </div>
           <div data-show-for="target_mode:fixed">
             <div class="repeat-detail">
@@ -123,6 +124,28 @@
           </div>
           <span class="field-hint" data-show-for="target_mode:ref">Off the board while that works out to 0.</span>
           <span class="field-hint" data-show-for="target_mode:none">A running count — health, points, a tally.</span>
+          <div data-show-for="target_mode:auto">
+            <div class="repeat-detail">
+              <select data-field="auto_match" class="quests-narrow">
+                <option value="all">All of these</option>
+                <option value="any">Any of these</option>
+                <option value="atLeast">At least</option>
+              </select>
+              <input type="number" min="1" data-field="auto_n" class="quests-num">
+            </div>
+            <div class="quests-rows" data-rows="auto"></div>
+            <button type="button" class="quests-add-row" data-add-row="auto">+ Row</button>
+            <span class="field-hint">
+              Fills itself in. A quest that isn't on that day's board is left out.
+              Once it's done, its effects and hooks fire for the day; undo one under it and they're taken back.
+            </span>
+          </div>
+        </div>
+
+        <div class="form-section" data-count-now>
+          <label class="field-label">Count now</label>
+          <input type="number" min="0" data-field="count_now" class="quests-num" inputmode="numeric">
+          <span class="field-hint">Type a number to put it straight there. Hold the circle to undo.</span>
         </div>
 
         <div class="form-section">
@@ -145,7 +168,7 @@
             <datalist id="quests-sections" data-section-list></datalist>
           </div>
 
-          <div class="form-section">
+          <div class="form-section" data-hide-for="target_mode:auto">
             <label class="field-label">Each tap counts</label>
             <input type="number" min="1" data-field="step" class="quests-num" placeholder="1">
           </div>
@@ -278,6 +301,10 @@
         <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
       </div>
       <form class="chore-form basic" data-multi-form autocomplete="off" novalidate>
+        <div class="pill-group" data-multi-mode>
+          <button type="button" class="pill active" data-value="add">Add</button>
+          <button type="button" class="pill" data-value="set">Set to</button>
+        </div>
         <div class="pill-group" data-multi-quicks>
           <% [2, 3, 5, 10].each do |n| %>
             <button type="button" class="pill" data-value="<%= n %>"><%= n %></button>
@@ -314,6 +341,26 @@
             <% end %>
           </select>
           <span class="field-hint">Taps before this still count toward the day before.</span>
+        </div>
+        <div class="form-section">
+          <label class="field-label">Sections</label>
+          <div class="quests-section-rows" data-settings-sections></div>
+          <div class="repeat-detail">
+            <input type="text" data-settings-new-section placeholder="New section — e.g. Long term"
+                   autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+                   data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+            <button type="button" class="ghost" data-settings-add-section>Add</button>
+          </div>
+          <span class="field-hint">Drag ☰ to put them in order. Quests with no section sit above them all.</span>
+          <template data-template="section-row">
+            <div class="quests-section-row" data-section-id>
+              <span class="quests-section-handle" data-section-handle aria-hidden="true">☰</span>
+              <input type="text" aria-label="Section name"
+                     autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"
+                     data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+              <button type="button" class="quests-row-remove" data-remove-section aria-label="Remove section">×</button>
+            </div>
+          </template>
         </div>
         <div class="form-actions">
           <button type="button" class="danger" data-settings-delete>Delete board</button>

@@ -8,6 +8,8 @@
 //   items:    [Item]                   in board order
 //   counts:   { periodKey: { itemId: n } }
 //   log:      [Entry]                  recent taps, newest last, for undo
+//   sections: [{ id, name }]           section order; quests name theirs
+//   autoFired: { itemId: Entry }       what a batch quest last fired, by period
 //
 // A count is kept per PERIOD rather than per day: a daily quest's period is
 // its game day ("d:2026-11-04"), a weekly one's is the Monday that starts its
@@ -55,6 +57,7 @@ function findItem(board, id) {
 
 function countOf(board, item, date) {
   if (!item) return 0;
+  if (isAuto(item)) return autoState(board, item, date).count;
   return board.counts?.[periodKey(item, date)]?.[item.id] || 0;
 }
 
@@ -79,6 +82,7 @@ function dateFor(date, when) {
 function resolveTarget(board, item, date) {
   const t = item?.target || {};
   if (t.mode === "none") return null;
+  if (t.mode === "auto") return autoState(board, item, date).target;
   if (t.mode === "ref") {
     const ref = findItem(board, t.item);
     const scale = Number.isFinite(Number(t.scale)) && t.scale !== "" ? Number(t.scale) : 1;
@@ -89,6 +93,7 @@ function resolveTarget(board, item, date) {
 }
 
 function isDone(board, item, date) {
+  if (isAuto(item)) return autoState(board, item, date).done;
   const target = resolveTarget(board, item, date);
   return target != null && countOf(board, item, date) >= target;
 }
@@ -101,14 +106,19 @@ function minutesOf(hhmm) {
 // Days of the week and months are read off the GAME day; the time window is
 // the wall clock. An open-ended window runs to (or from) the reset hour, so
 // "from 18:00" means the rest of that game day, past midnight included.
-function scheduleMatches(schedule, now, date, resetHour) {
+function scheduleMatchesDay(schedule, date) {
   const s = schedule || {};
   if (s.days?.length && !s.days.includes(date.getDay())) return false;
   if (s.months?.length && !s.months.includes(date.getMonth() + 1)) return false;
   const key = dayKey(date);
   if (s.startDate && key < s.startDate) return false;
   if (s.endDate && key > s.endDate) return false;
+  return true;
+}
 
+function scheduleMatches(schedule, now, date, resetHour) {
+  if (!scheduleMatchesDay(schedule, date)) return false;
+  const s = schedule || {};
   let from = minutesOf(s.from);
   let to = minutesOf(s.to);
   if (from == null && to == null) return true;
@@ -185,6 +195,46 @@ function conditionPasses(board, cond, date) {
   }
 }
 
+// A batch quest ("When others are") counts itself: each of its rows is a
+// condition like "Only when" uses, and it's done when all of them, any of
+// them, or at least `n` of them hold. A row about a quest that isn't on that
+// day's board at all (its days, months, dates or conditions rule it out) is
+// left out, so "all of these talks" means everyone who is actually around. No
+// rows left means nothing to do: a target of 0, off the board.
+function isAuto(item) {
+  return item?.target?.mode === "auto";
+}
+
+// Quests reading each other through batch rows could go round in a circle;
+// one already being worked out counts as nothing done.
+const evaluating = new Set();
+
+function onBoardThatDay(board, item, date) {
+  if (!item) return false;
+  if (item.kind === "rotation") return true;
+  if (!scheduleMatchesDay(item.schedule, date)) return false;
+  return (item.conditions || []).every(c => conditionPasses(board, c, date));
+}
+
+function autoState(board, item, date) {
+  if (evaluating.has(item.id)) return { count: 0, target: 0, done: false };
+  evaluating.add(item.id);
+  try {
+    const t = item.target;
+    const rows = (t.conditions || []).filter(c => {
+      return c.option || onBoardThatDay(board, findItem(board, c.item), dateFor(date, c.when));
+    });
+    if (!rows.length) return { count: 0, target: 0, done: false };
+    const passed = rows.filter(c => conditionPasses(board, c, date)).length;
+    let target = rows.length;
+    if (t.match === "any") target = 1;
+    if (t.match === "atLeast") target = Math.min(rows.length, Math.max(1, parseInt(t.n, 10) || 1));
+    return { count: Math.min(passed, target), target, done: passed >= target };
+  } finally {
+    evaluating.delete(item.id);
+  }
+}
+
 // On the board right now: in its schedule, every condition holds, and it has
 // something to do — a target that works out to zero ("collect the 0 stars you
 // wished on") keeps it off.
@@ -215,7 +265,7 @@ function displayName(item, target) {
 // Moves another quest's count by `amount`, held between zero and its target.
 // Answers the change actually made, or null when it was already at the edge.
 function shiftItem(board, item, amount, date) {
-  if (!item || !amount) return null;
+  if (!item || !amount || isAuto(item)) return null;
   const target = resolveTarget(board, item, date);
   const count = countOf(board, item, date);
   let next = count + amount;
@@ -226,6 +276,17 @@ function shiftItem(board, item, amount, date) {
   const period = periodKey(item, date);
   addCount(board, item.id, period, delta);
   return { item: item.id, period, delta };
+}
+
+function hookFor(hook, item, count, target, times, action) {
+  return {
+    kind:    hook.kind,
+    name:    hook.name || "",
+    notes:   String(hook.notes || "").replace(/\{n\}/g, String(count)),
+    trigger: hook.trigger || "",
+    data:    { quest: displayName(item, target), count, target, times: Math.max(1, times), action },
+    state:   "pending",
+  };
 }
 
 function newId(prefix) {
@@ -243,6 +304,7 @@ function newId(prefix) {
 // only for the tap that reaches the target. Effects don't chain: a rock adding
 // to the shovel doesn't run the shovel's own effects.
 function tap(board, item, now, times = 1) {
+  if (isAuto(item)) return null;
   const date = gameDate(now, resetHourOf(board));
   const target = resolveTarget(board, item, date);
   const count = countOf(board, item, date);
@@ -267,17 +329,10 @@ function tap(board, item, now, times = 1) {
   });
 
   const after = count + delta;
-  const hooks = (item.hooks || []).filter(h => fires(h.on)).map(h => ({
-    kind:    h.kind,
-    name:    h.name || "",
-    notes:   String(h.notes || "").replace(/\{n\}/g, String(after)),
-    trigger: h.trigger || "",
-    data:    {
-      quest: displayName(item, target), count: after, target,
-      times: Math.max(1, times), action: completed ? "complete" : "tap",
-    },
-    state:   "pending",
-  }));
+  const action = completed ? "complete" : "tap";
+  const hooks = (item.hooks || []).filter(h => fires(h.on)).map(h => {
+    return hookFor(h, item, after, target, times, action);
+  });
 
   const entry = { id: newId("e"), item: item.id, at: now.getTime(), changes, hooks };
   (board.log ||= []).push(entry);
@@ -287,6 +342,7 @@ function tap(board, item, now, times = 1) {
 // Sets a quest back to zero for its current period (the shovel's "until I
 // reset it"). Logged like a tap, so a hold walks it back.
 function resetItem(board, item, now) {
+  if (isAuto(item)) return null;
   const date = gameDate(now, resetHourOf(board));
   const count = countOf(board, item, date);
   if (!count) return null;
@@ -295,6 +351,108 @@ function resetItem(board, item, now) {
   const entry = { id: newId("e"), item: item.id, at: now.getTime(), changes: [{ item: item.id, period, delta: -count }], hooks: [], reset: true };
   (board.log ||= []).push(entry);
   return entry;
+}
+
+// Puts a quest straight at a number — the one shown on its circle, so a
+// count-down shovel showing 100 is set to 90 by typing 90. Held between zero
+// and its target, logged like a tap so a hold walks it back, and fires
+// nothing: it's a correction, not a round of taps.
+function setCount(board, item, now, shown) {
+  if (!item || isAuto(item)) return null;
+  const date = gameDate(now, resetHourOf(board));
+  const target = resolveTarget(board, item, date);
+  const wanted = Math.round(Number(shown));
+  if (!Number.isFinite(wanted)) return null;
+  let value = Math.max(0, countsDown(item, target) ? target - wanted : wanted);
+  if (target != null) value = Math.min(value, target);
+  const delta = value - countOf(board, item, date);
+  if (!delta) return null;
+  const period = periodKey(item, date);
+  addCount(board, item.id, period, delta);
+  const entry = { id: newId("e"), item: item.id, at: now.getTime(), changes: [{ item: item.id, period, delta }], hooks: [], set: true };
+  (board.log ||= []).push(entry);
+  return entry;
+}
+
+// Fires each batch quest that has become done this period and takes back one
+// that no longer is (a talk under it undone). A batch quest's effects and
+// hooks all fire on finishing, once a period. It runs to a standstill, since
+// one batch quest's effect can finish another. Answers both lists so the page
+// can send and reverse their hooks.
+function settleAuto(board, now) {
+  const date = gameDate(now, resetHourOf(board));
+  const fired = [];
+  const reversed = [];
+  for (let pass = 0; pass < 5; pass++) {
+    let moved = false;
+    (board.items || []).filter(isAuto).forEach(item => {
+      const period = periodKey(item, date);
+      const last = board.autoFired?.[item.id];
+      const live = last && !last.undone && last.period === period;
+      const done = isDone(board, item, date);
+      if (done && !live) {
+        fired.push(fireAuto(board, item, date, period, now));
+        moved = true;
+      } else if (!done && live) {
+        last.changes.forEach(c => addCount(board, c.item, c.period, -c.delta));
+        last.undone = true;
+        reversed.push(last);
+        moved = true;
+      }
+    });
+    if (!moved) break;
+  }
+  return { fired, reversed };
+}
+
+function fireAuto(board, item, date, period, now) {
+  const { count, target } = autoState(board, item, date);
+  const changes = [];
+  (item.effects || []).forEach(effect => {
+    const change = shiftItem(board, findItem(board, effect.item), Number(effect.amount) || 0, date);
+    if (change) changes.push(change);
+  });
+  const hooks = (item.hooks || []).map(h => hookFor(h, item, count, target, 1, "complete"));
+  const entry = { id: newId("e"), item: item.id, at: now.getTime(), period, changes, hooks, auto: true };
+  (board.autoFired ||= {})[item.id] = entry;
+  return entry;
+}
+
+// Sections in board order: the board's own list, then any name a quest
+// carries that the list doesn't have yet (in the order those quests sit).
+function sectionNames(board) {
+  const names = (board.sections || []).map(s => s.name).filter(Boolean);
+  (board.items || []).forEach(i => {
+    if (i.section && !names.includes(i.section)) names.push(i.section);
+  });
+  return names;
+}
+
+function syncSections(board) {
+  const known = new Set((board.sections || []).map(s => s.name));
+  const missing = sectionNames(board).filter(n => !known.has(n));
+  if (board.sections && !missing.length) return;
+  board.sections = [...(board.sections || []), ...missing.map(name => ({ id: newId("s"), name }))];
+}
+
+// Takes the section list as edited in settings, in its new order. A renamed
+// section takes its quests with it; a removed one leaves them in no section.
+function setSections(board, rows) {
+  const old = new Map((board.sections || []).map(s => [s.id, s.name]));
+  const moves = new Map();
+  const next = [];
+  rows.forEach(({ id, name }) => {
+    const clean = String(name || "").trim();
+    if (old.has(id) && old.get(id) !== clean) moves.set(old.get(id), clean);
+    if (clean && !next.some(s => s.name === clean)) next.push({ id: id || newId("s"), name: clean });
+  });
+  old.forEach((name, id) => {
+    if (!rows.some(r => r.id === id)) moves.set(name, "");
+  });
+  (board.items || []).forEach(item => {
+    if (item.section && moves.has(item.section)) item.section = moves.get(item.section);
+  });
+  board.sections = next;
 }
 
 // Walks back the newest thing done to this quest in its current period —
@@ -324,6 +482,8 @@ function prune(board, now) {
   Object.keys(board.counts || {}).forEach(k => {
     if ((k.startsWith("d:") && k < dayCut) || (k.startsWith("w:") && k < weekCut)) delete board.counts[k];
   });
+  const live = new Set((board.items || []).map(i => i.id));
+  Object.keys(board.autoFired || {}).forEach(id => { if (!live.has(id)) delete board.autoFired[id]; });
   const logCut = now.getTime() - (4 * 24 * HOUR_MS);
   board.log = (board.log || []).filter(e => e.at >= logCut).slice(-500);
 }
@@ -359,8 +519,9 @@ function newItem(attrs = {}) {
 const QuestRules = {
   dayKey, addDays, gameDate, periodKey, resetHourOf, findItem, countOf,
   resolveTarget, isDone, findOption, fixedDay, rotationEntry, mainOn, extrasOn, isHere,
-  dropMissingVisitors, scheduleMatches, conditionPasses, isVisible,
-  countsDown, shownCount, displayName, tap, resetItem, undo, prune, parseQuickAdd, newItem, newId,
+  dropMissingVisitors, scheduleMatches, conditionPasses, isVisible, isAuto, autoState,
+  countsDown, shownCount, displayName, tap, resetItem, setCount, settleAuto, undo, prune,
+  sectionNames, syncSections, setSections, parseQuickAdd, newItem, newId,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = QuestRules;

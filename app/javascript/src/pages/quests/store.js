@@ -69,6 +69,7 @@ export function createStore({ boardId, onChange, onError }) {
   function commit() {
     board.updatedAt = Date.now();
     QuestRules.prune(board, new Date());
+    QuestRules.syncSections(board);
     QuestRotation.prune(board, QuestRules.gameDate(new Date(), QuestRules.resetHourOf(board)));
     saveLocal();
     notify();
@@ -196,7 +197,8 @@ export function createStore({ boardId, onChange, onError }) {
   }
 
   function settleHook(op, json) {
-    const entry = (board.log || []).find(e => e.id === op.entryId);
+    const fired = Object.values(board.autoFired || {});
+    const entry = [...(board.log || []), ...fired].find(e => e.id === op.entryId);
     const hook = entry?.hooks?.[op.index];
     if (!hook) return;
     hook.state = "sent";

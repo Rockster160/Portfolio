@@ -111,4 +111,50 @@ RSpec.describe "the quest board rules (JS-side)" do
     expect(cases[:down_after_rock]).to eq(92)
     expect(cases[:down_empty]).to eq(shown: 0, done: true)
   end
+
+  it "sets a count straight to a number, the shown one for a count-down quest" do
+    expect(cases[:set_count]).to eq(shown: 90, hooks: 0, undone: 100, capped: 20, same: nil)
+  end
+
+  describe "a batch quest: talk to every villager around, fifty days over" do
+    let(:batch) { cases[:batch] }
+
+    it "counts the talks done against the villagers around and can't be tapped" do
+      expect(batch[:partway]).to eq(count: 2, target: 3, settle: 0)
+      expect(batch[:tap_auto]).to be_nil
+    end
+
+    it "adds one to the fifty-day counter once, firing its hook as complete" do
+      expect(batch[:doneDay]).to eq(done: true, fifty: 1)
+      expect(batch[:fired]).to eq([[["talked_to_all", "complete"]]])
+      expect(batch[:again]).to eq(0)
+    end
+
+    it "takes the day back when a talk under it is undone" do
+      expect(batch[:reversed]).to eq(1)
+      expect(batch[:after_undo]).to eq(0)
+    end
+
+    it "leaves out a villager who isn't around that day" do
+      expect(batch[:thursday]).to eq(target: 2, done: true, fifty: 2)
+      expect(batch[:nobody_visible]).to be(false)
+    end
+
+    it "takes any, and at least N" do
+      expect(batch[:at_least]).to eq(count: 2, target: 2, done: true)
+      expect(batch[:any]).to eq(target: 1, done: true)
+    end
+  end
+
+  it "doesn't go round forever when batch quests read each other" do
+    expect(cases[:batch_loop]).to eq(done: false, fired: 0)
+  end
+
+  it "keeps sections in the board's order, renaming and removing them with their quests" do
+    expect(cases[:sections]).to eq(
+      first: ["Visitors", "Dailies", "Old"],
+      after: ["Dailies", "Villagers", "Long term"],
+      items: ["Villagers", "Dailies", "", ""],
+    )
+  end
 end
