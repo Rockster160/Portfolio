@@ -112,7 +112,11 @@ function bootQuests(root) {
     // the celebration; one finished by this tap draws it.
     node.classList.toggle("no-animate", done && (firstPaint || wasDone || (target || 0) > 1));
     node.classList.toggle("pending", !visible);
-    node.title = visible ? "" : "Not on the board right now";
+    node.classList.toggle("secret", !!item.hidden);
+    node.title = (
+      item.hidden ? "Hidden — only shown while editing"
+        : visible ? "" : "Not on the board right now"
+    );
     patchRing(node, item, count, target);
 
     const icon = node.querySelector("[data-icon]");
@@ -198,7 +202,7 @@ function bootQuests(root) {
   }
 
   // In play only what's on the board right now is drawn; in edit mode
-  // everything is, the rest dimmed. A named section always shows, empty or
+  // everything is, the rest dimmed and hidden quests dashed. A named section always shows, empty or
   // not; the unnamed one only when something is in it.
   function render() {
     if (dragging) return;

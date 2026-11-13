@@ -235,10 +235,16 @@ function autoState(board, item, date) {
   }
 }
 
-// On the board right now: in its schedule, every condition holds, and it has
-// something to do — a target that works out to zero ("collect the 0 stars you
-// wished on") keeps it off.
+// On the board right now: not hidden, in its schedule, every condition holds,
+// and it has something to do — a target that works out to zero ("collect the
+// 0 stars you wished on") keeps it off.
+//
+// A hidden quest is never drawn in play, only in edit mode. Everything else
+// about it is untouched: its count moves under other quests' effects, a batch
+// quest finishes and fires on its own, and rows and conditions that read it
+// treat it as on the board — it's off the page, not off the day.
 function isVisible(board, item, now) {
+  if (item?.hidden) return false;
   const resetHour = resetHourOf(board);
   const date = gameDate(now, resetHour);
   if (!scheduleMatches(item.schedule, now, date, resetHour)) return false;

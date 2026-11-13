@@ -150,6 +150,22 @@ RSpec.describe "the quest board rules (JS-side)" do
     expect(cases[:batch_loop]).to eq(done: false, fired: 0)
   end
 
+  describe "hidden quests" do
+    let(:hidden) { cases[:hidden] }
+
+    it "never shows a hidden quest on the board" do
+      expect(hidden[:before]).to eq(["rock"])
+      expect(hidden[:after]).to eq(["rock", "chest"])
+      expect(hidden[:unhid]).to be(true)
+    end
+
+    it "still counts, finishes, fires and gates other quests while hidden" do
+      expect(hidden[:gems]).to eq(3)
+      expect(hidden[:key]).to be(true)
+      expect(hidden[:fired]).to eq([["gems_found"]])
+    end
+  end
+
   it "keeps sections in the board's order, renaming and removing them with their quests" do
     expect(cases[:sections]).to eq(
       first: ["Visitors", "Dailies", "Old"],

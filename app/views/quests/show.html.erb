@@ -162,6 +162,17 @@
           <summary class="form-advanced-summary">Schedule, conditions &amp; hooks</summary>
 
           <div class="form-section">
+            <label class="field-label">On the board</label>
+            <div class="pill-group" data-pills="hidden">
+              <button type="button" class="pill" data-value="shown">Shown</button>
+              <button type="button" class="pill" data-value="hidden">Hidden</button>
+            </div>
+            <span class="field-hint" data-show-for="hidden:hidden">
+              Only shows while editing. Still counts, still fires its effects and hooks, and other quests can still read it.
+            </span>
+          </div>
+
+          <div class="form-section">
             <label class="field-label">Section</label>
             <input type="text" data-field="section" list="quests-sections" placeholder="(none)"
                    autocomplete="off" data-1p-ignore="true" data-lpignore="true">
