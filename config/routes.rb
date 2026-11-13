@@ -258,6 +258,8 @@ Rails.application.routes.draw do
     patch  "/"      => "quests#update"
     delete "/"      => "quests#destroy"
     get    "/state" => "quests#state", as: :quest_board_state
+    get    "/manifest.webmanifest" => "quests#manifest", as: :quest_board_manifest
+    get    "/icon.png" => "quests#icon", as: :quest_board_icon
     put    "/state" => "quests#save", as: nil
   end
 

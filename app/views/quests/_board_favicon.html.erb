@@ -1,0 +1,17 @@
+<%# A board installs as its own app: its own manifest (id, scope, start_url),
+  its name on the home screen, and the icon chosen in Board settings — or the
+  site's icons until one is. The manifest and icon are fetched without
+  cookies, so both carry the board's signed install token. %>
+<% board_icon = icon_url(@board) %>
+<% touch_icon = asset_path("favicon/apple-touch-icon.png") %>
+<% tab_icon = asset_path("favicon/favicon-32x32.png") %>
+<link rel="apple-touch-icon" sizes="180x180" href="<%= board_icon || touch_icon %>"
+      data-quests-favicon data-default-href="<%= touch_icon %>">
+<link rel="icon" type="image/png" href="<%= board_icon || tab_icon %>"
+      data-quests-favicon data-default-href="<%= tab_icon %>">
+<link rel="manifest" href="<%= quest_board_manifest_path(@board, t: @board.install_token, v: @board.updated_at.to_i) %>">
+<meta name="theme-color" content="<%= @board.icon_color.presence || QuestsController::DEFAULT_COLOR %>">
+<meta name="apple-mobile-web-app-title" content="<%= @board.name %>">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
