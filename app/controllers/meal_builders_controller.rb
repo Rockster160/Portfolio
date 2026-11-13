@@ -1,7 +1,11 @@
 class MealBuildersController < ApplicationController
+  include HomeScreenInstall
+
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user_or_guest
+  before_action :authorize_user_or_guest, except: [:manifest, :icon]
   before_action :set_meal_builder, only: [:show, :edit, :update, :destroy]
+  before_action :set_installed_builder, only: [:manifest, :icon]
+  helper_method :home_screen_icon_url
 
   layout "quick_actions", only: [:show]
 
@@ -10,6 +14,22 @@ class MealBuildersController < ApplicationController
   end
 
   def show
+  end
+
+  # The builder's own install manifest, so one added to a home screen opens
+  # on itself, named after itself, wearing the icon picked on its edit page.
+  def manifest
+    render_install_manifest(
+      @meal_builder,
+      id:          "meal-builder-#{@meal_builder.id}",
+      path:        meal_builder_path(@meal_builder),
+      icon_src:    home_screen_icon_url(@meal_builder),
+      description: "Meal Builder: #{@meal_builder.name}",
+    )
+  end
+
+  def icon
+    send_home_screen_icon(@meal_builder)
   end
 
   def new
@@ -38,7 +58,7 @@ class MealBuildersController < ApplicationController
         format.json { render json: @meal_builder, status: :ok }
       end
     else
-      render :edit
+      render :form
     end
   end
 
@@ -53,11 +73,23 @@ class MealBuildersController < ApplicationController
     @meal_builder = current_user.meal_builders.find_by!(parameterized_name: params[:id])
   end
 
+  def set_installed_builder
+    @meal_builder = find_installed(MealBuilder)
+    head(:not_found) if @meal_builder.nil?
+  end
+
+  def home_screen_icon_url(builder)
+    return unless builder.icon?
+
+    icon_meal_builder_path(builder, t: builder.install_token, v: builder.updated_at.to_i)
+  end
+
   def meal_builder_params
-    params.require(:meal_builder).permit(:name).tap { |whitelisted|
+    permitted = [:name, :icon, :icon_color, :icon_data_url]
+    params.require(:meal_builder).permit(*permitted).tap { |whitelisted|
       if params[:meal_builder][:items].is_a?(String)
         whitelisted[:items] = params[:meal_builder][:items]
-      else
+      elsif params[:meal_builder][:items].present?
         whitelisted[:items] = params[:meal_builder][:items].map(&:permit!)
       end
     }

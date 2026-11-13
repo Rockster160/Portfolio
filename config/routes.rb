@@ -213,9 +213,13 @@ Rails.application.routes.draw do
   end
 
   scope path: :jarvis do
-    resources :meal_builders
+    resources :meal_builders do
+      get :manifest, on: :member
+      get "icon.png", on: :member, action: :icon, as: :icon
+    end
     resources :list_builders do
       get :manifest, on: :member
+      get "icon.png", on: :member, action: :icon, as: :icon
       post :toggle_item, on: :member
       patch :update_stock, on: :member
     end

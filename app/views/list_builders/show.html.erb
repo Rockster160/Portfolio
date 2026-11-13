@@ -1,15 +1,12 @@
 <% content_for :title, @list_builder.name %>
 <% content_for :favicon do %>
-  <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'list_favicon/apple-touch-icon.png' %>">
-  <link rel="icon" type="image/png" href="<%= asset_path 'list_favicon/favicon-32x32.png' %>" sizes="32x32">
-  <link rel="icon" type="image/png" href="<%= asset_path 'list_favicon/favicon-16x16.png' %>" sizes="16x16">
-  <link rel="manifest" href="<%= manifest_list_builder_path(@list_builder) %>">
-  <meta name="apple-mobile-web-app-title" content="<%= @list_builder.name.truncate(12) %>">
-  <link rel="mask-icon" href="<%= asset_path 'list_favicon/safari-pinned-tab.svg' %>" color="#5BBAD5">
-  <link rel="shortcut icon" href="<%= asset_path 'list_favicon/favicon.ico' %>">
-  <meta name="theme-color" content="#000712">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <%= render "shared/home_screen_favicon",
+    record:        @list_builder,
+    icon_path:     home_screen_icon_url(@list_builder),
+    manifest_path: manifest_list_builder_path(@list_builder, t: @list_builder.install_token, v: @list_builder.updated_at.to_i),
+    touch_icon:    asset_path("list_favicon/apple-touch-icon.png"),
+    tab_icon:      asset_path("list_favicon/favicon-32x32.png"),
+    status_bar:    "default" %>
 <% end %>
 <% content_for :head do %>
   <%= javascript_include_tag "icon_field", defer: true %>
