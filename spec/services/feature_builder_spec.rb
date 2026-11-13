@@ -315,6 +315,56 @@ RSpec.describe FeatureBuilder do
     end
   end
 
+  describe "the production scripts a build sent" do
+    before { allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original }
+
+    let!(:script) {
+      ProductionScripts.create!(
+        user:          user,
+        feature_build: build,
+        title:         "Add the dark mode task",
+        code:          "puts :ok",
+        commit_sha:    "abc1234",
+        edited_by:     :mini,
+      )
+    }
+    let(:link) { Rails.application.routes.url_helpers.system_production_script_url(script) }
+
+    it "links each one under the PR it's ready for review in" do
+      described_class.update_from_mini!(build, { "pr_number" => 42, "pr_url" => "https://github.com/x/pull/42" })
+
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).with(
+        hash_including(
+          text: a_string_including(
+            "is ready for review",
+            "Production scripts to approve:\n- [Add the dark mode task](#{link}) (waiting on approval)",
+          ),
+        ),
+      )
+    end
+
+    it "links each one when the build closes itself, leaving out the skipped ones" do
+      skipped = ProductionScripts.create!(
+        user:          user,
+        feature_build: build,
+        title:         "Set aside",
+        code:          "puts :no",
+        commit_sha:    "abc1234",
+        edited_by:     :mini,
+      )
+      ProductionScripts.skip!(skipped)
+
+      described_class.update_from_mini!(build, { "closed_reason" => "Only needed a script." })
+
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).with(
+        hash_including(
+          text: "**dark mode** closed itself: Only needed a script.\n\n" \
+                "Production scripts to approve:\n- [Add the dark mode task](#{link}) (waiting on approval)",
+        ),
+      )
+    end
+  end
+
   describe "the merge queue" do
     let(:landed) { [] }
 
