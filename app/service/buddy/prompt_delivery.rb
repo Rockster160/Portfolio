@@ -78,6 +78,19 @@ module Buddy
       nil
     end
 
+    # The same question was asked of someone else too, and they answered it.
+    # Their answer goes into this copy's form, so it reads as what was decided
+    # rather than as a question nobody needed.
+    def answered_elsewhere!(prompt, by:, values:)
+      receipt = "Answered by #{by.username} ✓"
+      open_forms(prompt.user, prompt.id).each { |action|
+        Buddy::FormAction.settle!(action, receipt: receipt, values: values)
+      }
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::PromptDelivery] answered elsewhere failed: #{e.class}: #{e.message}")
+      nil
+    end
+
     # Pending forms in ANY of their threads pointing at this prompt. Keyed on
     # the payload the form was posted with rather than on `merge_key`, which
     # only gets stored when the tool supersedes.

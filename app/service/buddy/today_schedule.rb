@@ -48,6 +48,20 @@ module Buddy
       reminder.metadata.is_a?(Hash) && reminder.metadata["today_briefing"].present?
     end
 
+    # Their own thread, never the wall tablet: on a kiosk the briefing would be
+    # read by whoever walked into the kitchen while the person it was written
+    # for got nothing. Re-resolved every time it fires and written back to the
+    # row, because the thread stored when the reminder was made goes stale the
+    # moment they make another one their primary.
+    def follow_primary!(reminder)
+      return unless briefing?(reminder)
+
+      conversation = ByteConversation.for_self_initiated(reminder.user)
+      return if conversation.nil? || conversation.id == reminder.byte_conversation_id
+
+      reminder.update!(byte_conversation: conversation)
+    end
+
     # `at` is the LATEST the briefing may land, not the time it always lands.
     #
     # Moving the schedule onto a reminder took `at` literally, and a flat 08:30
@@ -117,10 +131,6 @@ module Buddy
     end
 
     def create!(user, at: DEFAULT)
-      # Their own thread, never the wall tablet. Decided once, here, rather than
-      # at every fire: the briefing is addressed to one person, and on a kiosk it
-      # would be read by whoever walked into the kitchen while the person it was
-      # written for got nothing.
       conversation = ByteConversation.for_self_initiated(user)
       raise "no conversation to brief #{user.username} in" if conversation.nil?
 

@@ -56,7 +56,12 @@ module Buddy
         next if held.blank? || holding(user).exists?
 
         reminder.update!(metadata: reminder.metadata.except(HELD))
-        conversation = ByteConversation.find_by(id: held["conversation_id"]) if today?(user, held["at"])
+        next unless today?(user, held["at"])
+
+        # A wait can last all day, long enough for the thread it was held in to
+        # stop being theirs.
+        Buddy::TodaySchedule.follow_primary!(reminder)
+        conversation = reminder.byte_conversation
       }
       Buddy::TodayBriefing.post!(user, conversation, source: :today_scheduled) if conversation
     rescue StandardError => e

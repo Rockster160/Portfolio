@@ -331,7 +331,7 @@ RSpec.describe Buddy::JobMailOffer do
     it "quotes the message, fenced so its end is unambiguous, and promises none without one", :aggregate_failures do
       body = call(body: "Hi Rocco,\n\nWe'd like to schedule a 30-minute Zoom.\n\nCordelia").body
 
-      expect(body).to include("--- the message, for the NOTE only ---")
+      expect(body).to include("--- the message, for the NOTE only.")
       expect(body).to include("We'd like to schedule a 30-minute Zoom.")
       expect(body).to include("--- end ---")
 

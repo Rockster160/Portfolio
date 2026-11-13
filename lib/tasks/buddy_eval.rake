@@ -3152,6 +3152,34 @@ BUDDY_EDGE_PROBES = [
       )
     },
   },
+  {
+    case:  "prod 10688",
+    say:   "Add Kitty Litter Out to the Before Bed list",
+    tool:  :add_list_item,
+    avoid: %i[schedule_list_items],
+    needs: :before_bed_list,
+    note:  "read \"Before Bed\" as a when and asked for a clock time or a delay before adding it",
+  },
+  # Who "Mom" is had to be explained twice, and nothing kept it either time.
+  {
+    case:  "prod 10684",
+    say:   "Mom is Eve.",
+    tool:  :define_term,
+    note:  "credited the chore once told, but wrote nothing down, so the next \"Mom did it\" " \
+           "asks for the housemate's name again",
+    seed:  ->(user, convo) {
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "Mom took out both trash cans",
+      )
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :sent,
+        metadata:  { "kind" => "buddy" },
+        body:      "I need the housemate's actual name to credit that. Who's Mom?",
+      )
+    },
+  },
   # The same sentence again, over the thread where it was refused three times.
   {
     case:  "prod 8737",

@@ -632,7 +632,9 @@ module Buddy
     def message_block(body)
       return nil if body.blank?
 
-      ["", "--- the message, for the NOTE only ---", body, "--- end ---"].join("\n")
+      fence = "--- the message, for the NOTE only. " \
+              "Its today/tomorrow mean the day each part was written, not today ---"
+      ["", fence, body, "--- end ---"].join("\n")
     end
 
     # Which handle the note should be pinned to. An email we hold gets its id,

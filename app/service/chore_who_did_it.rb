@@ -14,8 +14,10 @@
 #   ask:       "household" asks everyone in the household, a list of user ids
 #              asks those of them who are in it. Each gets their own copy; the
 #              first answer settles it and the other copies go.
-#   questions: [{ key:, question: }] free-text questions asked alongside. A
-#              non-empty answer is stored in the event's data under `key`.
+#   questions: [{ key:, question:, prefill: }] free-text questions asked
+#              alongside. A non-empty answer is stored in the event's data
+#              under `key`. `prefill: "last"` starts it on the last answer
+#              anyone gave it for this chore.
 module ChoreWhoDidIt
   module_function
 
@@ -76,8 +78,19 @@ module ChoreWhoDidIt
         colors:   ::PromptChips.colors(names),
       },
       { type: :datetime, question: WHEN_QUESTION, default: local_datetime(person, at) },
-      *extra_questions(chore).map { |extra| { type: :text, question: extra[:question] } },
+      *extra_questions(chore).map { |extra|
+        { type: :text, question: extra[:question], default: prefill(chore, extra) }.compact
+      },
     ]
+  end
+
+  def prefill(chore, extra)
+    return unless extra[:prefill].to_s == "last"
+
+    answered = ::Prompt.where.not(response: nil).where("params->>'source' = ?", SOURCE)
+    answered = answered.where("params->>'chore_id' = ?", chore.id.to_s)
+    answered = answered.where("NULLIF(TRIM(response->>?), '') IS NOT NULL", extra[:question])
+    answered.order(updated_at: :desc).first&.response&.dig(extra[:question])
   end
 
   def settings(chore)
@@ -173,7 +186,7 @@ module ChoreWhoDidIt
 
     # Before the stand-in goes: undoing it retracts every copy still open, and
     # that takes a logged event with it.
-    close_other_copies!(prompt)
+    close_other_copies!(prompt, by: user, at: at)
     ::ChoreCompletionUndoer.call(user, stand_in) if stand_in
     leaf = chore.completion_leaf_for(who)
     unless done_already?(leaf, at)
@@ -201,13 +214,19 @@ module ChoreWhoDidIt
     asked.where("params->>'completion_id' = ?", completion_id.to_s)
   end
 
-  # Someone answered, so nobody else needs to. Deleting a copy settles the form
-  # it was posted as.
-  def close_other_copies!(prompt)
+  # Someone answered, so nobody else needs to. Each other copy's form settles
+  # showing that answer before the copy goes, since deleting it alone would
+  # settle the form as no longer needed with its defaults still in it.
+  def close_other_copies!(prompt, by:, at:)
     completion_id = prompt.params.to_h.with_indifferent_access[:completion_id]
     return if completion_id.blank?
 
-    copies_about(completion_id).where.not(id: prompt.id).find_each(&:destroy!)
+    response = prompt.response.to_h
+    copies_about(completion_id).where.not(id: prompt.id).find_each { |copy|
+      values = response.merge(WHEN_QUESTION => local_datetime(copy.user, at))
+      ::Buddy::PromptDelivery.answered_elsewhere!(copy, by: by, values: values)
+      copy.destroy!
+    }
   end
 
   def drop_logged_event!(prompt)

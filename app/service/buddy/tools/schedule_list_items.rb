@@ -15,10 +15,10 @@
 Buddy::Tools.register(
   name:        :schedule_list_items,
   summary:     "Add items to a list at a clock time or on a repeat: \"add batteries to Costco at " \
-               "5\", \"add these to Before Bed every day at 9pm\".",
+               "5\", \"add these to Garage every Friday at 6pm\".",
   description: <<~TXT,
-    Put items onto a list LATER, once or on a repeat. "Add these to Before Bed
-    every night at 9", "put the bin bags on the shopping list every Sunday
+    Put items onto a list LATER, once or on a repeat. "Add these to Garage
+    every Friday at 6", "put the bin bags on the shopping list every Sunday
     morning", "add the packing items to Camping on Friday".
 
     An add with a clock time on it - "at 5", "at 6pm", "tonight at 9" - is

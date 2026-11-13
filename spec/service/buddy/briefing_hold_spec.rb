@@ -66,6 +66,18 @@ RSpec.describe Buddy::BriefingHold do
     expect(reminder.reload.metadata).not_to have_key("held")
   end
 
+  it "goes out in the thread that's theirs when they answer, not the one it was held in" do
+    listen_with_check_in!
+    Buddy::ReminderFirer.fire!(reminder)
+    newer = user.byte_conversations.create!(mode: :buddy, name: "Kumoko", last_message_at: Time.current)
+    ByteConversation.pin_primary!(newer)
+
+    answer(user.prompts.unanswered.find_by!(question: "Morning check-in"), { "Feeling" => "6" })
+
+    expect(seeds).to be_empty
+    expect(newer.byte_messages.where("metadata ->> 'buddy_action' = 'today'").count).to eq(1)
+  end
+
   it "keeps waiting through the follow-ups the check-in asks" do
     listen_with_check_in!
     Buddy::ReminderFirer.fire!(reminder)

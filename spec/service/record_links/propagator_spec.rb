@@ -829,6 +829,57 @@ RSpec.describe RecordLinks::Propagator do
         expect(partner.prompts.sole.response).to be_present
       end
 
+      it "shows the answer, and who gave it, on the other person's form", :aggregate_failures do
+        allow(WebPushNotifications).to receive(:send_to_byte)
+        user.byte_conversations.create!(mode: :buddy, name: "Byte", last_message_at: Time.current)
+        partner.byte_conversations.create!(mode: :buddy, name: "Moss", last_message_at: Time.current)
+        log_event!("Whisper", notes: "Fed")
+        mine = Buddy::PromptDelivery.open_forms(user, user.prompts.sole.id).sole
+        fields = mine.buttons
+        at = 30.minutes.ago.change(sec: 0)
+
+        answer_as!(partner, partner.prompts.sole, {
+          "Who did it?"       => partner.username,
+          "When?"             => at.in_time_zone(partner.timezone).strftime("%Y-%m-%dT%H:%M"),
+          "What did she eat?" => "Kibble",
+          "How much?"         => "1 cup",
+        })
+
+        form = mine.byte_message.reload.metadata["form"]
+        values = form["fields"].to_h { |field| [field["key"], field["value"]] }
+        expect(form["receipt"]).not_to eq(Buddy::PromptDelivery::DISCARDED)
+        expect(form["receipt"]).to include(partner.username)
+        expect(form["fields"]).not_to eq(fields)
+        expect(values).to include(
+          "Who did it?"       => partner.username,
+          "When?"             => at.in_time_zone(user.timezone).strftime("%Y-%m-%dT%H:%M"),
+          "What did she eat?" => "Kibble",
+          "How much?"         => "1 cup",
+        )
+      end
+
+      it "starts a question marked to prefill on the last answer anyone gave it", :aggregate_failures do
+        fed.update!(who_did_it: fed.who_did_it.merge(
+          "questions" => [
+            { key: :food, question: "What did she eat?", prefill: :last },
+            { key: :amount, question: "How much?" },
+          ],
+        ))
+        log_event!("Whisper", notes: "Fed")
+        answer_as!(partner, partner.prompts.sole, {
+          "Who did it?"       => partner.username,
+          "When?"             => 5.minutes.ago.iso8601,
+          "What did she eat?" => "Freshpet bits",
+          "How much?"         => "1/2 cup",
+        })
+
+        log_event!("Whisper", notes: "Fed")
+
+        defaults = user.prompts.unanswered.sole.options.to_h { |option| [option["question"], option["default"]] }
+        expect(defaults["What did she eat?"]).to eq("Freshpet bits")
+        expect(defaults["How much?"]).to be_nil
+      end
+
       it "leaves the event's data alone when the extra questions are left empty" do
         event = log_event!("Whisper", notes: "Fed")
 

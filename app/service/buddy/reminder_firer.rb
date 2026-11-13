@@ -10,6 +10,7 @@ module Buddy
     def fire!(reminder)
       return if reminder.fired_at.present? || reminder.cancelled_at.present?
 
+      Buddy::TodaySchedule.follow_primary!(reminder)
       conversation = reminder.byte_conversation
       user         = reminder.user
 

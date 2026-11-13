@@ -90,8 +90,7 @@ RSpec.describe Buddy::TodaySchedule do
       expect(BuddyReminder.where(user: user).count).to eq(1)
     end
 
-    # Their own thread, never the wall tablet — decided once, here, rather than
-    # at every fire.
+    # Their own thread, never the wall tablet.
     it "brief them where they read, not on the kiosk" do
       kiosk = user.byte_conversations.create!(
         mode: :buddy, name: "Kitchen", last_message_at: Time.current, metadata: { "kiosk" => true },
@@ -130,6 +129,20 @@ RSpec.describe Buddy::TodaySchedule do
       expect(reminder.last_fired_at).to be_present
       expect(reminder.fire_at).to be > Time.current
       expect(described_class).to be_scheduled(user)
+    end
+
+    # The thread it was made in goes stale once they make another their primary.
+    it "follows them to the thread they made primary since", :aggregate_failures do
+      allow(Buddy::TodayBriefing).to receive(:deliver!).and_return(nil)
+      reminder = described_class.ensure!(user)
+      newer = user.byte_conversations.create!(mode: :buddy, name: "Kumoko", last_message_at: Time.current)
+      ByteConversation.pin_primary!(newer)
+
+      Buddy::ReminderFirer.fire!(reminder)
+
+      expect(Buddy::TodayBriefing).to have_received(:deliver!).with(user, newer, scheduled: true, morning: true)
+      expect(Buddy::TodayBriefing).not_to have_received(:deliver!).with(user, convo, any_args)
+      expect(reminder.reload.byte_conversation).to eq(newer)
     end
 
     # The roll-forward is where tomorrow's time is decided, so the rule has to
