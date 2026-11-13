@@ -44,6 +44,13 @@ module FeatureBuilder
   # Raised while any build has a question or a PR waiting on its owner.
   NEEDS_YOU_KEY = :"mini:needs_you"
 
+  # The look a builder's owner's own pet holds while that build is working: at
+  # the laptop. Low, so a mood in a reply or an alert shows over it and the pet
+  # comes back to it when idle.
+  LOOK_KEY = :"mini:building"
+  LOOK_FACE = :working
+  LOOK_STRENGTH = 20
+
   # The request, posted as the person's own message.
   REQUEST_KIND = :feature_request
 
@@ -578,6 +585,7 @@ module FeatureBuilder
       answered_elsewhere!(listed)
       refresh_chip!(User.me)
       refresh_needs_you!(User.me)
+      refresh_look!
     end
     listed
   end
@@ -651,6 +659,27 @@ module FeatureBuilder
       source: :mac,
       url:    Rails.application.routes.url_helpers.system_claude_url,
     )
+  end
+
+  # Held on the owner of every build with a working session, and let go of
+  # for everyone else. Holding an unchanged look again sends nothing.
+  def refresh_look!
+    ids = sessions.select { |session| session["working"] && session["kind"].to_s == "builder" }
+    ids = ids.filter_map { |session| session["build_id"]&.to_i }
+    owner_ids = FeatureBuild.where(id: ids).distinct.pluck(:user_id)
+
+    User.where(id: owner_ids).find_each do |user|
+      Buddy::Alerts.hold!(
+        user:       user,
+        key:        LOOK_KEY,
+        body:       nil,
+        expression: LOOK_FACE,
+        strength:   LOOK_STRENGTH,
+      )
+    end
+    BuddyAlert.status_open.where(key: LOOK_KEY).where.not(user_id: owner_ids).find_each do |alert|
+      Buddy::Alerts.resolve!(user: alert.user, key: LOOK_KEY)
+    end
   end
 
   # ---- waiting on the owner ----

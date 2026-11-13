@@ -22,6 +22,10 @@ module Buddy
     # picker can't land on it — `valid?` sees it, `selectable` doesn't.
     GESTURES = %i[wave].freeze
 
+    # Something the pet is busy doing for the person, held while it lasts: at
+    # the laptop while a Feature Builder works. Never a mood either.
+    ACTIVITIES = %i[working].freeze
+
     # Where the faces that are STATES rather than moods sit on the mood axes, so
     # a pet with no art for one wears the nearest face it does have instead of
     # going blank or snapping to neutral. Every other name takes its numbers
@@ -33,13 +37,14 @@ module Buddy
       wave:     { warmth: 0.85, play: 0.50, weight: 0.20, strain: 0.05 },
       clock:    { warmth: 0.45, play: 0.20, weight: 0.50, strain: 0.35 },
       alarm:    { warmth: 0.80, play: 0.65, weight: 0.55, strain: 0.25 },
+      working:  { warmth: 0.50, play: 0.13, weight: 0.62, strain: 0.15 },
     }.freeze
 
     # The faces the app itself puts on the pet rather than moods: asleep, mid
-    # thought, a wave. Every pet can wear these - one with no drawing for one
+    # thought, a wave, at work. Every pet can wear these - one with no drawing for one
     # wears its nearest face instead.
     def system_faces
-      [*SYSTEM, *TRANSITIONAL, *GESTURES]
+      [*SYSTEM, *TRANSITIONAL, *GESTURES, *ACTIVITIES]
     end
 
     # The face a pet wears when asked for one by NAME (a task's `face`): a

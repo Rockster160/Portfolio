@@ -852,4 +852,59 @@ RSpec.describe FeatureBuilder do
       expect(described_class.sessions).to be_empty
     end
   end
+
+  describe "the pet's look while a build works" do
+    let(:look) { -> { BuddyAlert.open_for(user, described_class::LOOK_KEY) } }
+
+    def report(**session)
+      described_class.report_sessions!(machine: :mini, sessions: [
+        { "build_id" => build.id, "kind" => "builder", **session.stringify_keys },
+      ])
+    end
+
+    before { thread }
+
+    it "holds the working face, low, while a builder is working" do
+      report(working: true)
+
+      expect(look.call).to be_present
+      expect(look.call.expression).to eq("working")
+      expect(look.call.face_for(:byte)).to eq("working")
+      expect(look.call.strength).to eq(described_class::LOOK_STRENGTH)
+      expect(look.call.strength).to be < Buddy::FaceStrength::MOOD
+      expect(look.call.groups).to be_blank
+    end
+
+    it "lets go once the build stops working" do
+      report(working: true)
+      report(working: false)
+
+      expect(look.call).to be_nil
+    end
+
+    it "lets go once the build leaves the report" do
+      report(working: true)
+      described_class.report_sessions!(machine: :mini, sessions: [])
+
+      expect(look.call).to be_nil
+    end
+
+    it "sends nothing new when the report hasn't changed" do
+      report(working: true)
+      allow(Buddy::Alerts).to receive(:broadcast_outstanding!)
+
+      report(working: true)
+
+      expect(Buddy::Alerts).not_to have_received(:broadcast_outstanding!)
+    end
+
+    it "isn't worn for a Claude session that isn't a build" do
+      described_class.report_sessions!(machine: :mini, sessions: [
+        { "conversation_id" => thread.id, "kind" => "claude", "working" => true },
+        { "kind" => "questions", "working" => true },
+      ])
+
+      expect(look.call).to be_nil
+    end
+  end
 end

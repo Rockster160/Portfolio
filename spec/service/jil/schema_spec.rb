@@ -83,7 +83,7 @@ RSpec.describe Jil::Schema do
     end
 
     it "offers the system faces for a face, or any name typed, beside the mood sliders" do
-      expect(alert_line(other)).to include(%(face:["sleeping" "thinking" "wave" *]), "warmth:Slider")
+      expect(alert_line(other)).to include(%(face:["sleeping" "thinking" "wave" "working" *]), "warmth:Slider")
       expect(alert_line(other)).not_to include("%")
     end
 

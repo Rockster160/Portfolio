@@ -52,9 +52,9 @@ module Buddy
       }
     end
 
-    # Never a mood's answer: a gesture is made on cue, and thinking is the face
-    # of a reply on its way.
-    NOT_MOODS = [*Buddy::Faces::GESTURES, *Buddy::Faces::TRANSITIONAL].freeze
+    # Never a mood's answer: a gesture is made on cue, thinking is the face of a
+    # reply on its way, and an activity is something the pet is doing.
+    NOT_MOODS = [*Buddy::Faces::GESTURES, *Buddy::Faces::TRANSITIONAL, *Buddy::Faces::ACTIVITIES].freeze
 
     # Every face this pet has a drawing AND a point for: its declared moods, plus
     # the drawn states (sleeping and the like), which a mood may also land on.
