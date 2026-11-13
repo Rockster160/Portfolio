@@ -21,17 +21,10 @@ function isRotation(item) {
   return item?.kind === "rotation";
 }
 
-function findOption(item, id) {
-  return (item?.options || []).find(o => o.id === id) || null;
-}
+const { findOption, fixedDay, mainOn, extrasOn, rotationEntry } = QuestRules;
 
 function isExtra(option) {
   return option?.slot === "extra";
-}
-
-function fixedDay(option) {
-  const day = parseInt(option?.day, 10);
-  return !isExtra(option) && day >= 0 && day <= 6 ? day : null;
 }
 
 function mondayOf(date) {
@@ -41,21 +34,6 @@ function mondayOf(date) {
 function weekDays(date) {
   const monday = mondayOf(date);
   return Array.from({ length: 7 }, (_, i) => QuestRules.addDays(monday, i));
-}
-
-function recorded(board, item, date) {
-  return board.rotations?.[item.id]?.[QuestRules.dayKey(date)] || null;
-}
-
-// What was (or, for a fixed day, will be) the main pick on a day.
-function mainOn(board, item, date) {
-  const main = recorded(board, item, date)?.main;
-  if (main && findOption(item, main)) return main;
-  return (item.options || []).find(o => fixedDay(o) === date.getDay())?.id || null;
-}
-
-function extrasOn(board, item, date) {
-  return (recorded(board, item, date)?.extras || []).filter(id => findOption(item, id));
 }
 
 function pickedInWeek(board, item, date) {
@@ -93,7 +71,7 @@ function store(board, item, date, entry) {
 function toggle(board, item, date, optionId) {
   const option = findOption(item, optionId);
   if (!option) return false;
-  const current = recorded(board, item, date) || {};
+  const current = rotationEntry(board, item, date) || {};
   const entry = { main: current.main || null, extras: [...(current.extras || [])] };
   if (isExtra(option)) {
     entry.extras = entry.extras.includes(optionId)

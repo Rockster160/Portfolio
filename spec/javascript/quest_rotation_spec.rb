@@ -42,4 +42,27 @@ RSpec.describe "the quest board rotation (JS-side)" do
     expect(cases[:pruned][:days]).not_to include("2026-08-01")
     expect(cases[:pruned][:rotations]).to eq(["visitors"])
   end
+
+  describe "quests that only show while a visitor is in town" do
+    let(:visitor) { cases[:visitor] }
+
+    it "shows the visitor's quests only on the days it's here" do
+      expect(visitor[:before]).to eq(["quiet"])
+      expect(visitor[:wisp_day]).to eq(["spirits"])
+      expect(visitor[:next_day]).to eq(["quiet", "after"])
+    end
+
+    it "counts a fixed day and an extra as being here" do
+      expect(visitor[:saturday]).to eq(["quiet", "on_sat", "with_x"])
+    end
+
+    it "takes the quest back off when the pick is taken back" do
+      expect(visitor[:wisp_taken_back]).to eq(["quiet"])
+    end
+
+    it "drops a condition whose visitor was removed, so the quest isn't stuck hidden" do
+      expect(visitor[:removed][:spirits]).to eq([])
+      expect(visitor[:removed][:on_sat]).to eq(1)
+    end
+  end
 end

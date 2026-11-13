@@ -119,10 +119,56 @@ function scheduleMatches(schedule, now, date, resetHour) {
   return from < to ? (m >= from && m < to) : (m >= from || m < to);
 }
 
+// A rotation's options, and who came on a day: the recorded main pick (or the
+// option whose fixed day it is) plus any extras. rotation.js builds the week
+// on these; a condition asks them whether a visitor is here.
+function findOption(item, id) {
+  return (item?.options || []).find(o => o.id === id) || null;
+}
+
+function fixedDay(option) {
+  const day = parseInt(option?.day, 10);
+  return option?.slot !== "extra" && day >= 0 && day <= 6 ? day : null;
+}
+
+function rotationEntry(board, item, date) {
+  return board.rotations?.[item.id]?.[dayKey(date)] || null;
+}
+
+function mainOn(board, item, date) {
+  const main = rotationEntry(board, item, date)?.main;
+  if (main && findOption(item, main)) return main;
+  return (item.options || []).find(o => fixedDay(o) === date.getDay())?.id || null;
+}
+
+function extrasOn(board, item, date) {
+  return (rotationEntry(board, item, date)?.extras || []).filter(id => findOption(item, id));
+}
+
+function isHere(board, item, date, optionId) {
+  return mainOn(board, item, date) === optionId || extrasOn(board, item, date).includes(optionId);
+}
+
+// A quest waiting on a visitor who's no longer in the rotation would never
+// show again, so the condition goes with the visitor.
+function dropMissingVisitors(board) {
+  (board.items || []).forEach(item => {
+    if (!item.conditions?.length) return;
+    item.conditions = item.conditions.filter(c => {
+      return !c.option || !!findOption(findItem(board, c.item), c.option);
+    });
+  });
+}
+
 function conditionPasses(board, cond, date) {
   const ref = findItem(board, cond.item);
   if (!ref) return false;
   const day = dateFor(date, cond.when);
+  if (cond.option) {
+    if (ref.kind !== "rotation" || !findOption(ref, cond.option)) return false;
+    const here = isHere(board, ref, day, cond.option);
+    return cond.op === "not_here" ? !here : here;
+  }
   if (cond.op === "done") return isDone(board, ref, day);
   if (cond.op === "not_done") return !isDone(board, ref, day);
 
@@ -312,7 +358,8 @@ function newItem(attrs = {}) {
 
 const QuestRules = {
   dayKey, addDays, gameDate, periodKey, resetHourOf, findItem, countOf,
-  resolveTarget, isDone, scheduleMatches, conditionPasses, isVisible,
+  resolveTarget, isDone, findOption, fixedDay, rotationEntry, mainOn, extrasOn, isHere,
+  dropMissingVisitors, scheduleMatches, conditionPasses, isVisible,
   countsDown, shownCount, displayName, tap, resetItem, undo, prune, parseQuickAdd, newItem, newId,
 };
 
