@@ -864,11 +864,12 @@ RSpec.describe FeatureBuilder do
 
     before { thread }
 
-    it "holds the focused face, low, while a builder is working" do
+    it "holds the working face, low, while a builder is working" do
       report(working: true)
 
       expect(look.call).to be_present
-      expect(look.call.expression).to eq("focused")
+      expect(look.call.expression).to eq("working")
+      expect(look.call.face_for(:byte)).to eq("working")
       expect(look.call.strength).to eq(described_class::LOOK_STRENGTH)
       expect(look.call.strength).to be < Buddy::FaceStrength::MOOD
       expect(look.call.groups).to be_blank

@@ -17,12 +17,13 @@
   # "thinking" overlay, the "sleeping" outage/cap face, and the wave gesture.
   # Every one is a slot shown for every pet — one the pet has no pose of its own
   # for draws blank, so the gaps in a set are visible rather than hidden.
-  system_order = ([Buddy::Faces.default] + Buddy::Faces::TRANSITIONAL + Buddy::Faces::SYSTEM + Buddy::Faces::GESTURES).uniq
+  system_order = ([Buddy::Faces.default] + Buddy::Faces::TRANSITIONAL + Buddy::Faces::SYSTEM + Buddy::Faces::GESTURES + Buddy::Faces::ACTIVITIES).uniq
   system_role  = {
     Buddy::Faces.default             => ["rests here", "The resting default — where the pet sits when nothing has moved it."],
     Buddy::Faces::TRANSITIONAL.first => ["transitional", "Shown while a reply is being written, never as a mood."],
     Buddy::Faces::SYSTEM.first       => ["system", "Shown when the connection drops or the usage cap is hit."],
     Buddy::Faces::GESTURES.first     => ["gesture", "A hello/goodbye wave — played on a bare greeting and at the top of the briefing, never as a mood."],
+    Buddy::Faces::ACTIVITIES.first   => ["activity", "At the laptop while a Feature Builder is working, under any mood a reply brings."],
   }
   axis_hint = {
     warmth: "how good the moment is",

@@ -44,11 +44,11 @@ module FeatureBuilder
   # Raised while any build has a question or a PR waiting on its owner.
   NEEDS_YOU_KEY = :"mini:needs_you"
 
-  # The look a builder's owner's own pet holds while that build is working: its
-  # focused face, the laptop on the pets that draw one. Low, so a mood in a
-  # reply or an alert shows over it and the pet comes back to it when idle.
+  # The look a builder's owner's own pet holds while that build is working: at
+  # the laptop. Low, so a mood in a reply or an alert shows over it and the pet
+  # comes back to it when idle.
   LOOK_KEY = :"mini:building"
-  LOOK_FACE = :focused
+  LOOK_FACE = :working
   LOOK_STRENGTH = 20
 
   # The request, posted as the person's own message.
