@@ -444,57 +444,6 @@ html.html-ctr-quests {
     touch-action: none;
     user-select: none;
   }
-
-  // Settings' home-screen icon: the tile as it will look, its colour, clear.
-  .quests-app-icon-row {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: flex-start;
-    margin-bottom: 4px;
-
-    > * {
-      flex: 0 0 auto;
-      margin: 0;
-    }
-    input[type="color"] {
-      width: 44px;
-      min-width: 0;
-      height: 36px;
-      padding: 2px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 8px;
-      background: transparent;
-      cursor: pointer;
-    }
-  }
-  .quests-app-icon-tile {
-    display: grid;
-    place-items: center;
-    width: 64px;
-    height: 64px;
-    padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 14px;
-    font-size: 38px;
-    line-height: 1;
-    cursor: pointer;
-    overflow: hidden;
-
-    &.empty .quests-app-icon-glyph {
-      font-size: 28px;
-      opacity: 0.6;
-    }
-    .icon-img {
-      width: 40px;
-      height: 40px;
-      object-fit: contain;
-    }
-  }
-  .quests-app-icon-glyph {
-    display: grid;
-    place-items: center;
-  }
 }
 
 @keyframes quests-glow {

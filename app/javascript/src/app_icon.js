@@ -1,11 +1,12 @@
-// The board's home-screen icon, chosen in Board settings: any pick from the
-// shared icon picker on a flat background colour. The phone draws it into one
+// A page's home-screen icon (a quest board, a list or meal builder): any pick
+// from the shared icon picker on a flat background colour. The phone draws it into one
 // 512px PNG and the server keeps that, since a manifest and an
 // apple-touch-icon both want a picture, and the phone already has every emoji,
 // glyph font and household upload loaded to draw from.
 
-import { renderIconValue, openIconPicker, loadIconPool } from "../../icon_picker";
-import { IconPool } from "../../icon_pool";
+import { renderIconValue, openIconPicker, loadIconPool } from "./icon_picker";
+import { IconPool } from "./icon_pool";
+import Rails from "@rails/ujs";
 
 const SIZE = 512;
 const GLYPH = 0.62;
@@ -120,7 +121,7 @@ export function setupAppIcon(row) {
     changed() {
       return icon !== saved.icon || (icon && colorInput.value !== saved.color);
     },
-    // The fields for PATCH /quests/:id, or null when the pick couldn't be drawn.
+    // The fields to save, or null when the pick couldn't be drawn.
     async payload() {
       if (!icon) return { icon: "", icon_color: "", icon_png: "" };
 
@@ -131,7 +132,7 @@ export function setupAppIcon(row) {
     saved(next) {
       saved.icon = next.icon || "";
       saved.color = next.icon_color || saved.color;
-      document.querySelectorAll("link[data-quests-favicon]").forEach(link => {
+      document.querySelectorAll("link[data-app-favicon]").forEach(link => {
         link.href = next.icon_url || link.dataset.defaultHref;
       });
       // Re-read by an install made without reloading the page.
@@ -143,4 +144,51 @@ export function setupAppIcon(row) {
       }
     },
   };
+}
+
+// On a form (a builder's edit page), the pick rides along with the submit:
+// drawn when the form is sent, and only when it changed, so an untouched
+// picker leaves the saved icon alone.
+function setupFormField(row) {
+  const form = row.closest("form");
+  if (!form) return;
+
+  const appIcon = setupAppIcon(row);
+  appIcon.reset();
+  const inputs = {};
+  row.querySelectorAll("[data-app-icon-input]").forEach(input => {
+    inputs[input.dataset.appIconInput] = input;
+  });
+
+  form.addEventListener("submit", async (evt) => {
+    if (!appIcon.changed()) return;
+
+    evt.preventDefault();
+    const payload = await appIcon.payload();
+    if (!payload) {
+      // UJS disables the submit button a beat after the submit event.
+      setTimeout(() => Rails.enableElement(form), 50);
+      window.alert("Couldn't draw that icon. Pick another, or clear it.");
+      return;
+    }
+    Object.entries(payload).forEach(([key, value]) => {
+      inputs[key].value = value;
+      inputs[key].disabled = false;
+    });
+    form.submit();
+  });
+}
+
+function bootFormFields() {
+  document.querySelectorAll("[data-app-icon-form-field]").forEach(row => {
+    if (row.dataset.booted) return;
+    row.dataset.booted = "1";
+    setupFormField(row);
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bootFormFields);
+} else {
+  bootFormFields();
 }

@@ -3,7 +3,7 @@
 # and every tap is local; this controller holds a copy of that blob, names and
 # lists the boards, and runs the hooks an item can fire.
 class QuestsController < ApplicationController
-  DEFAULT_COLOR = "#000712".freeze
+  include HomeScreenInstall
 
   before_action :authorize_user, except: [:manifest, :icon]
   before_action :set_board, only: [:show, :update, :destroy, :state, :save]
@@ -46,32 +46,20 @@ class QuestsController < ApplicationController
 
   # GET /quests/:id/manifest.webmanifest — the board's own install manifest,
   # so a board added to a home screen opens on itself, named after itself,
-  # wearing its chosen icon. Served without a session, since a browser
-  # fetches a manifest with no cookies; the signed install token stands in.
+  # wearing its chosen icon.
   def manifest
-    color = @board.icon_color.presence || DEFAULT_COLOR
-
-    render json: {
-      short_name:       @board.name.truncate(12),
-      name:             @board.name,
-      icons:            manifest_icons,
-      id:               "quest-board-#{@board.id}",
-      start_url:        "#{quest_board_path(@board)}?source=pwa",
-      scope:            quest_board_path(@board),
-      background_color: color,
-      display:          :standalone,
-      theme_color:      color,
-      description:      "Quests: #{@board.name}",
-    }, content_type: "application/manifest+json"
+    render_install_manifest(
+      @board,
+      id:          "quest-board-#{@board.id}",
+      path:        quest_board_path(@board),
+      icon_src:    icon_url(@board),
+      description: "Quests: #{@board.name}",
+    )
   end
 
-  # GET /quests/:id/icon.png — the PNG drawn in Board settings. Its URL
-  # carries the board's updated_at, so a long cache is never a stale icon.
+  # GET /quests/:id/icon.png — the PNG drawn in Board settings.
   def icon
-    return head(:not_found) unless @board.icon?
-
-    expires_in 1.year, public: true
-    send_data @board.icon_png, type: "image/png", disposition: :inline
+    send_home_screen_icon(@board)
   end
 
   def destroy
@@ -148,27 +136,14 @@ class QuestsController < ApplicationController
   end
 
   def set_installed_board
-    @board = QuestBoard.from_install_token(params[:t])
-    head(:not_found) if @board.nil? || @board.id != params[:id].to_i
+    @board = find_installed(QuestBoard)
+    head(:not_found) if @board.nil?
   end
 
   def icon_url(board)
     return unless board.icon?
 
     quest_board_icon_path(board, t: board.install_token, v: board.updated_at.to_i)
-  end
-
-  def manifest_icons
-    unless @board.icon?
-      return [
-        { src: "/favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
-        { src: "/favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
-      ]
-    end
-
-    [192, 512].map { |size|
-      { src: icon_url(@board), sizes: "#{size}x#{size}", type: "image/png", purpose: :any }
-    }
   end
 
   def stamp(data)
