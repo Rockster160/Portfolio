@@ -23,6 +23,12 @@
       </div>
 
       <div class="form-field">
+        <label>Home screen icon</label>
+        <%= render "shared/home_screen_icon_field", record: @list_builder, field: :list_builder %>
+        <small>The tab's icon, and the app's when this page is added to a home screen.</small>
+      </div>
+
+      <div class="form-field">
         <%= form.label :items, "Items" %>
         <%= form.text_area :items, rows: [@list_builder.items.length, 5].max, value: @list_builder.listify_items %>
         <small>Enter items in rows like "Item Name [5] | emoji or image url" -  [N] sets the low-stock threshold (optional)</small>

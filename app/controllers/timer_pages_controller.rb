@@ -125,7 +125,7 @@ class TimerPagesController < ApplicationController
 
   def page_params
     permitted = params.require(:timer_page).permit(
-      :name, :slug, :sort_order, :layout_mode,
+      :name, :slug, :sort_order, :layout_mode, :icon, :icon_color, :icon_data_url,
       sections: [[:id, :title, :h, :scroll_x]],
     )
     raw_meta = params.dig(:timer_page, :meta)
@@ -141,6 +141,9 @@ class TimerPagesController < ApplicationController
       id:          page.id,
       name:        page.name,
       slug:        page.slug,
+      icon:        page.icon,
+      icon_color:  page.icon_color,
+      icon_url:    helpers.home_screen_icon_url(page),
       layout_mode: page.layout_mode,
       sections:    page.sections,
       sort_order:  page.sort_order,

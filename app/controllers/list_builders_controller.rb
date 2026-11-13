@@ -1,7 +1,10 @@
 class ListBuildersController < ApplicationController
+  include HomeScreenInstall
+
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user_or_guest
-  before_action :set_list_builder, only: [:show, :edit, :update, :destroy, :toggle_item, :update_stock, :manifest]
+  before_action :authorize_user_or_guest, except: [:manifest, :icon]
+  before_action :set_list_builder, only: [:show, :edit, :update, :destroy, :toggle_item, :update_stock]
+  before_action :set_installed_builder, only: [:manifest, :icon]
 
   layout "quick_actions", only: [:show]
 
@@ -23,24 +26,20 @@ class ListBuildersController < ApplicationController
     end
   end
 
+  # The builder's own install manifest, so one added to a home screen opens
+  # on itself, named after itself, wearing the icon picked on its edit page.
   def manifest
-    manifest = {
-      short_name:       @list_builder.name.truncate(12),
-      name:             @list_builder.name,
-      icons:            [
-        { src: "/favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
-        { src: "/favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
-      ],
-      id:               "list-builder-#{@list_builder.id}",
-      start_url:        "/jarvis/list_builders/#{@list_builder.to_param}?source=pwa",
-      background_color: "#000712",
-      display:          :standalone,
-      scope:            "/jarvis/list_builders/#{@list_builder.to_param}",
-      theme_color:      "#000712",
-      description:      "List Builder: #{@list_builder.name}",
-    }
+    render_install_manifest(
+      @list_builder,
+      id:          "list-builder-#{@list_builder.id}",
+      path:        list_builder_path(@list_builder),
+      icon_src:    helpers.home_screen_icon_url(@list_builder),
+      description: "List Builder: #{@list_builder.name}",
+    )
+  end
 
-    render json: manifest, content_type: "application/manifest+json"
+  def icon
+    send_home_screen_icon(@list_builder)
   end
 
   def new
@@ -141,8 +140,14 @@ class ListBuildersController < ApplicationController
     ).find_by!(parameterized_name: params[:id])
   end
 
+  def set_installed_builder
+    @list_builder = find_installed(ListBuilder)
+    head(:not_found) if @list_builder.nil?
+  end
+
   def list_builder_params
-    params.require(:list_builder).permit(:name, :list_id).tap { |whitelisted|
+    permitted = [:name, :list_id, :icon, :icon_color, :icon_data_url]
+    params.require(:list_builder).permit(*permitted).tap { |whitelisted|
       if params[:list_builder][:items].is_a?(String)
         whitelisted[:items] = params[:list_builder][:items]
       elsif params[:list_builder][:items].present?

@@ -136,7 +136,7 @@ RSpec.describe TimersController do
     let!(:page) { user.timer_pages.create!(slug: "slime-colony", name: "Slime Colony") }
 
     it "renders a per-page manifest with a unique id, scope, and start_url" do
-      get timer_page_manifest_path(slug: "slime-colony")
+      get timer_page_manifest_path(slug: "slime-colony", t: page.install_token)
       expect(response).to have_http_status(:ok)
       expect(response.media_type).to eq("application/manifest+json")
       json = JSON.parse(response.body)
@@ -144,8 +144,55 @@ RSpec.describe TimersController do
       expect(json["scope"]).to eq("/timers/page/slime-colony")
       expect(json["start_url"]).to eq("/timers/page/slime-colony?source=pwa")
       expect(json["name"]).to eq("Slime Colony")
+      expect(json["theme_color"]).to eq("#0d1117")
+      expect(json["icons"].pluck("src")).to include("/timers_favicon/android-chrome-512x512.png")
     end
 
+    it "opens nothing without the page's own token" do
+      other = user.timer_pages.create!(slug: "other", name: "Other")
+      get timer_page_manifest_path(slug: "slime-colony")
+      expect(response).to have_http_status(:not_found)
+      get timer_page_manifest_path(slug: "slime-colony", t: other.install_token)
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  describe "a page's home screen icon" do
+    let!(:page) { user.timer_pages.create!(slug: "slime-colony", name: "Slime Colony") }
+    let(:png) { "\x89PNG\r\n\x1A\n".b + ("pixels" * 10) }
+    let(:data_url) { "data:image/png;base64,#{Base64.strict_encode64(png)}" }
+
+    def set_icon(fields={ icon: "⏰", icon_color: "#224466", icon_data_url: data_url })
+      patch "/timers/pages/#{page.id}", params: { timer_page: fields }, as: :json
+    end
+
+    it "keeps the icon picked in Settings and serves it for the installed page" do
+      set_icon
+      expect(response).to have_http_status(:ok)
+      icon_url = response.parsed_body["icon_url"]
+      expect(icon_url).to start_with("/timers/page/slime-colony/icon.png?t=")
+      expect(response.parsed_body).to include("icon" => "⏰", "icon_color" => "#224466")
+
+      get timer_page_path(slug: "slime-colony")
+      expect(response.body).to include(%(rel="apple-touch-icon" sizes="180x180" href="#{CGI.escapeHTML(icon_url)}"))
+
+      get logout_path
+      get icon_url
+      expect(response).to have_http_status(:ok)
+      expect(response.body.b).to eq(png)
+
+      get timer_page_manifest_path(slug: "slime-colony", t: page.install_token)
+      json = JSON.parse(response.body)
+      expect(json["icons"].pluck("src")).to all(eq(icon_url))
+      expect(json["theme_color"]).to eq("#224466")
+    end
+
+    it "goes back to the timers icon when cleared" do
+      set_icon
+      set_icon(icon: "", icon_color: "", icon_data_url: "")
+      expect(page.reload).to have_attributes(icon: nil, icon_png: nil)
+      expect(response.parsed_body["icon_url"]).to be_nil
+    end
   end
 
   describe "GET /timers/page/:slug" do
@@ -154,7 +201,7 @@ RSpec.describe TimersController do
     it "links the per-page manifest so the PWA installs distinctly" do
       get timer_page_path(slug: "slime-colony")
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include(%(href="/timers/page/slime-colony/manifest.webmanifest"))
+      expect(response.body).to include(%(href="/timers/page/slime-colony/manifest.webmanifest?t=))
       expect(response.body).not_to include(%(href="/timers.webmanifest"))
     end
   end

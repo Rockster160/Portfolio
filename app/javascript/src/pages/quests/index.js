@@ -15,7 +15,7 @@ import QuestRotation from "./rotation";
 import { createRotationCard } from "./rotation_card";
 import { setupRotationModal } from "./rotation_modal";
 import { renderIconValue, loadIconPool, onIconPoolChanged } from "../../icon_picker";
-import { setupAppIcon } from "./app_icon";
+import { setupAppIcon } from "../../app_icon";
 
 const LONG_MS = 550;
 const MOVE_THRESHOLD = 8;

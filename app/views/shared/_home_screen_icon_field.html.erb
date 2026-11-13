@@ -1,0 +1,21 @@
+<%# The home-screen icon picker: the tile as it will look, its background
+  colour, and × to go back to the default. Given a `field` (a form's param
+  key), it also carries hidden inputs that a form submits, filled with the
+  drawn PNG only when the pick changed. %>
+<% field = local_assigns[:field] %>
+<% color = record.home_screen_color(local_assigns.fetch(:default_color, HomeScreenIcon::DEFAULT_COLOR)) %>
+<div class="app-icon-row" data-settings-app-icon
+     data-icon="<%= record.icon %>"
+     data-color="<%= color %>"
+     <%= "data-app-icon-form-field" if field %>>
+  <button type="button" class="app-icon-tile" data-app-icon-pick title="Choose an icon">
+    <span class="app-icon-glyph" data-app-icon-glyph></span>
+  </button>
+  <input type="color" class="basic" data-app-icon-color aria-label="Icon background">
+  <button type="button" class="app-icon-clear" data-app-icon-clear aria-label="Use the default icon">×</button>
+  <% if field %>
+    <input type="hidden" name="<%= field %>[icon]" data-app-icon-input="icon" disabled>
+    <input type="hidden" name="<%= field %>[icon_color]" data-app-icon-input="icon_color" disabled>
+    <input type="hidden" name="<%= field %>[icon_data_url]" data-app-icon-input="icon_png" disabled>
+  <% end %>
+</div>

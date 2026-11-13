@@ -1,5 +1,14 @@
 class TimersController < ApplicationController
-  before_action :authorize_user
+  include HomeScreenInstall
+
+  DEFAULT_PAGE_COLOR = "#0d1117".freeze
+  DEFAULT_PAGE_ICONS = [
+    { src: "/timers_favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
+    { src: "/timers_favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+  ].freeze
+
+  before_action :authorize_user, except: [:page_manifest, :page_icon]
+  before_action :set_installed_page, only: [:page_manifest, :page_icon]
   before_action :set_timer, only: [:update, :destroy, :start, :pause, :resume, :reset, :confirm, :increment, :advance, :layout]
 
   DEFAULT_QUICK_DURATIONS = [60, 120, 180, 300, 600, 900, 1800].freeze
@@ -27,26 +36,26 @@ class TimersController < ApplicationController
   # + `start_url: "/timers"`, which means the OS treats every timer page's
   # install as the same PWA and opens the root /timers URL on launch.
   # Serving a slug-scoped manifest here gives each page its own id, scope,
-  # and start_url so it launches back into itself.
+  # and start_url so it launches back into itself, wearing the icon picked
+  # in Settings.
   def page_manifest
-    page = current_user.timer_pages.listed.find_by!(slug: params[:slug])
-    label = page.name.presence || page.slug
+    label = @page.name.presence || @page.slug
 
-    render json: {
-      short_name:       label.truncate(12),
-      name:             label,
-      icons:            [
-        { src: "/timers_favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
-        { src: "/timers_favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
-      ],
-      id:               "timers-page-#{page.slug}",
-      start_url:        "/timers/page/#{page.slug}?source=pwa",
-      scope:            "/timers/page/#{page.slug}",
-      background_color: "#0d1117",
-      display:          :standalone,
-      theme_color:      "#0d1117",
-      description:      "Timers: #{label}",
-    }, content_type: "application/manifest+json"
+    render_install_manifest(
+      @page,
+      id:            "timers-page-#{@page.slug}",
+      path:          timer_page_path(slug: @page.slug),
+      label:         label,
+      icon_src:      helpers.home_screen_icon_url(@page),
+      description:   "Timers: #{label}",
+      default_icons: DEFAULT_PAGE_ICONS,
+      default_color: DEFAULT_PAGE_COLOR,
+    )
+  end
+
+  # GET /timers/page/:slug/icon.png
+  def page_icon
+    send_home_screen_icon(@page)
   end
 
   # GET /timers/sync?since=<iso>
@@ -248,6 +257,11 @@ class TimersController < ApplicationController
 
   private
 
+  def set_installed_page
+    @page = TimerPage.from_install_token(params[:t])
+    head(:not_found) unless @page&.slug == params[:slug]
+  end
+
   def load_page_data
     @timers = current_user.timers.listed.ordered.to_a
     @pages  = current_user.timer_pages.listed.ordered.to_a
@@ -336,6 +350,9 @@ class TimersController < ApplicationController
       id:          page.id,
       slug:        page.slug,
       name:        page.name,
+      icon:        page.icon,
+      icon_color:  page.icon_color,
+      icon_url:    helpers.home_screen_icon_url(page),
       layout_mode: page.layout_mode,
       sections:    page.sections,
       sort_order:  page.sort_order,

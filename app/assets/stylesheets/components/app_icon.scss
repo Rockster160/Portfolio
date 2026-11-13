@@ -1,0 +1,67 @@
+// The home-screen icon picker (shared/_home_screen_icon_field): the tile as it
+// will look, its background colour, and × back to the default.
+.app-icon-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 4px;
+
+  > * {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  input[type="color"] {
+    width: 44px;
+    min-width: 0;
+    height: 36px;
+    padding: 2px;
+    border: 1px solid rgba(128, 128, 128, 0.35);
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+  }
+}
+.app-icon-tile {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  padding: 0 !important;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 14px;
+  font-size: 38px;
+  line-height: 1;
+  cursor: pointer;
+  overflow: hidden;
+
+  &.empty .app-icon-glyph {
+    font-size: 28px;
+    opacity: 0.6;
+  }
+  .icon-img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+  }
+}
+.app-icon-glyph {
+  display: grid;
+  place-items: center;
+}
+.app-icon-clear {
+  width: 26px;
+  height: 26px;
+  padding: 0 !important;
+  border: none;
+  border-radius: 999px;
+  background: #1F2A44 !important;
+  color: #FFF;
+  font-size: 16px !important;
+  line-height: 1;
+  cursor: pointer;
+
+  &.hidden {
+    display: none;
+  }
+}

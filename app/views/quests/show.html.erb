@@ -1,6 +1,11 @@
 <% content_for :title, @board.name %>
 <% content_for :favicon do %>
-  <%= render "quests/board_favicon" %>
+  <%= render "shared/home_screen_favicon",
+    record:        @board,
+    icon_path:     home_screen_icon_url(@board),
+    manifest_path: quest_board_manifest_path(@board, t: @board.install_token, v: @board.updated_at.to_i),
+    touch_icon:    asset_path("favicon/apple-touch-icon.png"),
+    tab_icon:      asset_path("favicon/favicon-32x32.png") %>
 <% end %>
 <% content_for :head do %>
   <script src="/chores_sortable.js" defer></script>
@@ -358,15 +363,7 @@
         </div>
         <div class="form-section">
           <label class="field-label">Home screen icon</label>
-          <div class="quests-app-icon-row" data-settings-app-icon
-               data-icon="<%= @board.icon %>"
-               data-color="<%= @board.icon_color.presence || QuestsController::DEFAULT_COLOR %>">
-            <button type="button" class="quests-app-icon-tile" data-app-icon-pick title="Choose an icon">
-              <span class="quests-app-icon-glyph" data-app-icon-glyph></span>
-            </button>
-            <input type="color" class="basic" data-app-icon-color aria-label="Icon background">
-            <button type="button" class="quests-row-remove" data-app-icon-clear aria-label="Use the default icon">×</button>
-          </div>
+          <%= render "shared/home_screen_icon_field", record: @board %>
           <span class="field-hint">The tab's icon, and the app's when this board is added to a home screen.</span>
         </div>
         <div class="form-section">

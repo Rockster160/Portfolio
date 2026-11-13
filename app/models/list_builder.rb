@@ -3,15 +3,20 @@
 # Table name: list_builders
 #
 #  id                 :bigint           not null, primary key
+#  icon               :string
+#  icon_color         :string
+#  icon_png           :binary
 #  items              :jsonb            not null
 #  name               :text             not null
 #  parameterized_name :text             not null
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
-#  user_id            :bigint           not null
 #  list_id            :bigint           not null
+#  user_id            :bigint           not null
 #
 class ListBuilder < ApplicationRecord
+  include HomeScreenIcon
+
   belongs_to :user
   belongs_to :list
 

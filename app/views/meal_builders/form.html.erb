@@ -18,6 +18,12 @@
       </div>
 
       <div class="form-field">
+        <label>Home screen icon</label>
+        <%= render "shared/home_screen_icon_field", record: @meal_builder, field: :meal_builder %>
+        <small>The tab's icon, and the app's when this page is added to a home screen.</small>
+      </div>
+
+      <div class="form-field">
         <%= form.label :items, "Items" %>
         <%= form.text_area :items, rows: [@meal_builder.items.length, 5].max, value: @meal_builder.listify_items %>
         <small>Enter items in rows like "Food Scrambled Eggs (100) 🥚"</small>

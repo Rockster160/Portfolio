@@ -213,9 +213,13 @@ Rails.application.routes.draw do
   end
 
   scope path: :jarvis do
-    resources :meal_builders
+    resources :meal_builders do
+      get :manifest, on: :member
+      get "icon.png", on: :member, action: :icon, as: :icon
+    end
     resources :list_builders do
       get :manifest, on: :member
+      get "icon.png", on: :member, action: :icon, as: :icon
       post :toggle_item, on: :member
       patch :update_stock, on: :member
     end
@@ -334,6 +338,7 @@ Rails.application.routes.draw do
   get  "/timers"            => "timers#index",  as: :timers
   get  "/timers/page/:slug" => "timers#page",   as: :timer_page
   get  "/timers/page/:slug/manifest.webmanifest" => "timers#page_manifest", as: :timer_page_manifest
+  get  "/timers/page/:slug/icon.png" => "timers#page_icon", as: :timer_page_icon
   get  "/timers/sync"       => "timers#sync",   as: :timers_sync
   get  "/timers/csrf"       => "timers#csrf",   as: :timers_csrf
 
@@ -562,6 +567,7 @@ Rails.application.routes.draw do
     post :reorder, on: :collection
     member do
       get :manifest
+      get "icon.png", action: :icon, as: :icon
       post :modify_from_message
       post :receive_update
     end

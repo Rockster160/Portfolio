@@ -5,6 +5,7 @@
 
 import Sortable from "../../../jil/Sortable.min.js";
 import { defaultLabelForSeconds } from "./duration";
+import { setupAppIcon } from "../../app_icon";
 
 export function setupSettingsModal({ root, store, actions, getActivePage, openEdit }) {
   const dialog = root.querySelector("[data-timers-settings-modal]");
@@ -20,6 +21,8 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
   const shareCreate = dialog.querySelector("[data-timers-share-create]");
   const shareMode = dialog.querySelector("[data-timers-share-mode]");
   const sharePageName = dialog.querySelector("[data-timers-share-page-name]");
+
+  setupPageIcon(dialog.querySelector("[data-settings-app-icon]"), { actions, getActivePage });
 
   tabs.forEach((tab) => tab.addEventListener("click", () => activate(tab.dataset.timersTab)));
   dialog.querySelectorAll("[data-timers-modal-close]").forEach((b) => {
@@ -310,4 +313,30 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
       dialog.showModal();
     },
   };
+}
+
+// The open page's home-screen icon, saved as soon as it changes, like the
+// rest of Settings. Saves run one after another, so a quick pick-then-colour
+// lands in the order it was made.
+function setupPageIcon(row, { actions, getActivePage }) {
+  if (!row) return;
+
+  let queue = Promise.resolve();
+  const appIcon = setupAppIcon(row, { onChange: () => { queue = queue.then(save); } });
+  appIcon.reset();
+
+  async function save() {
+    const page = getActivePage();
+    if (!page || !appIcon.changed()) return;
+
+    const payload = await appIcon.payload();
+    if (!payload) { window.alert("Couldn't draw that icon. Pick another, or clear it."); return; }
+
+    const res = await actions.updatePage(page.id, {
+      icon:          payload.icon,
+      icon_color:    payload.icon_color,
+      icon_data_url: payload.icon_png,
+    });
+    if (res) appIcon.saved(res);
+  }
 }

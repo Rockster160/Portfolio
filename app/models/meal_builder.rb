@@ -3,6 +3,9 @@
 # Table name: meal_builders
 #
 #  id                 :bigint           not null, primary key
+#  icon               :string
+#  icon_color         :string
+#  icon_png           :binary
 #  items              :jsonb            not null
 #  name               :text             not null
 #  parameterized_name :text             not null
@@ -11,6 +14,8 @@
 #  user_id            :bigint           not null
 #
 class MealBuilder < ApplicationRecord
+  include HomeScreenIcon
+
   belongs_to :user
 
   validates :name, :parameterized_name, presence: true
