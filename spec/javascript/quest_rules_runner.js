@@ -268,6 +268,42 @@ cases.game_day_after_reset = Q.dayKey(Q.gameDate(at(2026, 11, 5, 4, 0), 4));
   cases.batch_loop = { done: Q.isDone(b, a, Q.gameDate(NOV4, 4)), fired: Q.settleAuto(b, NOV4).fired.length };
 }
 
+// Hidden quests run the board from behind it: every rock mined adds a gem to a
+// hidden tally; a hidden batch quest notices three gems and adds a key; a
+// chest shows up only once that key is there.
+{
+  const rock = Q.newItem({
+    id: "rock", name: "Mine a rock", target: { mode: "none" },
+    effects: [{ on: "tap", kind: "add", item: "gems", amount: 1 }],
+  });
+  const gems = Q.newItem({ id: "gems", name: "Gems", hidden: true, target: { mode: "none" } });
+  const enough = Q.newItem({
+    id: "enough", name: "Three gems", hidden: true,
+    target: { mode: "auto", match: "all", conditions: [{ item: "gems", when: "today", op: ">=", value: 3 }] },
+    effects: [{ on: "complete", kind: "add", item: "key", amount: 1 }],
+    hooks: [{ on: "complete", kind: "trigger", trigger: "gems_found" }],
+  });
+  const key = Q.newItem({ id: "key", name: "Key", hidden: true, target: { mode: "fixed", value: 1 } });
+  const chest = Q.newItem({
+    id: "chest", name: "Open the chest",
+    conditions: [{ item: "key", when: "today", op: "done" }],
+  });
+  const b = { settings: { resetHour: 4 }, counts: {}, log: [], items: [rock, gems, enough, key, chest] };
+  const day = Q.gameDate(NOV4, 4);
+
+  const before = visibleIds(b, NOV4);
+  Q.tap(b, rock, NOV4, 3);
+  const settled = Q.settleAuto(b, NOV4);
+  cases.hidden = {
+    before,
+    after:   visibleIds(b, NOV4),
+    gems:    Q.countOf(b, gems, day),
+    key:     Q.isDone(b, key, day),
+    fired:   settled.fired.map(e => e.hooks.map(h => h.trigger)),
+    unhid:   Q.isVisible(b, { ...gems, hidden: false }, NOV4),
+  };
+}
+
 // Sections: the existing names in the order their quests sit, then renamed,
 // reordered and one removed from settings.
 {

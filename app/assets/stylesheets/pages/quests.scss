@@ -28,6 +28,12 @@ html.html-ctr-quests {
   &.edit-mode .chore-circle {
     cursor: grab;
   }
+  // A hidden quest, which only edit mode ever draws: dashed, so it can't be
+  // mistaken for one that's just off the board right now.
+  &.edit-mode .chore-circle.secret .circle-inner {
+    border-style: dashed;
+    box-shadow: none;
+  }
   .chore-circle.sortable-ghost {
     opacity: 0.35;
   }
