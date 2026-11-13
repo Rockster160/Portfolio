@@ -375,6 +375,24 @@ module ByteLocal
     false
   end
 
+  # Ask the Mini to read these Amazon orders' pages (~/code/Byte/amazon_reader.rb).
+  # It answers at once, and what the pages say comes back on its own to
+  # /webhooks/byte/amazon_orders. True when the Mini took the order ids.
+  def amazon_read(order_ids)
+    uri = URI.join(base_url(:mini), "/byte/amazon_read")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate({ order_ids: Array(order_ids) })
+
+    res = Net::HTTP.start(uri.hostname, uri.port,
+      use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,
+    ) { |http| http.request(req) }
+
+    res.is_a?(Net::HTTPSuccess)
+  rescue => e
+    Rails.logger.warn("[Byte] amazon_read failed: #{e.class}: #{e.message}")
+    false
+  end
+
   # Starting a Claude pane waits for it to print its Remote Control link
   # (Builder::READY_TIMEOUT on the Mini), so this one answers slowly.
   QUESTIONS_TIMEOUT_SECONDS = 75

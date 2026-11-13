@@ -167,19 +167,18 @@ RSpec.describe AmazonEmailParser do
       expect(placeholder.email_ids).to include(99_101)
     end
 
-    it "marks pre-existing items on the same order as delivered" do
+    it "leaves a named item to the Mini's read of the order, keeping the email on it" do
       existing = AmazonOrder.create(order_id: order_id, item_id: "B0AAAAAAAA", name: "Existing item")
 
       AmazonEmailParser.parse(delivery_notice_email(99_102, order_id))
 
-      expect(existing.delivered).to eq(true)
+      expect(existing.delivered).to be_falsey
       expect(existing.email_ids).to include(99_102)
     end
 
-    it "does not double-up when a duplicate delivery notice arrives after siblings are already delivered" do
+    it "does not double-up when a duplicate delivery notice arrives" do
       existing = AmazonOrder.create(order_id: order_id, item_id: "B0AAAAAAAA", name: "Existing item")
       AmazonEmailParser.parse(delivery_notice_email(99_103, order_id))
-      expect(existing.delivered).to eq(true)
 
       AmazonEmailParser.parse(delivery_notice_email(99_104, order_id))
 
@@ -404,7 +403,7 @@ RSpec.describe AmazonEmailParser do
       expect(calls).to be_empty
     end
 
-    it "marks existing items on the same order delivered when a redacted 'Delivered: N Office item' email arrives" do
+    it "leaves named items alone on a redacted 'Delivered: 1 Office item', which can't say which" do
       paper  = AmazonOrder.create(order_id: "114-3295736-0173045", item_id: "B09NXN8GTH", name: "Paper Guillotine")
       sleeve = AmazonOrder.create(order_id: "114-3295736-0173045", item_id: "B0FPHJF3CR", name: "Matte Euro Sleeves")
 
@@ -415,8 +414,8 @@ RSpec.describe AmazonEmailParser do
         subject: "Delivered: ⁦1⁩ Office item",
       ))
 
-      expect(paper.delivered).to eq(true)
-      expect(sleeve.delivered).to eq(true)
+      expect(paper.delivered).to be_falsey
+      expect(sleeve.delivered).to be_falsey
       expect(paper.email_ids).to include(51_049)
       expect(sleeve.email_ids).to include(51_049)
       # No phantom placeholder created when real siblings already covered the order.
@@ -427,14 +426,32 @@ RSpec.describe AmazonEmailParser do
     # redacted shape as the Ordered/Shipped/Delivered ones.
     let(:subject_51382) { "Out for delivery: ⁦1⁩ Lighting & Fans item" }
 
-    it "updates the existing item on the order when a redacted 'Out for delivery' email arrives" do
+    it "leaves a named item's date to the Mini on a redacted 'Out for delivery' email" do
       lamp = AmazonOrder.create(order_id: "114-7377615-7161007", item_id: "B0LAMP00001", name: "Ceiling Lamp")
 
       parse(51_382, subject_51382)
 
-      expect(lamp.delivery_date).to eq(Date.current.iso8601) # "Arriving today"
+      expect(lamp.delivery_date).to be_nil
       expect(lamp.delivered).to be_falsey
       expect(lamp.email_ids).to include(51_382)
+    end
+
+    it "updates a stand-in for the order, which has no item to be wrong about" do
+      parse(51_382, "Shipped 1 item: Lighting & Fans")
+
+      parse(51_382, subject_51382)
+
+      stand_in = AmazonOrder.find("114-7377615-7161007", "114-7377615-7161007")
+      expect(stand_in.delivery_date).to eq(Date.current.iso8601) # "Arriving today"
+    end
+
+    it "doesn't bring back a stand-in that was removed" do
+      parse(51_382, "Shipped 1 item: Lighting & Fans")
+      AmazonOrder.find("114-7377615-7161007", "114-7377615-7161007").remove!
+
+      parse(51_382, subject_51382)
+
+      expect(AmazonOrder.by_order("114-7377615-7161007")).to be_empty
     end
 
     it "creates a placeholder named from the subject when no items are known for the order, without flagging it" do
@@ -485,6 +502,19 @@ RSpec.describe AmazonEmailParser do
       after = AmazonOrder.by_order("114-3295736-0173045")
       expect(after.size).to eq(before_count)
       expect(after.flat_map(&:email_ids)).to include(51_049, 51_050)
+    end
+  end
+
+  describe "an item that was removed" do
+    it "isn't brought back by another email about its order" do
+      shipped = CASES.find { |row| row[:id] == 50_684 }
+      parse(shipped[:id], shipped[:subject])
+      expect(AmazonOrder.by_order(shipped[:order])).not_to be_empty
+      AmazonOrder.by_order(shipped[:order]).each(&:remove!)
+
+      parse(shipped[:id], shipped[:subject])
+
+      expect(AmazonOrder.by_order(shipped[:order])).to be_empty
     end
   end
 

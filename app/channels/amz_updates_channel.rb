@@ -16,7 +16,7 @@ class AmzUpdatesChannel < ApplicationCable::Channel
         order.merge!(source)
       end
     elsif json[:remove]
-      order.destroy
+      order&.remove!
     else
       name = json[:add] || json[:rename]
       return if name.blank?

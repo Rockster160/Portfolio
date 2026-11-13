@@ -34,6 +34,8 @@ daily_3am = "0 3 * * * MST"
 # hour, and kept clear of the 4-hourly sync at :13.
 every_3_hours_staggered = "37 */3 * * *"
 daily_4am = "0 4 * * * MST"
+# Early enough that a delivery's window for the day is on the dashboard by breakfast.
+daily_7am = "0 7 * * * MST"
 # Keep in step with ByteDailyAudit::BACKSTOP_HOUR — that's the constant the
 # audit's own "have I waited long enough" check reads.
 daily_10am = "0 10 * * * MST"
@@ -84,6 +86,13 @@ cron_jobs = [
     name:  "Rest Buddy's Face After A Lull",
     class: "BuddyExpressionResetWorker",
     cron:  every_minute,
+  },
+  {
+    # The backstop behind the Amazon emails, each of which reads every open
+    # order already: this only matters on a day none arrived.
+    name:  "Read Open Amazon Orders",
+    class: "AmazonReadWorker",
+    cron:  daily_7am,
   },
   {
     name:  "Prune Expired Buddy Memories",

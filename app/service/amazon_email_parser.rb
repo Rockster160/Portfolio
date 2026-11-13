@@ -90,7 +90,11 @@ class AmazonEmailParser
   #   * All rows on this order_id are delivered → idempotently attach the
   #     email_id to the most recent one (no phantom placeholder).
   #   * No rows exist on this order_id → create a placeholder keyed by
-  #     (order_id, order_id) with a name pulled from the subject.
+  #     (order_id, order_id) with a name pulled from the subject, unless
+  #     something on the order was taken off the list.
+  #   * Rows the Mini has named (keyed by ASIN) → left as they are. The email
+  #     can't say which of them it is about, and the Mini's read of the order
+  #     page, which every Amazon email sets off, says it for each one.
   def parse_no_card_email(delivered)
     unless shipment_lifecycle_email?
       tag = delivered ? "delivered, no order card" : "no order card"
@@ -100,6 +104,14 @@ class AmazonEmailParser
     all_siblings = AmazonOrder.by_order(order_id)
     active = all_siblings.reject(&:delivered)
 
+    if all_siblings.any? { |sibling| AmazonItemCatalog.asin?(sibling.item_id) }
+      all_siblings.each { |sibling|
+        sibling.email_ids << @email.id unless sibling.email_ids.include?(@email.id)
+      }
+      AmazonOrder.save
+      return true
+    end
+
     if all_siblings.any? && active.empty?
       target = all_siblings.max_by { |o| o.email_ids.max || 0 }
       target.email_ids << @email.id unless target.email_ids.include?(@email.id)
@@ -107,6 +119,8 @@ class AmazonEmailParser
       AmazonOrder.broadcast
       return true
     end
+
+    return true if active.empty? && AmazonOrder.removed_from?(order_id)
 
     targets = active.presence || [
       AmazonOrder.find_or_create(order_id, order_id).tap { |o|
@@ -226,8 +240,10 @@ class AmazonEmailParser
   end
 
   def email_items
-    @email_items ||= item_asins.map { |asin|
+    @email_items ||= item_asins.filter_map { |asin|
       asin_oid = asin_order_id(asin)
+      next if AmazonOrder.removed?(asin_oid, asin)
+
       is_ordered = ordered_email?
 
       # Amazon sometimes re-IDs items between "Ordered" and "Shipped" emails

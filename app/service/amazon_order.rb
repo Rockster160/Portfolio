@@ -38,6 +38,14 @@ class AmazonOrder
   # sayable exactly when there's somewhere to send its tracking number.
   NAMED_CARRIERS = (CARRIER_TRACKING_URLS.keys + [:amazon]).freeze
 
+  ORDER_ID_REGEX = /\A\d{3}-\d{7}-\d{7}\z/
+
+  # Items taken off the list, as "order_id/item_id" => when, so that nothing
+  # reading Amazon again (an email, the Mini's read of the order page) puts one
+  # back. Kept long enough to outlast any order's last update.
+  REMOVED_KEY = :amazon_removed
+  REMOVED_FOR = 120.days
+
   def self.all
     @@all ||= reload
   end
@@ -102,6 +110,34 @@ class AmazonOrder
     find(order_id, item_id) || create(order_id: order_id, item_id: item_id)
   end
 
+  def self.removed
+    (MeCache.get(REMOVED_KEY) || {}).transform_keys(&:to_s)
+  end
+
+  def self.removed?(order_id, item_id)
+    removed.key?(removed_key(order_id, item_id))
+  end
+
+  # Whether anything on this order was taken off, which also rules out a
+  # stand-in row for the whole order.
+  def self.removed_from?(order_id)
+    removed.keys.any? { |key| key.start_with?("#{order_id}/") }
+  end
+
+  def self.removed_key(order_id, item_id)
+    "#{order_id}/#{item_id}"
+  end
+
+  # Amazon orders still worth asking about: on the way, not cancelled.
+  def self.open_order_ids
+    all.filter_map { |order|
+      next if order.delivered || order.status == :cancelled
+      next unless order.order_id.to_s.match?(ORDER_ID_REGEX)
+
+      order.order_id
+    }.uniq
+  end
+
   def self.create(order_hash={})
     new(order_hash.merge(just_added: true)).tap { |item| all << item }
   end
@@ -129,6 +165,11 @@ class AmazonOrder
   # of the code (and #url) expects, whether freshly set or reloaded.
   def carrier=(val)
     @carrier = val.presence&.to_sym
+  end
+
+  # The same, for `status` (:cancelled, :declined).
+  def status=(val)
+    @status = val.presence&.to_sym
   end
 
   def reparse(email_id=nil)
@@ -180,6 +221,15 @@ class AmazonOrder
     self
   end
 
+  # Takes the item off the list for good: see REMOVED_KEY.
+  def remove!
+    cutoff = REMOVED_FOR.ago
+    kept = AmazonOrder.removed.select { |_key, at| Time.zone.parse(at.to_s)&.after?(cutoff) }
+    key = AmazonOrder.removed_key(order_id, item_id)
+    MeCache.set(REMOVED_KEY, kept.merge(key => Time.current.iso8601))
+    destroy
+  end
+
   def error!(str)
     @errors ||= []
     @errors.push(str)
@@ -202,7 +252,7 @@ class AmazonOrder
     # Keep the target's own link (part of its basic info); only adopt the
     # source's if the target didn't have one.
     self.custom_url    ||= other.custom_url
-    other.destroy
+    other.remove!
     self
   end
 

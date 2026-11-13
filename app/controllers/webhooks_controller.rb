@@ -573,6 +573,20 @@ class WebhooksController < ApplicationController
     render json: { ok: true, count: listed.length }
   end
 
+  # What the Mini read off Amazon's order pages (~/code/Byte/amazon_reader.rb),
+  # applied in a job of its own (AmazonReadResultWorker).
+  def byte_amazon_orders
+    return head :unauthorized unless byte_authorized?
+
+    payload = JSON.parse(request.raw_post) rescue nil
+    return head :bad_request unless payload.is_a?(Hash)
+
+    AmazonReadResultWorker.perform_async(
+      payload.slice("read_at", "orders", "error", "needs_person"),
+    )
+    render json: { ok: true }
+  end
+
   # A build handed over by a Claude session on the Mini (`bin/feature-build`),
   # with the brief that session wrote. It speaks in the owner's primary Buddy
   # thread, the same as one started from a feature request.

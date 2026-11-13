@@ -31,6 +31,10 @@ class ReceiveEmailWorker
 
     return unless trigger
 
+    # Whatever happens to the email after this, it's news about an order, so
+    # the Mini reads the order's page (AmazonOrderRead).
+    ::AmazonReadWorker.perform_async(amazon_order_ids) if amazon_order_email?
+
     # TODO: If using UUID, should specifically trigger ONLY that Task with the email as input.
     tasks = ::Jil.trigger(user, :email, @email)
     return if tasks.any?(&:stop_propagation?)
@@ -41,6 +45,8 @@ class ReceiveEmailWorker
     # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
     if amazon_update?
       parse_amazon && @email.archive! # Auto archive Amazon emails
+    elsif amazon_cancellation?
+      @email.archive! # The Mini's read of the order marks the item cancelled
     elsif usps_update?
       parse_usps && @email.archive! # Auto archive parsed USPS tracking emails
     end
@@ -64,6 +70,19 @@ class ReceiveEmailWorker
   def parse_amazon
     ::AmazonEmailParser.parse(@email)
   end
+
+  def amazon_order_email?
+    return false if amazon_order_ids.empty?
+
+    external_addresses.any? { |address| address.to_s.match?(/@amazon\.com\z/i) }
+  end
+
+  # "Item canceled for your Amazon.com order #111-…", from no-reply@amazon.com.
+  def amazon_cancellation?
+    amazon_order_email? && @email.subject.to_s.match?(/\bcancell?ed\b/i)
+  end
+
+  💾(:amazon_order_ids) { ::AmazonOrderRead.order_ids_in(@email.subject, parser.condensed_text) }
 
   # USPS tracking emails arrive from a usps.com sender when auto-forwarded (Gmail
   # preserves the original From), or — for a manual forward that rewrites From —

@@ -193,7 +193,7 @@ module Buddy
       order = find(user, match)
       raise "nothing on the way matches #{match.to_s.strip.inspect}" if order.nil?
 
-      order.destroy
+      order.remove!
       commit!
       order
     end
