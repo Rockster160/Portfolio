@@ -125,4 +125,95 @@ RSpec.describe "Quest board", type: :request do
       expect(response).to have_http_status(:unprocessable_entity)
     end
   end
+
+  describe "the home screen icon" do
+    let(:board) { user.quest_boards.create!(name: "Animal Crossing") }
+    let(:png) { "\x89PNG\r\n\x1A\n".b + ("pixels" * 10) }
+    let(:data_url) { "data:image/png;base64,#{Base64.strict_encode64(png)}" }
+
+    def set_icon
+      patch "/quests/#{board.id}", params: { icon: "🌟", icon_color: "#224466", icon_png: data_url }, as: :json
+    end
+
+    def install_path(name, token: board.install_token)
+      "/quests/#{board.id}/#{name}?t=#{token}"
+    end
+
+    it "keeps the drawn icon and serves it, named and scoped to the board" do
+      set_icon
+      expect(response).to have_http_status(:ok)
+      board.reload
+      expect(board.icon).to eq("🌟")
+      expect(board.icon_color).to eq("#224466")
+      expect(board.icon_png.b).to eq(png)
+      icon_url = response.parsed_body["icon_url"]
+      expect(icon_url).to start_with("/quests/#{board.id}/icon.png?")
+
+      get "/logout"
+      get icon_url
+      expect(response).to have_http_status(:ok)
+      expect(response.media_type).to eq("image/png")
+      expect(response.body.b).to eq(png)
+
+      get install_path("manifest.webmanifest")
+      manifest = ActiveSupport::JSON.decode(response.body)
+      expect(manifest).to include(
+        "name"        => "Animal Crossing",
+        "start_url"   => "/quests/#{board.id}?source=pwa",
+        "scope"       => "/quests/#{board.id}",
+        "theme_color" => "#224466",
+      )
+      expect(manifest["icons"].pluck("src")).to all(eq(icon_url))
+    end
+
+    it "keeps the name when only the icon changes, and the icon when only the name does" do
+      set_icon
+      expect(board.reload.name).to eq("Animal Crossing")
+
+      patch "/quests/#{board.id}", params: { name: "Stardew" }, as: :json
+      expect(board.reload).to have_attributes(name: "Stardew", icon: "🌟")
+    end
+
+    it "goes back to the site's icon when cleared" do
+      set_icon
+      patch "/quests/#{board.id}", params: { icon: "", icon_color: "", icon_png: "" }, as: :json
+      expect(board.reload.icon_png).to be_nil
+
+      get install_path("manifest.webmanifest")
+      expect(ActiveSupport::JSON.decode(response.body)["icons"].pluck("src")).to include("/favicon/android-chrome-512x512.png")
+      get install_path("icon.png")
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "links the board's own manifest and icon from its page" do
+      set_icon
+      get "/quests/#{board.id}"
+      expect(response.body).to include(
+        "/quests/#{board.id}/manifest.webmanifest?t=",
+        "rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/quests/#{board.id}/icon.png?t=",
+        "content=\"Animal Crossing\"",
+      )
+    end
+
+    it "refuses something that isn't a PNG, or is too big" do
+      patch "/quests/#{board.id}", params: { icon: "🌟", icon_png: "data:image/png;base64,#{Base64.strict_encode64("GIF89a")}" }, as: :json
+      expect(response).to have_http_status(:unprocessable_entity)
+
+      huge = "\x89PNG\r\n\x1A\n".b + ("x" * QuestBoard::MAX_ICON_BYTES)
+      patch "/quests/#{board.id}", params: { icon: "🌟", icon_png: "data:image/png;base64,#{Base64.strict_encode64(huge)}" }, as: :json
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(board.reload.icon_png).to be_nil
+    end
+
+    it "opens nothing without the board's own token" do
+      set_icon
+      other = user.quest_boards.create!(name: "Stardew")
+      get "/logout"
+
+      get "/quests/#{board.id}/manifest.webmanifest"
+      expect(response).to have_http_status(:not_found)
+      get install_path("icon.png", token: other.install_token)
+      expect(response).to have_http_status(:not_found)
+    end
+  end
 end
