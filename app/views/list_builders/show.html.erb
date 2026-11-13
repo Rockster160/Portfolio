@@ -4,8 +4,8 @@
     record:        @list_builder,
     icon_path:     home_screen_icon_url(@list_builder),
     manifest_path: manifest_list_builder_path(@list_builder, t: @list_builder.install_token, v: @list_builder.updated_at.to_i),
-    touch_icon:    asset_path("list_favicon/apple-touch-icon.png"),
-    tab_icon:      asset_path("list_favicon/favicon-32x32.png"),
+    touch_icon:    @list_builder.favicon("apple-touch-icon.png"),
+    tab_icon:      @list_builder.favicon("favicon-32x32.png"),
     status_bar:    "default" %>
 <% end %>
 <% content_for :head do %>

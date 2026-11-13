@@ -3,7 +3,7 @@
   key), it also carries hidden inputs that a form submits, filled with the
   drawn PNG only when the pick changed. %>
 <% field = local_assigns[:field] %>
-<% color = record.home_screen_color(local_assigns.fetch(:default_color, HomeScreenIcon::DEFAULT_COLOR)) %>
+<% color = record.home_screen_color(local_assigns.fetch(:default_color, record.favicon_color)) %>
 <div class="app-icon-row" data-settings-app-icon
      data-icon="<%= record.icon %>"
      data-color="<%= color %>"

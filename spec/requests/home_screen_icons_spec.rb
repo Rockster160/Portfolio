@@ -68,8 +68,9 @@ RSpec.describe "Home screen icons", type: :request do
       expect(builder.reload).to have_attributes(icon: nil, icon_color: nil, icon_png: nil)
 
       get install_path("manifest")
-      icons = ActiveSupport::JSON.decode(response.body)["icons"].pluck("src")
-      expect(icons).to include("/favicon/android-chrome-512x512.png")
+      manifest = ActiveSupport::JSON.decode(response.body)
+      expect(manifest["icons"]).to eq(HomeScreenIcon.icons_in(builder.favicon_dir).map(&:stringify_keys))
+      expect(manifest["theme_color"]).to eq(builder.favicon_color)
       get install_path("icon.png")
       expect(response).to have_http_status(:not_found)
     end
@@ -96,6 +97,20 @@ RSpec.describe "Home screen icons", type: :request do
     end
   end
 
+  shared_examples "a builder with its own icon" do |favicon_dir|
+    it "wears its own icon set and colour until one is picked" do
+      get "#{path}/#{builder.to_param}"
+      expect(response.body).to include(
+        "href=\"#{favicon_dir}/apple-touch-icon.png\"",
+        "href=\"#{favicon_dir}/favicon-32x32.png\"",
+        "content=\"#0059FD\"",
+      )
+      %w[apple-touch-icon.png favicon-32x32.png android-chrome-192x192.png android-chrome-512x512.png].each { |file|
+        expect(Rails.public_path.join(favicon_dir.delete_prefix("/"), file)).to exist
+      }
+    end
+  end
+
   describe "a list" do
     let(:builder) { create(:list, user: user, name: "Pantry", description: nil) }
     let(:other) { create(:list, user: user, name: "Garage") }
@@ -116,6 +131,9 @@ RSpec.describe "Home screen icons", type: :request do
     let(:other) { user.list_builders.create!(name: "Garage", list: list, items: []) }
 
     it_behaves_like "an installable page", :list_builder, "/jarvis/list_builders", "List Builder"
+    it_behaves_like "a builder with its own icon", "/list_builder_favicon" do
+      let(:path) { "/jarvis/list_builders" }
+    end
   end
 
   describe "a meal builder" do
@@ -123,6 +141,9 @@ RSpec.describe "Home screen icons", type: :request do
     let(:other) { user.meal_builders.create!(name: "Dinner", items: []) }
 
     it_behaves_like "an installable page", :meal_builder, "/jarvis/meal_builders", "Meal Builder"
+    it_behaves_like "a builder with its own icon", "/meal_builder_favicon" do
+      let(:path) { "/jarvis/meal_builders" }
+    end
 
     it "keeps the PNG out of the builder's JSON" do
       builder.update!(icon: "🥚", icon_data_url: data_url)
