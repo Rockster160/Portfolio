@@ -198,8 +198,8 @@ function bootQuests(root) {
   }
 
   // In play only what's on the board right now is drawn; in edit mode
-  // everything is, the rest dimmed, and an empty section shows as somewhere to
-  // drag quests into.
+  // everything is, the rest dimmed. A named section always shows, empty or
+  // not; the unnamed one only when something is in it.
   function render() {
     if (dragging) return;
     const b = board();
@@ -212,7 +212,7 @@ function bootQuests(root) {
       sections.get(item.section || "").push({ item, visible, rotation });
     });
     sections.forEach((entries, name) => {
-      if (!entries.length && (!editMode || !name)) sections.delete(name);
+      if (!entries.length && !name) sections.delete(name);
     });
 
     const seen = new Set();
@@ -249,7 +249,7 @@ function bootQuests(root) {
     });
     [...cards.keys()].forEach(id => { if (!seen.has(id)) cards.delete(id); });
     [...rotationCards.keys()].forEach(id => { if (!seen.has(id)) rotationCards.delete(id); });
-    emptyEl.classList.toggle("hidden", sections.size > 0);
+    emptyEl.classList.toggle("hidden", [...sections.values()].some(entries => entries.length));
 
     const day = today().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
     if (dayEl.textContent !== day) dayEl.textContent = day;
@@ -439,11 +439,12 @@ function bootQuests(root) {
     onSetCount: setCount,
   });
 
-  function setCount(item, shown) {
+  // A new quest started at a count was just announced as added.
+  function setCount(item, shown, { isNew = false } = {}) {
     const current = QuestRules.findItem(board(), item.id) || item;
     if (!QuestRules.setCount(board(), current, new Date(), shown)) return;
     commit();
-    flash("Set — hold it to undo");
+    if (!isNew) flash("Set — hold it to undo");
   }
 
   // A tap anywhere that isn't a visitor card's week or options folds its
