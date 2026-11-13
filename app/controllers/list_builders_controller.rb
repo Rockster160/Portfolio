@@ -5,7 +5,6 @@ class ListBuildersController < ApplicationController
   before_action :authorize_user_or_guest, except: [:manifest, :icon]
   before_action :set_list_builder, only: [:show, :edit, :update, :destroy, :toggle_item, :update_stock]
   before_action :set_installed_builder, only: [:manifest, :icon]
-  helper_method :home_screen_icon_url
 
   layout "quick_actions", only: [:show]
 
@@ -34,7 +33,7 @@ class ListBuildersController < ApplicationController
       @list_builder,
       id:          "list-builder-#{@list_builder.id}",
       path:        list_builder_path(@list_builder),
-      icon_src:    home_screen_icon_url(@list_builder),
+      icon_src:    helpers.home_screen_icon_url(@list_builder),
       description: "List Builder: #{@list_builder.name}",
     )
   end
@@ -144,12 +143,6 @@ class ListBuildersController < ApplicationController
   def set_installed_builder
     @list_builder = find_installed(ListBuilder)
     head(:not_found) if @list_builder.nil?
-  end
-
-  def home_screen_icon_url(builder)
-    return unless builder.icon?
-
-    icon_list_builder_path(builder, t: builder.install_token, v: builder.updated_at.to_i)
   end
 
   def list_builder_params

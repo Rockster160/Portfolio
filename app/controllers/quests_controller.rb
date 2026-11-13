@@ -8,7 +8,6 @@ class QuestsController < ApplicationController
   before_action :authorize_user, except: [:manifest, :icon]
   before_action :set_board, only: [:show, :update, :destroy, :state, :save]
   before_action :set_installed_board, only: [:manifest, :icon]
-  helper_method :icon_url
 
   def index
     @boards = current_user.quest_boards.order(:created_at)
@@ -40,7 +39,7 @@ class QuestsController < ApplicationController
       name:       @board.name,
       icon:       @board.icon,
       icon_color: @board.icon_color,
-      icon_url:   icon_url(@board),
+      icon_url:   helpers.home_screen_icon_url(@board),
     }
   end
 
@@ -52,7 +51,7 @@ class QuestsController < ApplicationController
       @board,
       id:          "quest-board-#{@board.id}",
       path:        quest_board_path(@board),
-      icon_src:    icon_url(@board),
+      icon_src:    helpers.home_screen_icon_url(@board),
       description: "Quests: #{@board.name}",
     )
   end
@@ -138,12 +137,6 @@ class QuestsController < ApplicationController
   def set_installed_board
     @board = find_installed(QuestBoard)
     head(:not_found) if @board.nil?
-  end
-
-  def icon_url(board)
-    return unless board.icon?
-
-    quest_board_icon_path(board, t: board.install_token, v: board.updated_at.to_i)
   end
 
   def stamp(data)

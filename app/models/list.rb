@@ -13,6 +13,8 @@
 #
 
 class List < ApplicationRecord
+  include HomeScreenIcon
+
   attr_accessor :do_not_broadcast, :response
 
   has_many :list_items, -> { ordered }, dependent: :destroy

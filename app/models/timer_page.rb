@@ -14,6 +14,8 @@
 #  user_id     :bigint           not null
 #
 class TimerPage < ApplicationRecord
+  include HomeScreenIcon
+
   LAYOUT_MODES = { auto: 0, manual: 1, list_rings: 2, list_rows: 3 }.freeze
   enum :layout_mode, LAYOUT_MODES
 

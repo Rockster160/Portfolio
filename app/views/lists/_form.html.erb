@@ -67,6 +67,13 @@
         <%= f.label :description %>
         <%= f.text_area :description %>
       </div>
+      <% if @list.persisted? %>
+        <div class="form-field">
+          <label>Home screen icon</label>
+          <%= render "shared/home_screen_icon_field", record: @list, field: :list %>
+          <small>The tab's icon, and the app's when this list is added to a home screen.</small>
+        </div>
+      <% end %>
       <div class="form-field">
         <div class="checkbox-wrapper">
           <%= f.check_box :important %>

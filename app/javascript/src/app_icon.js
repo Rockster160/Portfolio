@@ -85,7 +85,8 @@ export async function drawAppIcon(value, background) {
   return drawn ? canvas.toDataURL("image/png") : null;
 }
 
-export function setupAppIcon(row) {
+// `onChange` runs after each settled change: a pick, a clear, a colour chosen.
+export function setupAppIcon(row, { onChange } = {}) {
   const tile = row.querySelector("[data-app-icon-pick]");
   const glyph = row.querySelector("[data-app-icon-glyph]");
   const colorInput = row.querySelector("[data-app-icon-color]");
@@ -104,12 +105,14 @@ export function setupAppIcon(row) {
 
   tile.addEventListener("click", () => {
     loadIconPool();
-    openIconPicker({ onPick: value => { icon = value || ""; paint(); } });
+    openIconPicker({ onPick: value => { icon = value || ""; paint(); onChange?.(); } });
   });
   colorInput.addEventListener("input", paint);
+  colorInput.addEventListener("change", () => onChange?.());
   clearBtn.addEventListener("click", () => {
     icon = "";
     paint();
+    onChange?.();
   });
 
   return {

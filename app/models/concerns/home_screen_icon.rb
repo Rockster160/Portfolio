@@ -45,8 +45,8 @@ module HomeScreenIcon
     icon_png.present?
   end
 
-  def home_screen_color
-    icon_color.presence || DEFAULT_COLOR
+  def home_screen_color(default=DEFAULT_COLOR)
+    icon_color.presence || default
   end
 
   # Takes the PNG as the data URL the canvas hands over, or blank to clear it.
@@ -67,29 +67,33 @@ module HomeScreenIcon
     super
   end
 
-  # The install manifest: opens on `path`, named after the record, wearing
-  # the icon at `icon_src`, or the site's icons when there is none.
-  def install_manifest(id:, path:, icon_src:, description:)
+  # The install manifest: opens on `path` (with `query` on the way in),
+  # named `label`, wearing the icon at `icon_src`, or `default_icons` and
+  # `default_color` until one is picked.
+  def install_manifest(id:, path:, icon_src:, description:, **opts)
+    label = opts[:label].presence || name
+    color = home_screen_color(opts[:default_color] || DEFAULT_COLOR)
+    query = opts.fetch(:query, {}).merge(source: :pwa).to_query
     icons = (
       if icon_src
         [192, 512].map { |size|
           { src: icon_src, sizes: "#{size}x#{size}", type: "image/png", purpose: :any }
         }
       else
-        DEFAULT_ICONS
+        opts[:default_icons] || DEFAULT_ICONS
       end
     )
 
     {
-      short_name:       name.truncate(12),
-      name:             name,
+      short_name:       label.truncate(12),
+      name:             label,
       icons:            icons,
       id:               id,
-      start_url:        "#{path}?source=pwa",
+      start_url:        "#{path}?#{query}",
       scope:            path,
-      background_color: home_screen_color,
+      background_color: color,
       display:          :standalone,
-      theme_color:      home_screen_color,
+      theme_color:      color,
       description:      description,
     }
   end

@@ -1,17 +1,24 @@
 <%# Timers-specific icon set. The manifest stays per-page when a timer page is
-  active (id, scope, start_url) so each installed page behaves correctly; the
-  icon visuals are shared across them. %>
-<link rel="apple-touch-icon" sizes="180x180" href="/timers_favicon/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="/timers_favicon/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/timers_favicon/favicon-16x16.png">
-<link rel="shortcut icon" href="/timers_favicon/favicon.ico">
+  active (id, scope, start_url) so each installed page behaves correctly, and
+  wears the icon picked for it in Settings. %>
 <% if @active_page.present? %>
-  <link rel="manifest" href="<%= timer_page_manifest_path(slug: @active_page.slug) %>">
+  <%= render "shared/home_screen_favicon",
+    record:        @active_page,
+    title:         @active_page.name.presence || @active_page.slug,
+    icon_path:     home_screen_icon_url(@active_page),
+    manifest_path: timer_page_manifest_path(slug: @active_page.slug, t: @active_page.install_token, v: @active_page.updated_at.to_i),
+    touch_icon:    "/timers_favicon/apple-touch-icon.png",
+    tab_icon:      "/timers_favicon/favicon-32x32.png",
+    default_color: TimersController::DEFAULT_PAGE_COLOR %>
 <% else %>
+  <link rel="apple-touch-icon" sizes="180x180" href="/timers_favicon/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/timers_favicon/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/timers_favicon/favicon-16x16.png">
+  <link rel="shortcut icon" href="/timers_favicon/favicon.ico">
   <link rel="manifest" href="/timers.webmanifest">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="apple-mobile-web-app-title" content="Timers">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <% end %>
-<meta name="theme-color" content="#0d1117">
-<meta name="apple-mobile-web-app-title" content="<%= @active_page&.name.presence || @active_page&.slug || 'Timers' %>">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

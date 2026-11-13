@@ -1,14 +1,15 @@
 # Serves a HomeScreenIcon record's install manifest and icon. Both are fetched
 # by the browser without cookies, so the record is found by the signed install
-# token in the URL, and only when it is the record the path names.
+# token in the URL (`t` unless the page already uses that name), and only
+# when it is the record the path names.
 module HomeScreenInstall
   extend ActiveSupport::Concern
 
   private
 
-  def find_installed(klass)
-    record = klass.from_install_token(params[:t])
-    record if record && record.to_param == params[:id].to_s
+  def find_installed(klass, token: params[:t], key: params[:id])
+    record = klass.from_install_token(token)
+    record if record && record.to_param == key.to_s
   end
 
   def render_install_manifest(record, **)

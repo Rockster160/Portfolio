@@ -1,7 +1,10 @@
 class ListsController < ApplicationController
+  include HomeScreenInstall
+
   skip_before_action :verify_authenticity_token
-  before_action :authorize_user_or_guest, :color_scheme
-  before_action :set_list, only: [:edit, :update, :show, :destroy, :users, :modify_from_message, :manifest]
+  before_action :authorize_user_or_guest, :color_scheme, except: [:manifest, :icon]
+  before_action :set_list, only: [:edit, :update, :show, :destroy, :users, :modify_from_message]
+  before_action :set_installed_list, only: [:manifest, :icon]
 
   def index
     @lists = current_user.ordered_lists
@@ -23,27 +26,23 @@ class ListsController < ApplicationController
     end
   end
 
+  # The list's own install manifest, so one added to a home screen opens on
+  # itself (keeping the view it was installed from), named after itself,
+  # wearing the icon picked on its edit page. The install token is `key`,
+  # since `t` already picks the list's tasks.
   def manifest
-    pwa_params = params.permit(:mode, :reset, :t, :clear).to_h.compact
-    query_string = pwa_params.any? ? "?#{pwa_params.to_query}&source=pwa" : "?source=pwa"
+    render_install_manifest(
+      @list,
+      id:          "list-#{@list.id}",
+      path:        list_path(@list),
+      query:       params.permit(:mode, :reset, :t, :clear).to_h.compact,
+      icon_src:    helpers.home_screen_icon_url(@list),
+      description: @list.description.presence || "List: #{@list.name}",
+    )
+  end
 
-    manifest = {
-      short_name:       @list.name.truncate(12),
-      name:             @list.name,
-      icons:            [
-        { src: "/favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
-        { src: "/favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
-      ],
-      id:               "list-#{@list.id}",
-      start_url:        "/lists/#{@list.id}#{query_string}",
-      background_color: "#000712",
-      display:          :standalone,
-      scope:            "/lists/#{@list.id}",
-      theme_color:      "#000712",
-      description:      @list.description.presence || "List: #{@list.name}",
-    }
-
-    render json: manifest, content_type: "application/manifest+json"
+  def icon
+    send_home_screen_icon(@list)
   end
 
   def new
@@ -194,11 +193,16 @@ class ListsController < ApplicationController
     session[:color_scheme] = params[:style] if params[:style].present?
   end
 
+  def set_installed_list
+    @list = find_installed(List, token: params[:key])
+    head(:not_found) if @list.nil?
+  end
+
   def list_params
     if params[:list].present?
       params.require(:list).permit(
         :name, :description, :important, :show_deleted, :default,
-        :message, :add, :remove
+        :message, :add, :remove, :icon, :icon_color, :icon_data_url
       ).tap { |whitelist|
         whitelist[:add] ||= params[:add] if params[:add].present?
         whitelist[:remove] ||= params[:remove] if params[:remove].present?

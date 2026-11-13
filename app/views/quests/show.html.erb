@@ -1,9 +1,8 @@
 <% content_for :title, @board.name %>
 <% content_for :favicon do %>
-  <% board_icon = @board.icon? ? quest_board_icon_path(@board, t: @board.install_token, v: @board.updated_at.to_i) : nil %>
   <%= render "shared/home_screen_favicon",
     record:        @board,
-    icon_path:     board_icon,
+    icon_path:     home_screen_icon_url(@board),
     manifest_path: quest_board_manifest_path(@board, t: @board.install_token, v: @board.updated_at.to_i),
     touch_icon:    asset_path("favicon/apple-touch-icon.png"),
     tab_icon:      asset_path("favicon/favicon-32x32.png") %>

@@ -1786,3 +1786,18 @@ html:has(.timers-modal[open]) { overflow: hidden; }
   .is-press-pending { animation: none; opacity: 0.6; }
   .is-press-done, .is-press-queued, .is-press-failed { animation: none; }
 }
+
+// Settings › Pages: the open page's home-screen icon, above the page list.
+.timers-app .timers-form .timers-page-icon {
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid $t-border;
+
+  .field-hint {
+    margin: 0 0 8px;
+  }
+  .app-icon-row input[type="color"] {
+    width: 44px;
+    height: 36px;
+    min-height: 0;
+  }
+}

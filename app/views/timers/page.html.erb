@@ -270,6 +270,12 @@
         </div>
       </section>
       <section data-timers-tab-panel="pages" hidden>
+        <% if @active_page.present? %>
+          <div class="timers-page-icon">
+            <p class="field-hint">Home screen icon for <strong><%= @active_page.name.presence || @active_page.slug %></strong></p>
+            <%= render "shared/home_screen_icon_field", record: @active_page, default_color: TimersController::DEFAULT_PAGE_COLOR %>
+          </div>
+        <% end %>
         <div data-timers-pages-list></div>
         <div class="timers-quick-add-form">
           <input type="text" placeholder="New page name" data-timers-new-page-name>

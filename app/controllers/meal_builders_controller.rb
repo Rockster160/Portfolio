@@ -5,7 +5,6 @@ class MealBuildersController < ApplicationController
   before_action :authorize_user_or_guest, except: [:manifest, :icon]
   before_action :set_meal_builder, only: [:show, :edit, :update, :destroy]
   before_action :set_installed_builder, only: [:manifest, :icon]
-  helper_method :home_screen_icon_url
 
   layout "quick_actions", only: [:show]
 
@@ -23,7 +22,7 @@ class MealBuildersController < ApplicationController
       @meal_builder,
       id:          "meal-builder-#{@meal_builder.id}",
       path:        meal_builder_path(@meal_builder),
-      icon_src:    home_screen_icon_url(@meal_builder),
+      icon_src:    helpers.home_screen_icon_url(@meal_builder),
       description: "Meal Builder: #{@meal_builder.name}",
     )
   end
@@ -76,12 +75,6 @@ class MealBuildersController < ApplicationController
   def set_installed_builder
     @meal_builder = find_installed(MealBuilder)
     head(:not_found) if @meal_builder.nil?
-  end
-
-  def home_screen_icon_url(builder)
-    return unless builder.icon?
-
-    icon_meal_builder_path(builder, t: builder.install_token, v: builder.updated_at.to_i)
   end
 
   def meal_builder_params

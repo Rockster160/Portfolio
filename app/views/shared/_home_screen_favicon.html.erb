@@ -3,13 +3,14 @@
   defaults until one is. The manifest and icon are fetched without cookies,
   so both carry the record's signed install token. %>
 <% status_bar = local_assigns.fetch(:status_bar, "black-translucent") %>
+<% default_color = local_assigns.fetch(:default_color, HomeScreenIcon::DEFAULT_COLOR) %>
 <link rel="apple-touch-icon" sizes="180x180" href="<%= icon_path || touch_icon %>"
       data-app-favicon data-default-href="<%= touch_icon %>">
 <link rel="icon" type="image/png" href="<%= icon_path || tab_icon %>"
       data-app-favicon data-default-href="<%= tab_icon %>">
 <link rel="manifest" href="<%= manifest_path %>">
-<meta name="theme-color" content="<%= record.home_screen_color %>">
-<meta name="apple-mobile-web-app-title" content="<%= record.name.truncate(12) %>">
+<meta name="theme-color" content="<%= record.home_screen_color(default_color) %>">
+<meta name="apple-mobile-web-app-title" content="<%= local_assigns.fetch(:title, record.name).truncate(12) %>">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="<%= status_bar %>">
