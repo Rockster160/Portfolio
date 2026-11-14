@@ -36,17 +36,18 @@ html.html-ctr-quests {
   }
   // A locked quest: a small padlock on its circle, and no pointer, since a
   // tap only shakes it.
-  .quests-lock {
+  .chore-circle .circle-inner > .quests-lock {
     display: none;
     position: absolute;
-    top: 4px;
+    top: 10%;
     left: 50%;
     transform: translateX(-50%);
     font-size: 11px;
     color: var(--chores-muted);
+    z-index: 3;
     pointer-events: none;
   }
-  .chore-circle.locked .quests-lock {
+  .chore-circle.locked .circle-inner > .quests-lock {
     display: block;
   }
   &:not(.edit-mode) .chore-circle.locked {
