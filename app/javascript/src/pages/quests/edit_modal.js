@@ -259,6 +259,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset, onSetCount
     setPills("direction", item.countDown ? "down" : "up");
     setPills("reset", item.reset || "daily");
     setPills("hidden", item.hidden ? "hidden" : "shown");
+    setPills("locked", item.locked ? "locked" : "tap");
     setChips("days", s.days || []);
     setChips("months", s.months || []);
 
@@ -277,7 +278,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset, onSetCount
     syncShowFor();
 
     advanced.open = !!(
-      item.hidden || item.section || (item.step > 1) || s.days?.length || s.months?.length ||
+      item.hidden || item.locked || item.section || (item.step > 1) || s.days?.length || s.months?.length ||
       s.startDate || s.endDate || s.from || s.to ||
       item.conditions?.length || item.effects?.length || item.hooks?.length
     );
@@ -309,6 +310,7 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset, onSetCount
       ...editing,
       countDown: mode === "fixed" && getPills("direction") === "down",
       hidden:    getPills("hidden") === "hidden",
+      locked:    getPills("target_mode") !== "auto" && getPills("locked") === "locked",
       icon:     iconStack.__iconValue().trim(),
       name:     field("name").value.trim(),
       section:  field("section").value.trim(),
