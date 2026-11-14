@@ -114,9 +114,11 @@ function bootQuests(root) {
     node.classList.toggle("no-animate", done && (firstPaint || wasDone || (target || 0) > 1));
     node.classList.toggle("pending", !visible);
     node.classList.toggle("secret", !!item.hidden);
+    node.classList.toggle("locked", QuestRules.isLocked(item));
     node.title = (
       item.hidden ? "Hidden — only shown while editing"
-        : visible ? "" : "Not on the board right now"
+        : !visible ? "Not on the board right now"
+          : QuestRules.isLocked(item) ? "Locked — only the editor and other quests change it" : ""
     );
     patchRing(node, item, count, target);
 
@@ -270,7 +272,15 @@ function bootQuests(root) {
     return QuestRules.findItem(board(), node?.dataset.questId);
   }
 
+  // A locked quest shakes and says so instead of counting.
+  function refuseLocked(item) {
+    const node = cards.get(item.id);
+    if (node) replay(node, "quests-bump");
+    flash("Locked — change it from the editor", "warn");
+  }
+
   function complete(item, times = 1) {
+    if (QuestRules.isLocked(item)) { refuseLocked(item); return; }
     const entry = QuestRules.tap(board(), item, new Date(), times);
     if (!entry) {
       const node = cards.get(item.id);
@@ -289,6 +299,7 @@ function bootQuests(root) {
   }
 
   function undoLast(item) {
+    if (QuestRules.isLocked(item)) { refuseLocked(item); return; }
     const entry = QuestRules.undo(board(), item, new Date());
     if (!entry) { flash("Nothing to undo", "warn"); return; }
     navigator.vibrate?.([10, 40, 10]);
@@ -438,7 +449,7 @@ function bootQuests(root) {
     onReset(item) {
       if (QuestRules.resetItem(board(), item, new Date())) {
         commit();
-        flash("Reset — hold it to undo");
+        flash(QuestRules.isLocked(item) ? "Reset" : "Reset — hold it to undo");
       }
     },
     onSetCount: setCount,
@@ -449,7 +460,7 @@ function bootQuests(root) {
     const current = QuestRules.findItem(board(), item.id) || item;
     if (!QuestRules.setCount(board(), current, new Date(), shown)) return;
     commit();
-    if (!isNew) flash("Set — hold it to undo");
+    if (!isNew) flash(QuestRules.isLocked(current) ? "Set" : "Set — hold it to undo");
   }
 
   // A tap anywhere that isn't a visitor card's week or options folds its
@@ -542,6 +553,7 @@ function bootQuests(root) {
   });
 
   function openMulti(item) {
+    if (QuestRules.isLocked(item)) { setMultiMode(false); refuseLocked(item); return; }
     if (QuestRules.isAuto(item)) { setMultiMode(false); complete(item); return; }
     multiItem = item;
     setMultiSet(false);

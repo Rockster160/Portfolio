@@ -57,6 +57,7 @@
         </svg>
         <div class="icon" data-icon></div>
         <div class="count-slot" data-count-slot></div>
+        <span class="quests-lock" aria-hidden="true"><i class="fa fa-lock"></i></span>
       </div>
       <div class="title"></div>
     </div>
@@ -177,6 +178,17 @@
             </div>
             <span class="field-hint" data-show-for="hidden:hidden">
               Only shows while editing. Still counts, still fires its effects and hooks, and other quests can still read it.
+            </span>
+          </div>
+
+          <div class="form-section" data-hide-for="target_mode:auto">
+            <label class="field-label">Tapping</label>
+            <div class="pill-group" data-pills="locked">
+              <button type="button" class="pill" data-value="tap">Tap to count</button>
+              <button type="button" class="pill" data-value="locked">Locked</button>
+            </div>
+            <span class="field-hint" data-show-for="locked:locked">
+              Taps, ×N and holds leave it alone. Other quests, its own rules and Count now here still change it.
             </span>
           </div>
 

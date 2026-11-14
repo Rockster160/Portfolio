@@ -201,6 +201,12 @@ function conditionPasses(board, cond, date) {
 // day's board at all (its days, months, dates or conditions rule it out) is
 // left out, so "all of these talks" means everyone who is actually around. No
 // rows left means nothing to do: a target of 0, off the board.
+// A locked quest is never counted from the board — no tap, no ×N, no hold —
+// while effects, auto rules and the editor still move it.
+function isLocked(item) {
+  return !!item?.locked;
+}
+
 function isAuto(item) {
   return item?.target?.mode === "auto";
 }
@@ -304,13 +310,13 @@ function newId(prefix) {
 
 // One tap (or `times` taps from multi mode) on a quest. Mutates the board and
 // answers the log entry, or null when there was nothing to do — a finished
-// quest doesn't count past its target.
+// quest doesn't count past its target, and a locked one isn't tapped at all.
 //
 // Effects and hooks marked `on: "tap"` fire for the tap; `on: "complete"` fire
 // only for the tap that reaches the target. Effects don't chain: a rock adding
 // to the shovel doesn't run the shovel's own effects.
 function tap(board, item, now, times = 1) {
-  if (isAuto(item)) return null;
+  if (isAuto(item) || isLocked(item)) return null;
   const date = gameDate(now, resetHourOf(board));
   const target = resolveTarget(board, item, date);
   const count = countOf(board, item, date);
@@ -525,7 +531,8 @@ function newItem(attrs = {}) {
 const QuestRules = {
   dayKey, addDays, gameDate, periodKey, resetHourOf, findItem, countOf,
   resolveTarget, isDone, findOption, fixedDay, rotationEntry, mainOn, extrasOn, isHere,
-  dropMissingVisitors, scheduleMatches, conditionPasses, isVisible, isAuto, autoState,
+  dropMissingVisitors, scheduleMatches, conditionPasses, isVisible, isAuto, isLocked,
+  autoState,
   countsDown, shownCount, displayName, tap, resetItem, setCount, settleAuto, undo, prune,
   sectionNames, syncSections, setSections, parseQuickAdd, newItem, newId,
 };
