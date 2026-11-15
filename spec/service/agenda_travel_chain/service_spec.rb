@@ -128,6 +128,42 @@ RSpec.describe AgendaTravelChain::Service do
       expect(meta["travel_minutes"]).to eq(25)
     end
 
+    # The drive home measured from the typed name went to whichever "Dayne's"
+    # Google liked, nineteen hours away, while the drive there was right.
+    it "drives home from the same resolved address it drove to" do
+      resolved = "6559 N Fiona St, Eagle Mountain, UT 84005"
+      allow(address_book).to receive(:geocode) { |addr|
+        next nil if addr == "Dayne's"
+        [40.0 + addr.to_s.length * 0.001, -111.0]
+      }
+      allow(address_book).to receive(:nearest_from_name) { |_name, **opts|
+        case opts[:extract]
+        when :address then resolved
+        when :loc then [40.34, -112.01]
+        end
+      }
+      allow(address_book).to receive(:traveltime_seconds) { |to, from, _opts = {}|
+        case [from, to]
+        when ["Home St", resolved], [resolved, "Home St"] then 1500
+        when ["Dayne's", "Home St"] then 67_742
+        else drive_matrix[[from.to_s, to.to_s]] || 600
+        end
+      }
+
+      evt = make_event(
+        name:     "Fire & Games",
+        start_at: Time.zone.parse("2026-06-18 18:00"),
+        end_at:   Time.zone.parse("2026-06-18 23:00"),
+        location: "Dayne's",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      meta = evt.reload.metadata["travel"]
+      expect(meta["travel_seconds"]).to eq(1500)
+      expect(meta["post_travel_seconds"]).to eq(1500)
+      expect(meta["post_arrive_at"]).to eq(evt.end_at.to_i + 1500)
+    end
+
     it "chains two events when going home in between wouldn't fit" do
       a = make_event(
         name: "Meeting A",
