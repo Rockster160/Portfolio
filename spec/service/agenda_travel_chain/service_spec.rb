@@ -134,7 +134,8 @@ RSpec.describe AgendaTravelChain::Service do
       resolved = "6559 N Fiona St, Eagle Mountain, UT 84005"
       allow(address_book).to receive(:geocode) { |addr|
         next nil if addr == "Dayne's"
-        [40.0 + addr.to_s.length * 0.001, -111.0]
+
+        [40.0 + (addr.to_s.length * 0.001), -111.0]
       }
       allow(address_book).to receive(:nearest_from_name) { |_name, **opts|
         case opts[:extract]
@@ -142,7 +143,7 @@ RSpec.describe AgendaTravelChain::Service do
         when :loc then [40.34, -112.01]
         end
       }
-      allow(address_book).to receive(:traveltime_seconds) { |to, from, _opts = {}|
+      allow(address_book).to receive(:traveltime_seconds) { |to, from, _opts={}|
         case [from, to]
         when ["Home St", resolved], [resolved, "Home St"] then 1500
         when ["Dayne's", "Home St"] then 67_742

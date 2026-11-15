@@ -772,6 +772,22 @@ RSpec.describe "Buddy agenda tools" do
         expect(result[:follow_on]).to eq(clock(Buddy::FollowUp.after(home)))
       end
 
+      it "throws away a wrong drive and measures it again when asked to" do
+        item = orchard!(travel: { "travel_seconds" => 1860, "post_travel_seconds" => 67_742 })
+        allow(AgendaTravelChain).to receive(:reset_and_recompute_for) { |i|
+          i.update!(metadata: { "travel" => { "travel_seconds" => 1860, "post_travel_seconds" => 1860 } })
+        }
+        payload = { item: "Orchard", remeasure: true }
+        merged  = payload.merge(tool[:confirm].call(payload, ctx)[:resolved])
+
+        result = tool[:execute].call(merged, ctx)
+
+        expect(AgendaTravelChain).to have_received(:reset_and_recompute_for).with(item)
+        expect(result[:remeasured]).to be(true)
+        expect(result[:home_by]).to eq(clock(starts + 1.hour + 31.minutes))
+        expect(tool[:receipt].call(result, ctx)).to start_with("Orchard - remeasured, 31m to")
+      end
+
       it "refuses something with nowhere to drive to" do
         orchard!(location: "")
 
