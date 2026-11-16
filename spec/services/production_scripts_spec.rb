@@ -55,6 +55,38 @@ RSpec.describe ProductionScripts do
     end
   end
 
+  describe "the hero chip" do
+    def chip = BackgroundProcess.live_find(user, described_class::CHIP_KEY)
+
+    it "counts the scripts whose commit is live and only need approving" do
+      script
+      described_class.create!(user: user, title: "Later", code: "1", commit_sha: unknown, edited_by: :mini)
+      expect(chip.name).to eq("1 script to approve")
+      expect(chip.links.first["url"]).to end_with("/system/production_scripts")
+
+      described_class.create!(user: user, title: "Also", code: "2", commit_sha: head, edited_by: :mini)
+      expect(chip.name).to eq("2 scripts to approve")
+    end
+
+    it "goes once nothing is left waiting on approval" do
+      described_class.approve!(script, by: user)
+
+      expect(chip).to be_nil
+    end
+
+    it "picks up a script after the deploy that brings its commit in" do
+      waiting = described_class.create!(user: user, title: "Later", code: "1", commit_sha: unknown, edited_by: :mini)
+      expect(chip).to be_nil
+
+      allow(described_class).to receive(:deployed?).and_return(true)
+      ProductionScriptsDeployedWorker.new.perform
+
+      expect(chip.name).to eq("1 script to approve")
+      described_class.skip!(waiting)
+      expect(chip).to be_nil
+    end
+  end
+
   describe ".run!" do
     def finishing(output, success)
       allow(Open3).to receive(:capture2e).and_return([output, instance_double(Process::Status, success?: success, exitstatus: success ? 0 : 1)])

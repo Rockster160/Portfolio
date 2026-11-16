@@ -10,6 +10,8 @@ require "open3"
 module ProductionScripts
   module_function
 
+  CHIP_KEY = :"production-scripts:awaiting"
+
   def create!(user:, title:, code:, commit_sha:, edited_by:, feature_build: nil)
     user.production_scripts.create!(
       title:         title,
@@ -49,6 +51,38 @@ module ProductionScripts
     ProductionScript.status_approved.find_each { |script|
       ProductionScriptRunWorker.perform_async(script.id) if deployed?(script.commit_sha)
     }
+  end
+
+  # Pending, and their commit is already live: the owner's approval is the only
+  # thing they're waiting on. One whose commit hasn't deployed is waiting on
+  # the deploy too, and approving it now wouldn't run it.
+  def awaiting_approval(user)
+    user.production_scripts.status_pending.select { |script| deployed?(script.commit_sha) }
+  end
+
+  # A count of them on the owner's hero, tapping through to the list. Runs
+  # when a script changes and after every deploy, which between them are the
+  # only moments the count can move.
+  def refresh_chip!(user)
+    count = awaiting_approval(user).length
+    return BackgroundProcess.clear(user: user, key: CHIP_KEY) if count.zero?
+
+    BackgroundProcess.note(
+      user:     user,
+      key:      CHIP_KEY,
+      name:     "#{count} #{"script".pluralize(count)} to approve",
+      state:    :waiting,
+      source:   :rails,
+      url:      Rails.application.routes.url_helpers.system_production_scripts_url,
+      metadata: { color: :amber, pinned: true },
+    )
+  rescue StandardError => e
+    Rails.logger.warn("[ProductionScripts] chip refresh failed: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def refresh_chips!
+    User.where(id: ProductionScript.select(:user_id)).find_each { |user| refresh_chip!(user) }
   end
 
   def run!(script)

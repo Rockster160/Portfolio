@@ -56,6 +56,7 @@ class ProductionScript < ApplicationRecord
   validate :unchanged_while_running, on: :update
 
   before_save :withdraw_approval, if: :code_changed?, unless: :new_record?
+  after_commit :refresh_chip, if: -> { destroyed? || saved_change_to_status? || saved_change_to_commit_sha? }
 
   scope :newest, -> { order(created_at: :desc) }
   # What the System page counts: still to run, or ran and failed.
@@ -83,6 +84,10 @@ class ProductionScript < ApplicationRecord
   end
 
   private
+
+  def refresh_chip
+    ProductionScripts.refresh_chip!(user)
+  end
 
   def withdraw_approval
     return if status_skipped?
