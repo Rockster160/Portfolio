@@ -89,6 +89,9 @@ Text.clean = function (text) {
   text = text.replaceAll(/<img.*?\>/gi, "  ");
   text = text.replaceAll(/<es>.*?<\/es>/gi, " ");
   text = text.replaceAll(/<.*?>/gi, "");
+  // Escaping turned every literal "<" into "&lt;"; measured as is, a line
+  // holding one comes up three characters long and justifies short.
+  text = text.replaceAll("&lt;", "<");
 
   return text;
 };

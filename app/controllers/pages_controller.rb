@@ -93,11 +93,11 @@ class PagesController < ApplicationController
 
     return if @page.present?
 
-    if Page.exists?(id: params[:id])
-      @restricted_title = "Page"
-      @restricted_description = "Sign in to view this document."
-      render "application/restricted"
-    end
+    raise ActiveRecord::RecordNotFound unless Page.exists?(id: params[:id])
+
+    @restricted_title = "Page"
+    @restricted_description = "Sign in to view this document."
+    render "application/restricted"
   end
 
   def page_params

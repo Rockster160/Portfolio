@@ -298,6 +298,7 @@ class TeslaControl
         # push it to the dashboard in the same breath. No-ops when it was
         # already clear, so this doesn't churn on every successful command.
         ::TeslaCommand.proxy_unreachable!(false)
+        ::TeslaCommand.error!(nil)
         result
       end
     rescue *::TeslaErrorClassifier::PROXY_UNREACHABLE_CLASSES => e
@@ -428,6 +429,7 @@ class TeslaControl
   end
 
   def err(title=nil, exception)
+    ::TeslaCommand.error!("#{title}: #{exception.message}", loading: false)
     ::SlackNotifier.notify(
       ::TeslaErrorClassifier.slack_message(
         exception,

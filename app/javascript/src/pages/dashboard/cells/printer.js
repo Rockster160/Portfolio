@@ -16,6 +16,7 @@ let contrastText = function (hex, text) {
 
 (function () {
   let cell = {};
+  let tickTimer = undefined;
   const CELL_LINES = 9;
 
   class Printer {
@@ -261,6 +262,9 @@ let contrastText = function (hex, text) {
       renderLines(); // Keeps the timeago line ticking
     },
     onload: function () {
+      // The reloader flashes the cell, so the per-second timeago runs apart from it.
+      clearInterval(tickTimer);
+      tickTimer = setInterval(() => renderLines(), 1000);
       let monitor = Monitor.subscribe("printer", {
         connected: function () {
           monitor.resync();

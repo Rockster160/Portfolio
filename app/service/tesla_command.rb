@@ -29,6 +29,16 @@ module TeslaCommand
     broadcast(extra) if changed || extra.present?
   end
 
+  # The last thing that went wrong talking to Tesla, held until a request gets
+  # through again. Transient failures count: the dashboard shows the mark for as
+  # long as the most recent attempt is the one that failed.
+  def error!(message, extra={})
+    message = message.presence&.to_s
+    changed = DataStorage[:tesla_error] != message
+    DataStorage[:tesla_error] = message if changed
+    broadcast(extra) if changed || extra.present?
+  end
+
   def address_book
     @address_book ||= User.me.address_book
   end
@@ -187,11 +197,11 @@ module TeslaCommand
     if e.message.match?(/forbidden/i)
       broadcast
     else
-      broadcast(failed: true)
+      error!(e.message, loading: false)
     end
     "Tesla #{e.message}"
   rescue StandardError => e
-    broadcast(failed: true)
+    error!("#{e.class}: #{e.message}", loading: false)
     backtrace = e.backtrace.map { |l|
       l.include?("/app/") ? l.gsub("`", "'").gsub(/^.*\/app\//, "") : nil
     }.compact.join("\n").truncate(2000)
@@ -210,7 +220,7 @@ module TeslaCommand
   end
 
   # The broadcast IS the clean :car_data, plus a few ephemeral flags
-  # (loading, failed, forbidden, sleeping) that don't belong on the
+  # (loading, error, forbidden, sleeping) that don't belong on the
   # persistent cache but the dashboard cell needs to render. Dashboard JS
   # reads car_data field paths directly — no Rails-side reshaping.
   def format_data(extra_data={})
@@ -221,6 +231,7 @@ module TeslaCommand
       forbidden:         DataStorage[:tesla_forbidden],
       sleeping:          data[:state] == "asleep" || !!extra_data[:sleeping],
       proxy_unreachable: !!DataStorage[:tesla_proxy_unreachable],
+      error:             DataStorage[:tesla_error],
     )
   end
 end

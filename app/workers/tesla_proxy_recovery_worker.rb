@@ -30,6 +30,7 @@ class TeslaProxyRecoveryWorker
   # when the retry belongs.
   def refresh_tesla
     ::TeslaControl.me.refresh
+    ::TeslaCommand.error!(nil)
     ::SlackNotifier.notify(
       ":satellite: *Tesla home proxy recovered* — reachable end-to-end at " \
       "`#{::DataStorage[:local_ip]}:#{::ProxyRequest::PROXY_PORT}`, token refreshed.",

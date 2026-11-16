@@ -43,6 +43,23 @@ RSpec.describe Buddy::UnpromptedMemory do
     expect(described_class.trim(body, carried, facts_with)).to eq(body)
   end
 
+  # The word that tips a sentence can be its lead-in, and an agenda item the
+  # seed carried is the seed's subject however the sentence opens.
+  it "keeps a sentence that names one of the seed's items" do
+    body = "Then 3pm is Yoga at Mountain Yoga Sandy. After that, 8pm is Game Night! & dinner."
+    seeded = {
+      today: [
+        { title: "Yoga", time: "3:00 PM" },
+        { title: "Game Night! & dinner", time: "8:00 PM" },
+      ],
+    }
+    lingering = [held.new("What happens after the audit wraps up")]
+
+    expect(described_class.trim(body, lingering, seeded)).to eq(body)
+    expect(described_class.trim("8pm is Game Night! I'm holding the wraps note for you.", lingering, seeded))
+      .to eq("8pm is Game Night!")
+  end
+
   # The always-loaded block ships on a briefing where `situation_block` does
   # not, so a preference-kind note about somebody's life is the one that can
   # actually reach one - and it takes two of its words rather than one, because

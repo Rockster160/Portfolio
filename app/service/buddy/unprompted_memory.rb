@@ -78,8 +78,12 @@ module Buddy
         # "That one's been sitting for 9 weeks" lands on whatever was said
         # before it.
         orphaned = dropped && part.match?(BACK_REFERENCE)
-        dropped = orphaned || names?(part, private_words, at_least: 1) ||
-          loose_sets.any? { |words| names?(part, words, at_least: 2) }
+        dropped = orphaned || (
+          !seed_item?(part, facts) && (
+            names?(part, private_words, at_least: 1) ||
+            loose_sets.any? { |words| names?(part, words, at_least: 2) }
+          )
+        )
         if dropped
           Rails.logger.info("[Buddy::UnpromptedMemory] dropped a sentence naming a prompt-resident memory")
           kept.pop
@@ -130,6 +134,14 @@ module Buddy
       lists  = Array(memories).map { |memory| distinctive([memory], facts) }
       shared = lists.flatten.tally.filter_map { |word, count| word if count > 1 }.to_set
       lists.map { |words| words.reject { |word| shared.include?(word) } }.reject(&:empty?)
+    end
+
+    # A sentence naming one of the seed's own agenda items is the seed's, so no
+    # memory can convict it. The one word that tips a sentence is often its
+    # lead-in rather than its subject - "After that, 8pm is Game Night!" went
+    # for "after" - and cutting it takes an appointment out of the briefing.
+    def seed_item?(part, facts)
+      facts.is_a?(::Hash) && Buddy::SeedItem.any_named_in?(part, facts)
     end
 
     # One distinctive word is enough for a carried memory, and that is

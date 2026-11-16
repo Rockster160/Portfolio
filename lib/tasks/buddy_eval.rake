@@ -403,6 +403,10 @@ BUDDY_TOOL_PROBES = {
   # three words about two different subsystems, so every probe here names the
   # list tool it must not reach for.
   search_inventory:       { say: "where did I put the camp stove?", avoid: %i[search_events search_memories], needs: :camp_stove_filed },
+  search_everything:      {
+    say:   "I've got something called vitamins in here somewhere, a chore or a list thing or something. Find it",
+    avoid: %i[search_inventory search_events show_list],
+  },
   add_inventory_item:     {
     say:          "the lantern lives in the camping tote now",
     avoid:        %i[add_list_item stash_idea],
@@ -2143,6 +2147,25 @@ BUDDY_EDGE_PROBES = [
            "listener carries lock_doors - but its description said Tesla and " \
            "never said car, and there was no probe anywhere using the word",
   },
+  {
+    case:       "prod 11000-11002, 14 Nov",
+    say:        "Venmo mom 40 🥓 🍳",
+    tool:       :run_jil_task,
+    needs:      :venmo_fn,
+    args:       { run_jil_task: { who: /\Amom\z/i, amount: /\A40(?:\.0+)?\z/, note: "🥓 🍳" } },
+    never_args: { run_jil_task: { who: /\d|\$/ } },
+    note:       "sent everything as one `string:` arg, so the note went out as \"$ 🥓 🍳 $\". " \
+                "The signature named no args then; it does now",
+  },
+  {
+    case:  "prod 10957-10958, 14 Nov",
+    say:   "When did we last close the garage?",
+    tool:  :run_jil_task,
+    needs: :garage_fns,
+    args:  { run_jil_task: { name: /garage state/i } },
+    note:  "called nothing and said there was no garage reading; Garage State only said " \
+           "open or closed, never when, and now answers with the time",
+  },
 
   # --- the camera: seeing something, versus being told when ----------------
   {
@@ -3189,6 +3212,34 @@ BUDDY_EDGE_PROBES = [
         state:     :sent,
         metadata:  { "kind" => "buddy" },
         body:      "I need the housemate's actual name to credit that. Who's Mom?",
+      )
+    },
+  },
+  # The board and the message were both in the sentence.
+  {
+    case:  "prod 11121",
+    say:   "Yell on Cobalt Dishes",
+    tool:  :call_jil_function,
+    args:  { call_jil_function: { name: /yell/i } },
+    needs: :yell_fn,
+    note:  "asked what the board should yell, with the message sitting in the request",
+  },
+  # The answer to Buddy's own question, a word on its own.
+  {
+    case:  "prod 11123",
+    say:   "Dishes",
+    tool:  :call_jil_function,
+    args:  { call_jil_function: { name: /yell/i } },
+    needs: :yell_fn,
+    note:  "answered \"Dishes. Got it.\" with no call - nothing was yelled and nothing was kept",
+    seed:  ->(user, convo) {
+      convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Yell on Cobalt")
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :sent,
+        metadata:  { "kind" => "buddy", "opened_tools" => ["call_jil_function"] },
+        body:      "What message should the board yell?",
       )
     },
   },

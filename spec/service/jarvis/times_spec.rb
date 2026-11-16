@@ -34,6 +34,21 @@ RSpec.describe Jarvis::Times do
       end
     end
 
+    it "reads a full timestamp as itself, not its year as a clock time" do
+      Time.use_zone("America/Denver") {
+        travel_to(Time.zone.parse("2026-11-13 11:21")) {
+          pre_text, parsed = described_class.extract_time(
+            "at 2026-11-13T12:30:00", context: :future,
+          )
+          expect(pre_text).to eq("at 2026-11-13T12:30:00")
+          expect(parsed).to eq(Time.zone.parse("2026-11-13 12:30"))
+
+          _, offset = described_class.extract_time("at 2026-11-13T12:30:00-07:00")
+          expect(offset).to eq(Time.zone.parse("2026-11-13 12:30"))
+        }
+      }
+    end
+
     describe "noon / midnight" do
       it "matches 'at noon'" do
         pre_text, parsed = described_class.extract_time("remind me at noon to eat")

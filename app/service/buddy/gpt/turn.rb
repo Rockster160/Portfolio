@@ -1085,6 +1085,7 @@ module Buddy
         @failed   = Set.new
         @seen     = Set.new
         @acted    = false
+        @called   = false
         # What each call this turn could back, by call id. See claim_ran.
         @claim_calls = {}
         # Whether a resolve found several records and put the choice up as
@@ -1469,6 +1470,7 @@ module Buddy
         # already finished and the slowest part of the turn would still look
         # like nothing was happening.
         note_progress(name, call[:arguments])
+        @called = true
         @read_context ||= name == ContextTool::NAME
         @read_actions ||= name == ContextTool::NAME && ContextTool.serves?(call[:arguments], :recent_actions)
         reader = read_tools[name]
@@ -2574,40 +2576,13 @@ module Buddy
         }
       end
 
-      # Did the reply name this item?
-      #
-      # The title as written is the first test, because that is how a briefing
-      # says one - it reads the name off the same field. It doesn't always,
-      # though, and the substring test has no give at all: a briefing writes
-      # "chai pickup at 12:00 PM" for an item titled "Pick up chai from LOC",
-      # so a 34-minute drive and an 11:21 walk-out were never a candidate. The
-      # SHS item beside it got its figures only because the model happened to
-      # type that title verbatim.
-      #
-      # So the item's own start time counts as naming it. Every briefing that
-      # names an item prints its clock time, and the thing this guard exists to
-      # prevent - a leave-by for something the message never mentioned - can't
-      # happen when that item's time is already in the body.
+      # See Buddy::SeedItem.
       def named_in?(body, item)
-        title = item[:title].to_s.strip
-        return true if title.length >= 2 && body.downcase.include?(title.downcase)
-
-        time_said?(body, item[:time])
+        Buddy::SeedItem.named_in?(body, item)
       end
 
-      # A start time as `Buddy::Context` writes one: "12:00 PM", "9:30 AM".
-      # `all_day` items carry the word "today" here instead and match nothing.
-      TIME_RX = /\A(?<hour>\d{1,2}):(?<min>\d{2})\s*(?<mer>[ap])\.?m\.?\z/i
-
-      # In any of the ways a person writes that time back: "12:00 PM", "12 PM",
-      # "12pm", "12 p.m.". The minutes are optional only on the hour, so 12:30
-      # never satisfies 12:00.
       def time_said?(body, time)
-        parts = TIME_RX.match(time.to_s.strip)
-        return false if parts.nil?
-
-        minutes = parts[:min] == "00" ? "(?::00)?" : "(?::#{parts[:min]})"
-        body.match?(/(?<!\d)#{parts[:hour]}#{minutes}\s*#{parts[:mer]}\.?m\.?/i)
+        Buddy::SeedItem.time_said?(body, time)
       end
 
       # What get_context actually served this turn, or nothing if it was never
@@ -2750,6 +2725,17 @@ module Buddy
       # Never on a self-initiated turn: nobody spoke, so there is no dispute to
       # answer. A turn that already read `recent_actions` has done the thing
       # this would ask for.
+      # Buddy asked something, they answered, and the reply took the answer in
+      # without doing anything with it - no call of any kind, no question back.
+      # Reading counts: an answer to "which list?" is used by showing the list.
+      # An acknowledgment on that turn reports something that never happened.
+      def answer_unheeded?(body)
+        return false if @called || @acted || @asked_choice || @later.any? || question_answered.nil?
+        return false if body.strip.match?(ASKED_RX) || body.match?(DENIAL_RX)
+
+        !@inbound.body.to_s.strip.match?(DECLINED_RX)
+      end
+
       def disputed_action?
         return false if self_initiated?
         return false if @read_actions
@@ -2764,6 +2750,28 @@ module Buddy
       # the routine was supposed to do: the quote used, the instruction behind
       # it dropped. Same failure as the camera line in `check_weather`, in a
       # surface nobody had swept. See feedback_no_sample_replies_in_prompts.
+      # Their message ends a reply that asked them something, and only reads as
+      # an aside when the question is forgotten.
+      ASKED_RX = /\?["'\u201d)*_]*\z/
+
+      # An answer that means nothing should happen, which a short acknowledgment
+      # is the right reply to.
+      DECLINED_RX = /\A(?:no|nope|nah|never\s*mind|nvm|not\s+now|skip(?:\s+it)?|forget\s+it|cancel|don'?t)\b/i
+
+      ANSWER_UNHEEDED_NUDGE = <<~TXT.freeze
+        STOP. Your last message asked them a question, and this message is their
+        answer to it. You acknowledged it without doing anything, so nothing
+        happened.
+
+        Go back to what you were asking about and finish it with their answer:
+        - If it was the missing piece of an action, make that call now.
+        - If it was something about them worth knowing later, save it with
+          `remember`.
+        - If their answer means nothing should happen, say that plainly.
+
+        Do not acknowledge an answer you haven't used.
+      TXT
+
       CHECK_ACTIONS_NUDGE = <<~TXT.freeze
         STOP. They are disputing something you said you did, and you answered
         without looking it up. What you remember about this turn is the thing
@@ -3047,6 +3055,7 @@ module Buddy
           # untrue, and the model's job is then to reconcile a correct reply with
           # being told it was wrong, which costs the turn two rounds.
           return RETRY_NUDGE if !@acted && commanded_action_unanswered?(spoken.to_s)
+          return ANSWER_UNHEEDED_NUDGE if answer_unheeded?(spoken.to_s)
         end
 
         return POINTER_NUDGE if spoken.to_s.strip.match?(DANGLING_POINTER_RX)
@@ -3170,8 +3179,27 @@ module Buddy
 
       # The indexed tools this turn has opened. Kept across a retried attempt:
       # the second try is the same request and needs the same tools.
+      #
+      # A turn answering Buddy's own question starts with whatever that question
+      # was asked over already open. The question was half of an action, and
+      # without the tool in reach the answer reads as small talk: a one-word
+      # reply gets a one-word acknowledgment and the action is never finished.
       def loaded_tools
-        @loaded_tools ||= Set.new
+        @loaded_tools ||= Set.new(Array(question_answered&.metadata&.dig("opened_tools")).map(&:to_sym))
+      end
+
+      # Buddy's last message in the thread, when it was a question and this
+      # message is the next thing the person said.
+      def question_answered
+        return @question_answered if defined?(@question_answered)
+        return @question_answered = nil if self_initiated?
+
+        prior = @conversation.byte_messages.not_hidden.where(id: ...@inbound.id).where(
+          "byte_messages.metadata ->> 'kind' IS NULL OR byte_messages.metadata ->> 'kind' NOT IN (?)",
+          ByteMessage::SILENT_KINDS,
+        ).order(id: :desc).first
+        asked = prior&.inbound? && prior.body.to_s.strip.match?(ASKED_RX)
+        @question_answered = asked ? prior : nil
       end
 
       # A seed that came to have ONE thing done is offered the tools for that
@@ -3413,6 +3441,9 @@ module Buddy
         spoke = body.present? && body.strip != PLACEHOLDER
         @reply.update!(state: :delivered, body: (spoke ? body : ""), delivered_at: Time.current)
         stamp_floated_stash(body) if spoke
+        if spoke && body.strip.match?(ASKED_RX) && loaded_tools.any?
+          @reply.update!(metadata: @reply.metadata.merge("opened_tools" => loaded_tools.map(&:to_s)))
+        end
 
         proposals = outcome[:proposals]
         result    = build_proposals(proposals)

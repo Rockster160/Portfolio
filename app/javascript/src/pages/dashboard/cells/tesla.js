@@ -55,13 +55,15 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     // survives the [NOT CHARGING] center-override below (which keeps topchar).
     if (cell.data.proxy_unreachable) {
       topchar = Text.red("[ico ti ti-fa-unlink]")
+    } else if (cell.data.error) {
+      topchar = Text.red("(!)")
     }
     let plugged = data.charging?.state && data.charging.state != "Disconnected"
     let topright = plugged ? Text.yellow("[ico ti ti-fa-bolt]") : "  "
-    let topline = topchar + " ".repeat(single_width - 4) + topright
+    let topline = Text.justify(topchar, topright)
     if (data.charging?.state == "Disconnected") {
       topline = Text.center(Text.red("[NOT CHARGING]"))
-      topline = topline.replace(/^../, topchar)
+      topline = topchar + topline.slice(Text.clean(topchar).length)
     }
     lines.push(topline)
 
@@ -124,8 +126,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     let route = routeLabel(data)
     lines.push(route ? Text.center(Text.grey(route)) : "")
 
-    let notify = cell.data.failed ? Text.orange("[FAILED]") : ""
-    notify = cell.data.sleeping ? Text.grey("[sleep]") : notify
+    let notify = cell.data.sleeping ? Text.grey("[sleep]") : ""
     notify = cell.data.forbidden ? Text.orange("[AUTH]") : notify
     // Left: how long since Tesla said anything at all, condensed ("4m").
     // Right: when the car last moved or changed gear — a parked car keeps
@@ -153,7 +154,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     title: "Tesla",
     text: "Loading...",
     flash: false,
-    refreshInterval: Time.minute(),
+    refreshInterval: Time.second(),
     reloader: function() { renderLines() },
     onload: function() {
       this.data.refresh_timer = undefined
@@ -172,6 +173,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       this.data.sleeping = msg.sleeping
       this.data.forbidden = msg.forbidden
       this.data.proxy_unreachable = msg.proxy_unreachable
+      this.data.error = msg.error
       if (msg.loading) {
         this.data.loading = true
         renderLines()

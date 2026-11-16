@@ -113,6 +113,16 @@ RSpec.describe GlobalSearch do
     )
   end
 
+  it "finds a logged event once by name, however often it was logged" do
+    2.times { |i| ActionEvent.create!(user: user, name: "Zephyr drops", timestamp: (i + 1).days.ago) }
+    ActionEvent.create!(user: other, name: "Zephyr drops", timestamp: 1.hour.ago)
+
+    events = group(search("zephyr"), :events)
+
+    expect(events.pluck(:title)).to eq(["Zephyr drops"])
+    expect(events.first[:subtitle]).to start_with("2 logged")
+  end
+
   it "uses symbols for groups and icons" do
     hits = results.flat_map { |g| g[:results] }
     expect(results.pluck(:group)).to all(be_a(Symbol))

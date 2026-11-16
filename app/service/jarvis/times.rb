@@ -14,12 +14,19 @@ module Jarvis::Times
   # an ordinal embedded in unrelated prose shouldn't suddenly become a
   # date).
   ORDINAL_DAY_RX = /\b(?:on|for) the (\d{1,2})(?:st|nd|rd|th)?\b/i
+  # The offset is optional: without one, the timestamp is in the caller's zone.
+  ISO_TIMESTAMP_RX = /\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?/
 
   def extract_time(words, chronic_opts={})
     rx = Jarvis::Regex
     drx = /\d+(?:\.\d+)?/
     # Strip quoted sections so time-like text inside quotes isn't matched
     words = words.gsub(/(?<!\S)["\u201C\u201D].*["\u201C\u201D]/m, " ").squish
+    # A full timestamp already says exactly when. Left to the phrase matchers,
+    # "at 2026-11-13T12:30:00" reads its year as the clock time 20:26.
+    iso = words.match(/(?:\bat )?(#{ISO_TIMESTAMP_RX})/)
+    return [iso[0], ::Time.zone.parse(iso[1])] if iso
+
     words = words.gsub(rx.words(:later), "today")
     words = resolve_ordinal_day(words)
     month_words_regex = /(?<![\w-])(?:#{MONTH_WORDS.join("|")})(?![\w-])/i
@@ -29,7 +36,6 @@ module Jarvis::Times
     noon_midnight_regex = /(?<![\w-])(?:noon|midnight)(?![\w-])/i
     time_words = [:second, :minute, :hour, :day, :week, :month, :year]
     rel_words_regex = rx.words(time_words, suffix: "s?")
-    iso8601_regex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-\d{2}:\d{2}/
     and_some = /(?: (?:and )?(?:an? )?(#{drx})?(?: ?\bhalf\b ?)?(?: (#{rel_words_regex}))?)?/
     time_words_regex = /(#{rel_words_regex})#{and_some}/
     clock_time = /(?:#{noon_midnight_regex}|\d+:?\d*(?: ?(?:am|pm))?)/
@@ -43,7 +49,6 @@ module Jarvis::Times
     time_str ||= words[/in the #{weak_day_regex}/]
     time_str ||= words[/(#{drx}|an?) #{time_words_regex} \b(from now|ago)\b/]
     time_str ||= words[/((next|last) )?#{strong_day_regex}(?: #{weak_day_regex})?/]
-    time_str ||= words[/(\bat )(#{iso8601_regex} ?)/]
 
     pre_sub = time_str
 

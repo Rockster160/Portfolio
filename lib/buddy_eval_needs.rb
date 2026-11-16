@@ -172,7 +172,10 @@ module BuddyEvalNeeds
     quiet_fn:             { label: "the Whisper Quiet For function", check: ->(u) { jil(u, /whisper quiet/i) } },
     # A copy from before it took an end time has nowhere to put "until 12:30".
     quiet_until_fn:       { label: "the Whisper Quiet For function with an end time", check: ->(u) { jil(u, /"or until"/i) } },
+    # A copy from before its args were labeled gives the model no keys to send.
+    venmo_fn:             { label: "the Venmo function with labeled args", check: ->(u) { jil(u, /"Note" TAB String/) && jil(u, /venmo/i) } },
     skip_nap_fn:          { label: "the Whisper Skip Nap function", check: ->(u) { jil(u, /skip nap/i) } },
+    yell_fn:              { label: "the board Yell function", check: ->(u) { jil(u, /\Ayell\z|"Board" TAB String/i) } },
     scene_fn:             { label: "the HASS Scene function", check: ->(u) { jil(u, /hass scene/i) } },
     camera_fn:            { label: "the Camera Last Seen function", check: ->(u) { jil(u, /camera/i) } },
     fan_fn:               { label: "a fan function",               check: ->(u) { jil(u, /fan/i) } },

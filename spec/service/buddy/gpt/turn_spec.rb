@@ -4707,4 +4707,60 @@ RSpec.describe Buddy::GPT::Turn do
       }
     end
   end
+
+  describe "a reply to Buddy's own question" do
+    def buddy_asked(text, metadata={})
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :delivered,
+        body:      text,
+        metadata:  { "kind" => "buddy" }.merge(metadata),
+      )
+    end
+
+    it "opens the tools the question was asked over" do
+      buddy_asked("Where should the interview go on the calendar?", "opened_tools" => ["add_agenda_item"])
+      turn = described_class.new(user_says("Tuesday at 11"), client: FakeBuddyClient.new([]))
+
+      schema = turn.send(:tools).find { |tool| tool[:name].to_s == "add_agenda_item" }
+
+      expect(schema.dig(:parameters, :properties)).to be_present
+    end
+
+    it "remembers what was open when a reply asks something" do
+      run([
+        { tool_calls: [{ name: :add_agenda_item, arguments: {} }] },
+        { text: "What time is it at?" },
+      ])
+
+      expect(reply.metadata["opened_tools"]).to eq(["add_agenda_item"])
+    end
+
+    it "gives the model a round when an answer is acknowledged and nothing is done with it" do
+      buddy_asked("What message should the board yell?")
+
+      client = run([{ text: "Dishes. Got it." }, { text: "Couldn't reach the board." }], text: "Dishes")
+
+      expect(client.calls.length).to eq(2)
+      expect(client.calls[1].input.pluck(:content)).to include(described_class::ANSWER_UNHEEDED_NUDGE)
+      expect(reply.body).not_to eq("Dishes. Got it.")
+    end
+
+    it "lets a short acknowledgment stand when the answer declines" do
+      buddy_asked("Want me to set a reminder for that?")
+
+      client = run([{ text: "Okay, leaving it." }], text: "No thanks")
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    it "leaves an ordinary exchange alone when Buddy hadn't asked anything" do
+      buddy_asked("Dinner's in the oven.")
+
+      client = run([{ text: "Nice." }], text: "Dishes")
+
+      expect(client.calls.length).to eq(1)
+    end
+  end
 end

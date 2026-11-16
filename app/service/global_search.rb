@@ -24,6 +24,7 @@ class GlobalSearch
     lists:       { label: "Lists",       icon: :list },
     list_items:  { label: "List items",  icon: :check_square_o },
     chores:      { label: "Chores",      icon: :check_circle },
+    events:      { label: "Events",      icon: :bolt },
     pages:       { label: "Pages",       icon: :file_text_o },
     timer_pages: { label: "Timer pages", icon: :th_large },
     timers:      { label: "Timers",      icon: :clock_o },
@@ -84,6 +85,18 @@ class GlobalSearch
       title = chore.short_name.presence || chore.name
       subtitle = (chore.name if chore.name != title)
       hit(:chores, chore.id, title, subtitle, routes.chore_routes_edit_path(chore))
+    }
+  end
+
+  # Events are a log, so one name comes back once with how often and how
+  # recently it was logged, rather than as a page of identical rows.
+  def events
+    scope = ActionEvent.where(user_id: @user.id).group(:name)
+    scope = scope.select("action_events.name, MAX(action_events.id) AS id, COUNT(*) AS logged, MAX(timestamp) AS last_at")
+    zone = ActiveSupport::TimeZone[@user.timezone.to_s] || Time.zone
+    named(scope, "action_events.name").map { |event|
+      subtitle = "#{event.logged} logged, last #{event.last_at&.in_time_zone(zone)&.strftime("%b %-d, %Y")}"
+      hit(:events, event.id, event.name, subtitle, routes.action_events_path(q: "name::\"#{event.name}\""))
     }
   end
 
