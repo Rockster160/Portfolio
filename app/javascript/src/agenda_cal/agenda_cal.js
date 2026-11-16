@@ -26,6 +26,8 @@
 //     - Click + drag a vertical range → custom-duration event, 15-min snap
 //     - All-day events render in the band above the time grid, spanning
 //       multi-day ranges as horizontal bars
+//     - Desktop: click selects an event, double-click opens it; Delete,
+//       copy, cut and paste act on the selection (see WEEK VIEW SELECTION)
 //
 //   Both views:
 //     - Monitor broadcasts trigger an HTML refetch that swaps the grid
@@ -509,8 +511,8 @@
   // attribute (server-rendered by AgendaItem#presentation_attrs). Returns
   // null for non-recurring tiles or for malformed JSON — caller treats
   // null as "no pattern row in the modal."
-  function readScheduleRecurrence(btn) {
-    const raw = btn?.dataset?.schedule;
+  function readScheduleRecurrence(data) {
+    const raw = data?.schedule;
     if (!raw || raw === "null") return null;
     try {
       const sched = JSON.parse(raw);
@@ -564,11 +566,22 @@
   // pending-sync badge surfaces while the queue drains, the SW's
   // synthetic 503 keeps the op queued for replay when offline, and a
   // permanent 4xx lands in the dropped-bucket banner.
-  function commitEventMove(btn, newStartAt, newEndAt, scope) {
-    const itemId = btn.dataset.itemId;
+  //
+  // `data` is a tile's dataset or a clipboard snapshot of one, so a cut
+  // can be pasted after its tile has scrolled out of the visible week.
+  // `btn` is the on-screen tile when there is one.
+  function commitEventMove(data, newStartAt, newEndAt, scope, btn) {
+    const itemId = data.itemId;
     if (!itemId) return;
-    btn.dataset.startAt = String(newStartAt);
-    btn.dataset.endAt = String(newEndAt);
+    if (btn) {
+      btn.dataset.startAt = String(newStartAt);
+      btn.dataset.endAt = String(newEndAt);
+      btn.classList.add("is-pending");
+    }
+    // One-off rows move in the store too, so the event shows up in its
+    // new week straight away. Recurring rows are left to the broadcast:
+    // moving one off its date un-suppresses the phantom for that date.
+    if (data.recurring !== "true") patchStoreForMove(itemId, newStartAt, newEndAt);
 
     const url = `/agenda_items/${itemId}`;
     const mid = window.AgendaMutationQueue.newMutationId();
@@ -585,7 +598,6 @@
     // occurrence-only branch in AgendaItemsController#update.
     if (scope) payload.scope = scope;
 
-    btn.classList.add("is-pending");
     window.AgendaMutationQueue.enqueue({
       client_mutation_id: mid,
       kind:               "update",
@@ -601,22 +613,20 @@
   // Top-level move dispatcher. For non-recurring items, commits
   // immediately. For recurring items, opens the three-way scope modal
   // (just this / this and following / cancel) and either commits with
-  // the chosen scope or reverts the tile to `snap`. The tile is already
-  // optimistically moved in the DOM by the time this runs.
-  function sendEventMove(btn, newStartAt, newEndAt, snap) {
-    const recurring = btn.dataset.recurring === "true";
+  // the chosen scope or reverts the tile to `snap`. When there is a tile
+  // it is already optimistically moved in the DOM by the time this runs.
+  // `data.startAt`/`endAt` are still the ORIGINAL slot here: only
+  // commitEventMove rewrites them.
+  function sendEventMove(data, newStartAt, newEndAt, { btn, snap } = {}) {
+    const recurring = data.recurring === "true";
     if (!recurring) {
-      commitEventMove(btn, newStartAt, newEndAt, null);
-      return;
+      commitEventMove(data, newStartAt, newEndAt, null, btn);
+      return Promise.resolve(true);
     }
-    const title = btn.dataset.name || "this event";
-    // Build a before/after diff from the snapshot's preserved epochs vs
-    // the dropped position, so the user sees exactly what they're about
-    // to change. Snap captured the dataset BEFORE applyInlineMove
-    // mutated it, so snap.startAt/endAt are the original values.
-    const from = (snap && snap.startAt)
-      ? formatRangeLong(snap.startAt, snap.endAt || snap.startAt)
-      : null;
+    const title = data.name || "this event";
+    const origStartAt = data.startAt;
+    const origEndAt = data.endAt || origStartAt;
+    const from = origStartAt ? formatRangeLong(origStartAt, origEndAt) : null;
     const to = formatRangeLong(newStartAt, newEndAt);
     // Pattern row — only when the tile carries a recurrence rule. The
     // BE shifts the rule to anchor on the new occurrence date; preview
@@ -627,28 +637,334 @@
     // BE's apply_future_update! using original_start_at as the cutoff.
     let patternFrom = null;
     let patternTo = null;
-    const rule = readScheduleRecurrence(btn);
+    const rule = readScheduleRecurrence(data);
     if (rule) {
-      const detached = btn.dataset.detached === "true";
-      const origStartAt = Number(btn.dataset.originalStartAt) || null;
-      const anchorEpoch = (detached && origStartAt) ? origStartAt : snap?.startAt;
+      const detached = data.detached === "true";
+      const originalSlot = Number(data.originalStartAt) || null;
+      const anchorEpoch = (detached && originalSlot) ? originalSlot : origStartAt;
       const beforeDesc = describeRecurrence(rule, anchorEpoch);
       const shifted = shiftRecurrencePreview(rule, anchorEpoch, newStartAt);
       const afterDesc = describeRecurrence(shifted, newStartAt);
-      if (beforeDesc) patternFrom = `${beforeDesc} at ${formatRangeShort(snap.startAt, snap.endAt || snap.startAt)}`;
+      if (beforeDesc) patternFrom = `${beforeDesc} at ${formatRangeShort(origStartAt, origEndAt)}`;
       if (afterDesc)  patternTo   = `${afterDesc} at ${formatRangeShort(newStartAt, newEndAt)}`;
     }
     const choose = (window.AgendaRecurringScope)
       ? window.AgendaRecurringScope({ title, from, to, patternFrom, patternTo })
       : Promise.resolve("occurrence");
-    choose.then((choice) => {
+    return choose.then((choice) => {
       if (choice === "occurrence" || choice === "future") {
-        commitEventMove(btn, newStartAt, newEndAt, choice);
-      } else if (snap) {
-        revertTileState(btn, snap);
+        commitEventMove(data, newStartAt, newEndAt, choice, btn);
+        return true;
       }
+      if (btn && snap) revertTileState(btn, snap);
+      return false;
     });
   }
+
+  // Optimistic store move for a one-off row. A phantom or an id the
+  // store doesn't hold is left alone; the broadcast brings it.
+  function patchStoreForMove(itemId, newStartAt, newEndAt) {
+    const item = window.AgendaStore?.getItem?.(itemId);
+    if (!item) return;
+    const attrs = Object.assign({}, item.presentation_attrs, {
+      "start-at": newStartAt,
+      "end-at":   newEndAt,
+    });
+    // `end-date` is the inclusive last day; all-day `end_at` is the
+    // exclusive next midnight, so step back one day.
+    if (item.all_day) attrs["end-date"] = shiftEpochByDays(newEndAt, -1);
+    window.AgendaStore.patchItem({
+      id:                 item.id,
+      start_at:           newStartAt,
+      end_at:             newEndAt,
+      presentation_attrs: attrs,
+    });
+  }
+
+  // Calendar-day shift that keeps the wall-clock time across a DST
+  // change, which adding 86400s would not.
+  function shiftEpochByDays(epoch, days) {
+    const d = new Date(Number(epoch) * 1000);
+    d.setDate(d.getDate() + days);
+    return Math.floor(d.getTime() / 1000);
+  }
+  function daysBetweenISO(fromISO, toISO) {
+    const from = new Date(fromISO + "T12:00:00");
+    const to = new Date(toISO + "T12:00:00");
+    return Math.round((to - from) / 86400000);
+  }
+
+  // ============================================================
+  // WEEK VIEW SELECTION + CLIPBOARD
+  // ============================================================
+  // On a desktop pointer a click selects an event and a double click
+  // opens its details. Clicking empty grid clears the selection and makes
+  // that day the paste target. Delete/Backspace deletes the selection,
+  // Cmd/Ctrl+C and +X put it on the clipboard, Cmd/Ctrl+V lands it on the
+  // selected day at the same time of day.
+  //
+  // A cut leaves the original in place, faded, until the paste moves it
+  // through sendEventMove, the same move a drag makes, so a recurring
+  // event asks which occurrences to move.
+  //
+  // The clipboard is a snapshot of the tile's data, not the tile: week
+  // navigation rebuilds every tile, and sessionStorage carries it through
+  // a hop to the month view and back.
+  const CLIPBOARD_KEY = "agendaCalClipboard:v1";
+  const CLIPBOARD_FIELDS = [
+    "itemId", "itemUrl", "name", "kind", "color", "agendaId", "agendaName", "agendaColor",
+    "agendaSource", "location", "navAddress", "notes", "arriveEarlyMinutes",
+    "triggerExpression", "startAt", "endAt", "allDay", "recurring", "detached",
+    "originalStartAt", "schedule",
+  ];
+  const calSelection = { itemId: null, dateISO: null };
+  let calClipboard = readStoredClipboard();
+
+  function readStoredClipboard() {
+    try {
+      const raw = window.sessionStorage.getItem(CLIPBOARD_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_e) {
+      return null;
+    }
+  }
+  function setCalClipboard(value) {
+    calClipboard = value;
+    try {
+      if (value) window.sessionStorage.setItem(CLIPBOARD_KEY, JSON.stringify(value));
+      else window.sessionStorage.removeItem(CLIPBOARD_KEY);
+    } catch (_e) {}
+  }
+
+  // Touch devices keep tap-to-open: there is no double tap or keyboard
+  // to reach the details and shortcuts otherwise.
+  function isDesktopPointer() {
+    return !!window.matchMedia?.("(hover: hover) and (pointer: fine)").matches;
+  }
+
+  function weekPageRoot() { return $(".agenda-cal-week-page"); }
+
+  // A tile's day comes from the column under the cursor rather than its
+  // parent: an all-day chip spans several columns, and a timed event
+  // split across midnight is clicked on one of its segments.
+  function dayAtX(root, clientX) {
+    const col = $$(".cal-week-column[data-date]", root).find((c) => {
+      const rect = c.getBoundingClientRect();
+      return clientX >= rect.left && clientX < rect.right;
+    });
+    return col?.dataset.date || null;
+  }
+
+  function tilesForItem(root, itemId) {
+    if (!itemId) return [];
+    const id = CSS.escape(String(itemId));
+    return $$(`.cal-week-event[data-item-id="${id}"], .cal-week-allday-chip[data-item-id="${id}"]`, root);
+  }
+
+  // Re-applied after every buildWeekBlocks, which replaces all tiles.
+  function paintCalSelection(root) {
+    if (!root) return;
+    const cutId = calClipboard?.mode === "cut" ? calClipboard.itemId : null;
+    $$(".cal-week-event, .cal-week-allday-chip", root).forEach((tile) => {
+      const id = tile.dataset.itemId;
+      tile.classList.toggle("is-selected", !!id && id === calSelection.itemId);
+      tile.classList.toggle("is-cut", !!id && id === cutId);
+    });
+    // The day tint only means something when there is a paste to land.
+    const pasteDay = (calClipboard && !calSelection.itemId) ? calSelection.dateISO : null;
+    $$(".cal-week-column[data-date], .cal-week-allday-cell[data-date], .cal-week-header-day[data-date]", root).forEach((el) => {
+      el.classList.toggle("is-paste-target", el.dataset.date === pasteDay);
+    });
+  }
+
+  function selectCalEvent(root, tile, clientX) {
+    calSelection.itemId = tile.dataset.itemId || null;
+    calSelection.dateISO = dayAtX(root, clientX) || calSelection.dateISO;
+    paintCalSelection(root);
+  }
+
+  function selectCalDay(root, dateISO) {
+    calSelection.itemId = null;
+    if (dateISO) calSelection.dateISO = dateISO;
+    paintCalSelection(root);
+  }
+
+  function snapshotTile(tile, mode) {
+    const snap = { mode };
+    CLIPBOARD_FIELDS.forEach((key) => {
+      if (tile.dataset[key] != null) snap[key] = tile.dataset[key];
+    });
+    return snap;
+  }
+
+  // Read-only events sit on agendas that can't take a new row either, so
+  // they can be selected but not copied, cut or deleted.
+  function selectedEditableTile(root) {
+    const tile = tilesForItem(root, calSelection.itemId)[0];
+    if (!tile || tile.hasAttribute("data-readonly")) return null;
+    return tile;
+  }
+
+  function copyCalSelection(root, mode) {
+    const tile = selectedEditableTile(root);
+    if (!tile) return false;
+    setCalClipboard(snapshotTile(tile, mode));
+    paintCalSelection(root);
+    return true;
+  }
+
+  // The clipboard's start/end shifted onto the selected day. Timed events
+  // keep their clock time on the logical (3am) day; all-day events count
+  // calendar days, since their midnight start sits before the rollover.
+  // A day picked before navigating to another week is off screen, and a
+  // paste never lands where it can't be seen.
+  function clipboardSlotOn(root, clip) {
+    const startAt = Number(clip.startAt);
+    const targetISO = calSelection.dateISO;
+    if (!startAt || !targetISO) return null;
+    if (!$(`.cal-week-column[data-date="${targetISO}"]`, root)) return null;
+    const endAt = Number(clip.endAt) || startAt;
+    const grid = $(".cal-week-grid", root);
+    const dayStart = Number(grid?.dataset?.dayStartHour) || 3;
+    const start = new Date(startAt * 1000);
+    const sourceISO = clip.allDay === "true" ? formatDateISO(start) : logicalDateISO(start, dayStart);
+    const days = daysBetweenISO(sourceISO, targetISO);
+    return {
+      days,
+      startAt: shiftEpochByDays(startAt, days),
+      endAt:   shiftEpochByDays(endAt, days),
+    };
+  }
+
+  function pasteCalClipboard(root) {
+    const clip = calClipboard;
+    if (!clip) return false;
+    const slot = clipboardSlotOn(root, clip);
+    if (!slot) return false;
+    if (clip.mode !== "cut") {
+      createFromClipboard(clip, slot.startAt, slot.endAt);
+      return true;
+    }
+    if (slot.days === 0) {
+      setCalClipboard(null);
+      paintCalSelection(root);
+      return true;
+    }
+    // Stays on the clipboard if the recurring prompt is cancelled.
+    sendEventMove(clip, slot.startAt, slot.endAt).then((moved) => {
+      if (moved && calClipboard === clip) setCalClipboard(null);
+      paintCalSelection(weekPageRoot());
+    });
+    return true;
+  }
+
+  // Same write-first create the add modal makes: optimistic row in the
+  // store, POST through the mutation queue.
+  function createFromClipboard(clip, startAt, endAt) {
+    const allDay = clip.allDay === "true";
+    const agendaId = Number(clip.agendaId);
+    const fields = {
+      name:                 clip.name || "",
+      kind:                 clip.kind || "event",
+      color:                clip.color || null,
+      location:             clip.location || null,
+      notes:                clip.notes || null,
+      arrive_early_minutes: parseInt(clip.arriveEarlyMinutes, 10) || 0,
+    };
+    const mid = window.AgendaMutationQueue.newMutationId();
+    const tempId = window.AgendaMutationQueue.newTempId();
+    window.AgendaStore.upsertItem(window.AgendaOptimisticItem.buildOptimisticItem({
+      ...fields,
+      id:                 tempId,
+      client_mutation_id: mid,
+      start_at:           startAt,
+      end_at:             endAt,
+      all_day:            allDay,
+      agenda_id:          agendaId,
+      agenda_name:        clip.agendaName,
+      agenda_color:       clip.agendaColor,
+      agenda_source:      clip.agendaSource,
+    }));
+    const body = {
+      agenda_item: {
+        ...fields,
+        agenda_id:          agendaId,
+        start_at:           startAt,
+        end_at:             endAt,
+        all_day:            allDay,
+        trigger_expression: clip.triggerExpression || null,
+        client_mutation_id: mid,
+      },
+    };
+    if (clip.navAddress) body.agenda_item.travel_nav_address = clip.navAddress;
+    window.AgendaMutationQueue.enqueue({
+      client_mutation_id: mid,
+      kind:               "create",
+      url:                "/agenda_items",
+      method:             "POST",
+      body,
+      target_id:          tempId,
+    });
+    window.AgendaMutationQueue.flush();
+  }
+
+  // The destroy endpoint's `series` scope cancels this occurrence and
+  // everything after it, which is what "This and following" means here.
+  async function deleteCalSelection(root) {
+    const tile = selectedEditableTile(root);
+    if (!tile) return;
+    const data = snapshotTile(tile, null);
+    const title = `Delete “${data.name || "this event"}”?`;
+    let scope = "occurrence";
+    if (data.recurring === "true") {
+      const choice = await window.AgendaRecurringScope({ title, prompt: "Delete:", danger: true });
+      if (!choice) return;
+      scope = choice === "future" ? "series" : "occurrence";
+    } else {
+      const ok = await window.AgendaConfirm({ title, confirmLabel: "Delete", danger: true });
+      if (!ok) return;
+    }
+
+    const page = weekPageRoot();
+    tilesForItem(page, data.itemId).forEach((t) => t.classList.add("is-pending-delete"));
+    if (calSelection.itemId === data.itemId) calSelection.itemId = null;
+    if (calClipboard?.itemId === data.itemId && calClipboard.mode === "cut") setCalClipboard(null);
+    paintCalSelection(page);
+
+    const itemUrl = data.itemUrl || `/agenda_items/${data.itemId}`;
+    const mid = window.AgendaMutationQueue.newMutationId();
+    window.AgendaStore.removeItem(String(data.itemId));
+    window.AgendaMutationQueue.enqueue({
+      client_mutation_id: mid,
+      kind:               "destroy",
+      url:                `${itemUrl}?scope=${scope}`,
+      method:             "DELETE",
+      target_id:          String(data.itemId),
+      dedup_key:          `delete:${itemUrl}`,
+    });
+    window.AgendaMutationQueue.flush();
+  }
+
+  document.addEventListener("keydown", (e) => {
+    const root = weekPageRoot();
+    if (!root || e.defaultPrevented) return;
+    if (inputBusy() || e.target?.isContentEditable) return;
+    if (document.querySelector(".modal.shown")) return;
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod && !e.altKey && (e.key === "Backspace" || e.key === "Delete")) {
+      if (!calSelection.itemId) return;
+      e.preventDefault();
+      deleteCalSelection(root);
+      return;
+    }
+    if (!mod || e.altKey || e.shiftKey) return;
+    const key = e.key.toLowerCase();
+    if (key === "c" || key === "x") {
+      if (copyCalSelection(root, key === "x" ? "cut" : "copy")) e.preventDefault();
+    } else if (key === "v") {
+      if (pasteCalClipboard(root)) e.preventDefault();
+    }
+  });
 
   // ============================================================
   // MONTH VIEW
@@ -1331,6 +1647,23 @@
       openHiddenListAt(mark, e);
     });
 
+    // Desktop click model. Capture phase, so a click on a tile stops here
+    // before agenda.js's `[data-open-details]` delegate opens the details
+    // (the dblclick handler below does that instead). The tile itself was
+    // already selected on mousedown. Anywhere else on the grid clears the
+    // selection and picks the clicked day as the paste target.
+    root.addEventListener("click", (e) => {
+      if (!isDesktopPointer()) return;
+      if (e.target.closest(".cal-week-event, .cal-week-allday-chip")) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      if (!e.target.closest(".cal-week-grid")) return;
+      if (e.target.closest(".cal-week-hidden-mark")) return;
+      selectCalDay(root, e.target.closest("[data-date]")?.dataset.date);
+    }, true);
+
     // Drag-to-create and dbl-click on time grid — delegated to root.
     root.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
@@ -1349,9 +1682,14 @@
         }
       }
 
+      // Selecting on mousedown rather than click means a drag starts
+      // with the dragged event already selected.
+      const tile = e.target.closest(".cal-week-event, .cal-week-allday-chip");
+      if (tile && isDesktopPointer()) selectCalEvent(root, tile, e.clientX);
+
       // ---- event-drag init: mousedown on an existing event button ----
-      // Don't `preventDefault` — the click event needs to fire for
-      // agenda.js's `[data-open-details]` delegate.
+      // Don't `preventDefault` — on touch the click event needs to fire
+      // for agenda.js's `[data-open-details]` delegate.
       const eventBtn = e.target.closest(".cal-week-event");
       if (eventBtn) {
         if (eventBtn.hasAttribute("data-readonly")) {
@@ -1398,7 +1736,11 @@
     });
 
     root.addEventListener("dblclick", (e) => {
-      if (e.target.closest(".cal-week-event")) return;
+      const tile = e.target.closest(".cal-week-event, .cal-week-allday-chip");
+      if (tile) {
+        if (isDesktopPointer()) window.__openAgendaDetails?.(tile);
+        return;
+      }
       const col = e.target.closest(".cal-week-column");
       const grid = $(".cal-week-grid", root);
       if (col && grid) {
@@ -1532,6 +1874,7 @@
     // the completed/tentative criteria that depend on classes the seeds
     // don't carry. Runs after gutter paint so the marks aren't touched.
     window.__applyAgendaVisibility?.();
+    paintCalSelection(root);
   }
 
   // Returns one segment per logical day the event covers. Each segment is
@@ -2110,6 +2453,7 @@
   // Document-level Escape handler. Priority:
   //   1) If a drag is in progress, cancel it (revert in place).
   //   2) Otherwise close the topmost shown modal.
+  //   3) Otherwise drop a pending cut, then the selection.
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (eventDrag.btn && eventDrag.moved) {
@@ -2123,7 +2467,12 @@
       return;
     }
     const shown = Array.from(document.querySelectorAll(".modal.shown"));
-    if (shown.length === 0) return;
+    if (shown.length === 0) {
+      if (calClipboard?.mode === "cut") setCalClipboard(null);
+      else calSelection.itemId = null;
+      paintCalSelection(weekPageRoot());
+      return;
+    }
     e.preventDefault();
     const top = shown[shown.length - 1];
     if (top.id && window.hideModal) window.hideModal(`#${top.id}`);
@@ -3210,7 +3559,7 @@
             const snap = captureTileState(btn);
             applyInlineMove(btn, dropCol, dropTop - bandPx, pxPerMin);
             applyInlineTimeLabel(btn, newStartAt, newEndAt);
-            sendEventMove(btn, newStartAt, newEndAt, snap);
+            sendEventMove(btn.dataset, newStartAt, newEndAt, { btn, snap });
           }
           // Tear down ghost + placeholder, restore the source button.
           cancelEventDrag();
@@ -3265,17 +3614,21 @@
         clearAllDayDragSelection(root);
         const startDate = startCell.dataset.date;
         const endDate = endCell.dataset.date;
-        // Single-cell click ALSO opens the add modal — mirrors the
-        // body-grid `dblclick` behavior, but on a single click since the
-        // all-day strip has no fine-grained selection to disambiguate.
-        const lo = startDate <= endDate ? startDate : endDate;
-        const hi = startDate <= endDate ? endDate : startDate;
-        openAddModalForRange(lo, hi, true);
-        // Always suppress — the synthesized click on mouseup bubbles to
-        // modals.js's document-click handler which would immediately close
-        // the modal we just opened. Both the drag-finish and single-cell
-        // click paths need the suppressor.
-        armClickSuppressor();
+        if (startDate === endDate && isDesktopPointer()) {
+          // On desktop a single click selects the day like the time
+          // grid does; the add modal is a double click away.
+          selectCalDay(root, startDate);
+        } else {
+          // On touch a single-cell tap ALSO opens the add modal, since
+          // there is no double click to reach it.
+          const lo = startDate <= endDate ? startDate : endDate;
+          const hi = startDate <= endDate ? endDate : startDate;
+          openAddModalForRange(lo, hi, true);
+          // Always suppress — the synthesized click on mouseup bubbles to
+          // modals.js's document-click handler which would immediately
+          // close the modal we just opened.
+          armClickSuppressor();
+        }
       }
       // ---- week drag finish ----
       if (weekDrag.col) {

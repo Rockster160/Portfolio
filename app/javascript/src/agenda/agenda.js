@@ -227,8 +227,9 @@
   // Three-way prompt for a drag-and-drop edit on a recurring event.
   // Resolves to "occurrence" | "future" | null (null = cancel / dismiss).
   // Uses the shared #agenda-recurring-scope-modal partial; same modal
-  // infra (showModal + jQuery modal.hidden) as agendaConfirm.
-  function agendaRecurringScope({ title, from, to, patternFrom, patternTo }) {
+  // infra (showModal + jQuery modal.hidden) as agendaConfirm. `prompt`
+  // and `danger` let a delete reuse it; both fall back to the edit copy.
+  function agendaRecurringScope({ title, from, to, patternFrom, patternTo, prompt, danger }) {
     const modal = document.getElementById("agenda-recurring-scope-modal");
     if (!modal || typeof window.showModal !== "function" || !window.jQuery) {
       // No modal available — degrade to default-occurrence (safest: only
@@ -245,7 +246,11 @@
     const pRowEl     = modal.querySelector("[data-recurring-scope-pattern-row]");
     const pFromEl    = modal.querySelector("[data-recurring-scope-pattern-from]");
     const pToEl      = modal.querySelector("[data-recurring-scope-pattern-to]");
+    const promptEl   = modal.querySelector(".agenda-recurring-scope-body");
     if (titleEl) titleEl.textContent = title || "Edit recurring event";
+    if (promptEl) promptEl.textContent = prompt || "Apply this change to:";
+    occBtn?.classList.toggle("af-btn-danger", !!danger);
+    occBtn?.classList.toggle("af-btn-primary", !danger);
     if (diffEl) {
       const hasOcc = !!(from && to);
       const hasPattern = !!(patternFrom && patternTo);

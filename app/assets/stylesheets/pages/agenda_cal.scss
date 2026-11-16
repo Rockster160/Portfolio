@@ -1460,6 +1460,57 @@ body.cal-event-drag-blocked * {
   overflow: hidden;
 }
 
+// Selection + clipboard states, set by `paintCalSelection`. `!important`
+// matches the tile rules above, which have to beat the global button
+// styles. `is-cut` comes after `is-selected` so a cut event reads as cut
+// even while it is still the selection.
+.cal-week-event {
+  &.is-selected {
+    background: color-mix(in srgb, var(--agenda-color, #888) 80%, transparent) !important;
+    color: #FFF !important;
+    outline: 1.5px solid rgba(255, 255, 255, 0.85);
+    outline-offset: -1.5px;
+    z-index: 5;
+  }
+  &.is-cut {
+    opacity: 0.5;
+    background: transparent !important;
+    outline: 1.5px dashed var(--agenda-color, #888);
+    outline-offset: -1.5px;
+  }
+  &.is-pending-delete {
+    opacity: 0.25;
+    pointer-events: none;
+  }
+}
+
+.cal-week-allday-chip {
+  &.is-selected {
+    outline: 2px solid #FFF;
+    outline-offset: 1px;
+    z-index: 5;
+  }
+  &.is-cut {
+    opacity: 0.55;
+    background: transparent;
+    color: var(--agenda-color, #888);
+    outline: 1.5px dashed var(--agenda-color, #888);
+    outline-offset: -1.5px;
+  }
+  &.is-pending-delete {
+    opacity: 0.25;
+    pointer-events: none;
+  }
+}
+
+// The day a paste will land on — only drawn while something is on the
+// clipboard and no event is selected.
+.cal-week-column.is-paste-target,
+.cal-week-allday-cell.is-paste-target,
+.cal-week-header-day.is-paste-target {
+  background: rgba(1, 96, 255, 0.14);
+}
+
 // Draft block while user is dragging to create.
 .cal-week-drag-sel {
   position: absolute;
