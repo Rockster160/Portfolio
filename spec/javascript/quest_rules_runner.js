@@ -328,4 +328,29 @@ cases.game_day_after_reset = Q.dayKey(Q.gameDate(at(2026, 11, 5, 4, 0), 4));
   };
 }
 
+// A locked bank: a tap does nothing, while a coin's effect and a typed count
+// still move it.
+{
+  const bank = Q.newItem({ id: "bank", name: "Bank", locked: true, target: { mode: "none" } });
+  const coin = Q.newItem({
+    id: "coin", name: "Find a coin", target: { mode: "none" },
+    effects: [{ on: "tap", kind: "add", item: "bank", amount: 5 }],
+  });
+  const b = { settings: { resetHour: 4 }, counts: {}, log: [], items: [bank, coin] };
+  const day = Q.gameDate(NOV4, 4);
+  const tapped = Q.tap(b, bank, NOV4, 3);
+  const afterTap = Q.countOf(b, bank, day);
+  Q.tap(b, coin, NOV4);
+  const afterCoin = Q.countOf(b, bank, day);
+  Q.setCount(b, bank, NOV4, 12);
+  cases.locked = {
+    tapped,
+    after_tap:  afterTap,
+    after_coin: afterCoin,
+    after_set:  Q.countOf(b, bank, day),
+    locked:     Q.isLocked(bank),
+    coin:       Q.isLocked(coin),
+  };
+}
+
 process.stdout.write(JSON.stringify({ cases }));

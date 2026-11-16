@@ -173,4 +173,15 @@ RSpec.describe "the quest board rules (JS-side)" do
       items: ["Villagers", "Dailies", "", ""],
     )
   end
+
+  it "leaves a locked quest alone when it's tapped, while effects and a typed count still move it" do
+    expect(cases[:locked]).to eq(
+      tapped:     nil,
+      after_tap:  0,
+      after_coin: 5,
+      after_set:  12,
+      locked:     true,
+      coin:       false,
+    )
+  end
 end
