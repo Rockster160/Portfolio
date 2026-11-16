@@ -439,6 +439,7 @@ Rails.application.routes.draw do
   post  "webhooks/byte/production_scripts"     => "webhooks#byte_create_production_script"
   patch "webhooks/byte/production_scripts/:id" => "webhooks#byte_update_production_script"
   get   "webhooks/byte/agenda"           => "webhooks#byte_agenda"
+  get   "webhooks/byte/needs_you"        => "webhooks#byte_needs_you"
   get   "webhooks/byte/weather"          => "webhooks#byte_weather"
 
   get "webhooks/uptime" => "webhooks#uptime"

@@ -697,6 +697,13 @@ class WebhooksController < ApplicationController
     render json: { range: label[:name], count: items.length, body: body }
   end
 
+  # What the Feature Builder waits on the owner for, for the Mini's dashboard (NeedsYou).
+  def byte_needs_you
+    return head :unauthorized unless byte_authorized?
+
+    render json: { needs_you: NeedsYou.call(User.me) }
+  end
+
   # The mirror of byte_create: a message FROM the person, injected from off-web
   # (the Mac `tell` CLI, a cron job, a Jil bash step). byte_create posts as
   # Byte; this posts as them and gets a real Buddy turn back, exactly as if
