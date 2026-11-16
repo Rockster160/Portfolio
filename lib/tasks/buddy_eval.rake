@@ -1823,6 +1823,18 @@ BUDDY_EDGE_PROBES = [
                   "the row. `home_by` is in the context and the search rows now",
   },
 
+  # --- a drive figure they say is wrong is measured again -------------------
+  {
+    case:  "redo a wrong drive home",
+    say:   "the drive home from the orchard says like 18 hours, can you redo the travel on it?",
+    tool:  :check_travel_time,
+    avoid: %i[edit_agenda_item search_agenda],
+    args:  { check_travel_time: { remeasure: true } },
+    needs: :orchard_home_drive,
+    note:  "a drive home measured from the typed name \"Dayne's\" came back at 1130 minutes " \
+           "and there was no way to ask for it to be measured again",
+  },
+
   # --- a one-off is not a series, and asking for one is not an error --------
   {
     case:        "prod 5270",

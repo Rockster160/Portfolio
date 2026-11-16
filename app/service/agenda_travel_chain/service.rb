@@ -543,17 +543,23 @@ module AgendaTravelChain
     # post_dest is the `to:` override OR the default Home return trip (see
     # persist_event). Returns the same leg shape as build_incoming_legs.
     # Empty array when there's no destination AND no after: waypoints.
+    #
+    # The first leg is DRIVEN from the event's resolved address, the same one
+    # the incoming leg drove to: a casual name ("Dayne's") handed to Distance
+    # Matrix can land anywhere it likes. `cursor_from` stays the typed text,
+    # for the leg labels and the same-place check against `to:`.
     def build_outgoing_legs(evt, post_dest, after_entries)
       return [] if post_dest.blank? && after_entries.empty?
 
       legs = []
       cursor_from = evt.location.to_s
+      drive_from = resolved_location(evt) || cursor_from
 
       after_entries.each do |entry|
         loc = entry[:location].to_s
         next if loc.empty?
 
-        drive_secs = leg_drive_seconds(cursor_from, loc, evt.end_at)
+        drive_secs = same_place?(cursor_from, loc) ? 0 : @resolver.travel_seconds(drive_from, loc, at: evt.end_at)
         legs << {
           "from"          => cursor_from,
           "to"            => loc,
@@ -561,10 +567,11 @@ module AgendaTravelChain
           "dwell_seconds" => entry[:dwell_seconds].to_i,
         }
         cursor_from = loc
+        drive_from = loc
       end
 
       if post_dest.present?
-        drive_secs = same_place?(cursor_from, post_dest) ? 0 : @resolver.travel_seconds(cursor_from, post_dest, at: evt.end_at)
+        drive_secs = same_place?(cursor_from, post_dest) ? 0 : @resolver.travel_seconds(drive_from, post_dest, at: evt.end_at)
         legs << {
           "from"          => cursor_from,
           "to"            => post_dest,

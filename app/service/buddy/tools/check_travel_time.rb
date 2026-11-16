@@ -28,6 +28,12 @@ Buddy::Tools.register(
     Somebody else's item is fine to look up. Their drive home is a fact about
     when the house is theirs again, which is a fact about the asker's day.
 
+    **`remeasure: true` when they say the figures on it are wrong** - "the drive
+    home from Dayne's says three hours, redo it", "that leave time is off, run
+    the travel again". It throws away everything stored about the trip (the
+    address it was placed at, the drive there, the drive home) and measures the
+    whole day again from scratch, then answers with the new figures.
+
     If there's no location on it, or nowhere the address can be found, this says
     so plainly. That is a real answer - tell them, rather than inventing a
     figure.
@@ -36,9 +42,10 @@ Buddy::Tools.register(
   args:        {
     item:      { type: :string, required: true,  description: "Fuzzy title of the calendar item to measure" },
     hint_date: { type: :string, required: false, description: "YYYY-MM-DD, the date the item is on, only to tell two of the same name apart" },
+    remeasure: { type: :boolean, required: false, description: "true to throw away the stored drive figures and measure again, when they say they're wrong" },
   },
   # A read. Nothing is written but the travel figures on the row itself, which
-  # is a cache of something already true.
+  # is a cache of something already true - remeasuring included.
   auto:        true,
   answers:     true,
   confirm:     ->(payload, ctx) {
@@ -50,9 +57,12 @@ Buddy::Tools.register(
             "ask where it is, or say plainly that it doesn't have a place yet"
     end
 
-    { summary: "Check the drive for #{item.name}", resolved: { agenda_item_id: item.display_id, name: item.name } }
+    verb = payload[:remeasure] ? "Remeasure" : "Check"
+    { summary: "#{verb} the drive for #{item.name}", resolved: { agenda_item_id: item.display_id, name: item.name } }
   },
-  label:       ->(payload, _ctx) { { title: "🚗 #{payload[:name]}", sub: "drive time" } },
+  label:       ->(payload, _ctx) {
+    { title: "🚗 #{payload[:name]}", sub: payload[:remeasure] ? "remeasured drive" : "drive time" }
+  },
   execute:     ->(payload, ctx) {
     item = AgendaItem.locate_for_user(payload[:agenda_item_id], ctx.user)
 
@@ -61,8 +71,13 @@ Buddy::Tools.register(
     # Measured only when we haven't got it. The chain caches on a fingerprint,
     # so a row that already knows its drive costs no Google round-trip; one that
     # doesn't gets a real one. `refresh_for` rather than `force_refresh_for` —
-    # forcing re-bills every call for an answer that hasn't changed.
-    if item.travel_seconds.nil? && item.persisted?
+    # forcing re-bills every call for an answer that hasn't changed. A remeasure
+    # is asked for because what's stored is wrong, so it keeps none of it.
+    remeasured = payload[:remeasure].to_s == "true" && item.persisted?
+    if remeasured
+      AgendaTravelChain.reset_and_recompute_for(item)
+      item.reload
+    elsif item.travel_seconds.nil? && item.persisted?
       AgendaTravelChain.refresh_for(item)
       item.reload
     end
@@ -81,6 +96,7 @@ Buddy::Tools.register(
       # `at` or `leave_at`. See Buddy::FollowUp.
       follow_on:  clock.call(Buddy::FollowUp.after(item.home_at)),
       unresolved: (true if drive.nil?),
+      remeasured: (true if remeasured),
     }.compact
   },
   receipt:     ->(result, _ctx) {
@@ -90,7 +106,7 @@ Buddy::Tools.register(
       next "Couldn't place #{result[:where]}, so there's no drive time for #{result[:name]} ✓"
     end
 
-    parts = ["#{result[:drive_min]}m to #{result[:where]}"]
+    parts = ["#{"remeasured, " if result[:remeasured]}#{result[:drive_min]}m to #{result[:where]}"]
     parts << "leave #{result[:leave_by]}" if result[:leave_by]
     parts << "home #{result[:home_by]}" if result[:home_by]
     "#{result[:name]} - #{parts.join(", ")} ✓"
