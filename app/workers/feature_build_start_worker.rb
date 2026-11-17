@@ -18,7 +18,8 @@ class FeatureBuildStartWorker
       build_id:        build.id,
       title:           build.title,
       branch_name:     FeatureBuilder::BranchName.for(build),
-      request:         build.request,
+      request:         "#{build.request}\n\n#{FeatureBuilder::TEXTING}",
+      kind:            build.kind,
       user_id:         build.user_id,
       conversation_id: build.byte_conversation_id,
     }

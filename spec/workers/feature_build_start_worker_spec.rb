@@ -12,14 +12,15 @@ RSpec.describe FeatureBuildStartWorker do
     FeatureBuild.find(message.metadata["feature_build_id"])
   }
 
-  it "asks the Mini to start the build, with the words to name its branch" do
+  it "asks the Mini to start the build, with the words to name its branch and how to talk" do
     allow(FeatureBuilder::BranchName).to receive(:for).and_return("dark-mode")
     start = stub_request(:post, %r{/byte/builder\z}).with(
       body: hash_including(
         "action"      => "start",
         "build_id"    => build.id,
-        "request"     => "dark mode",
+        "request"     => "dark mode\n\n#{FeatureBuilder::TEXTING}",
         "branch_name" => "dark-mode",
+        "kind"        => "feature",
       ),
     ).to_return(status: 200, body: "{}")
 

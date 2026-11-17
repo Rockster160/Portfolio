@@ -25,6 +25,12 @@ RSpec.describe FeatureBuilder::BranchName do
     expect(Buddy::GPT::Client).not_to have_received(:new)
   end
 
+  it "gives a quick session no branch" do
+    build.update!(kind: :quick)
+
+    expect(described_class.for(build)).to be_nil
+  end
+
   it "uses the model's name for the request" do
     answering("dynamic-pwas")
 

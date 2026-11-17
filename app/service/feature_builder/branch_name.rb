@@ -36,6 +36,8 @@ module FeatureBuilder
 
     def for(build)
       return AUDIT if build.kind_audit?
+      # A `/q` has no branch: it runs in the checkout itself.
+      return nil if build.kind_quick?
 
       from_model(build) || from_words(build.request)
     end

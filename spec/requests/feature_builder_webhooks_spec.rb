@@ -66,6 +66,17 @@ RSpec.describe "Feature Builder webhooks", type: :request do
       expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id, nil)
     end
 
+    it "speaks in the thread of the `/q` that handed it over" do
+      thread = user.byte_conversations.create!(name: :Other, mode: :buddy)
+      quick = FeatureBuild.create!(
+        user: user, byte_conversation: thread, title: "Q", request: "q", kind: :quick, status: :running,
+      )
+
+      hand_over({ title: "Fix the gate", request: "Make it sound once.", from_build_id: quick.id })
+
+      expect(FeatureBuild.find(response.parsed_body["id"]).byte_conversation).to eq(thread)
+    end
+
     it "names it from the brief when no title is given" do
       hand_over({ request: "Dark mode for lists\n\nMore detail." })
 

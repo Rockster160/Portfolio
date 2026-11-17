@@ -7,7 +7,15 @@
   parse = ->(iso) { Time.zone.parse(iso.to_s) if iso.present? }
   thread_url = ->(conversation) { byte_root_url(subdomain: :byte, conversation_id: conversation.id) }
   builds_by_id = @builds.index_by(&:id)
-  kind_label = { audit: "Daily audit", builder: "Feature build", claude: "Claude thread", questions: "Questions" }
+  kind_label = {
+    audit:     "Daily audit",
+    auditing:  "Audit",
+    planning:  "Feature build",
+    builder:   "Feature build",
+    quick:     "Quick question",
+    claude:    "Claude thread",
+    questions: "Questions",
+  }
   build_state = ->(build) { FeatureBuilder.stage(build, @live[build.id]) }
   queue_label = {
     landing:  "merging now",
@@ -123,7 +131,7 @@
 
   <% running.each do |session| %>
     <%
-      kind = FeatureBuilder.kind_of(session, @conversations)
+      kind = FeatureBuilder.kind_of(session, @conversations, builds_by_id)
       build = builds_by_id[session["build_id"].to_i] || FeatureBuild.find_by(id: session["build_id"])
       conversation = @conversations[session["conversation_id"].to_i]
     %>

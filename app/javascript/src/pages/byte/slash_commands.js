@@ -53,6 +53,7 @@ const COMMANDS = [
   // the PR come back to this thread.
   { name: "feature",  owner: true, modes: ["buddy"], description: "Have Claude build a feature and open a PR", args: "add <what to build>" },
   { name: "audit",    owner: true, modes: ["buddy"], description: "Have Claude audit recent messages and fix what it finds", args: "[what to look at]" },
+  { name: "q",        owner: true, modes: ["buddy"], description: "Quick question or data fix for Claude on the Mini", args: "<what to ask or fix>" },
 
   // Jarvis. Everywhere, because the house doesn't care which thread you're
   // standing in — the bare-dot shortcut for the same thing is Buddy-only.

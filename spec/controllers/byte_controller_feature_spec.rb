@@ -71,6 +71,41 @@ RSpec.describe ByteController, type: :controller do
     end
   end
 
+  describe "/q" do
+    it "starts a quick session with the message it was typed under" do
+      sign_in rocco
+      answer = convo.byte_messages.create!(
+        user: rocco, direction: :inbound, state: :delivered, body: "The gate sounded at 9:02.",
+      )
+
+      post :create_message, params: {
+        conversation_id: convo.id,
+        body:            "/q why twice?",
+        metadata:        { reply_to: { id: answer.id, excerpt: "The gate" } },
+      }
+
+      build = FeatureBuild.last
+      expect(build).to be_kind_quick
+      expect(build.request).to include("Quick request: why twice?", "typed as a reply to this", "[#{answer.id}]")
+      expect(convo.byte_messages.find_by(direction: :outbound).body).to eq("/q why twice?")
+    end
+
+    it "is the owner's alone" do
+      chelsea = create(:user, id: 58_128)
+      thread = chelsea.byte_conversations.create!(name: :Buddy, mode: :buddy)
+      sign_in chelsea
+
+      post :create_message, params: { conversation_id: thread.id, body: "/q anything" }
+
+      expect(FeatureBuild.count).to eq(0)
+    end
+
+    it "is a command after a dot too, like `/audit`, rather than words for Jarvis" do
+      expect(ByteMessageIntake.slash_command?(".q why twice?")).to be(true)
+      expect(ByteMessageIntake.slash_command?(".audit")).to be(true)
+    end
+  end
+
   describe "/audit" do
     it "starts an audit build with the note as its focus, under their message" do
       sign_in rocco

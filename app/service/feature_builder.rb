@@ -61,6 +61,13 @@ module FeatureBuilder
 
   USAGE = "usage: `/feature add WHAT TO BUILD`".freeze
 
+  # How every build talks, handed to it with its request. Each message a turn
+  # ends with reaches its owner's phone as a push.
+  TEXTING = <<~TXT.chomp.freeze
+    HOW TO TALK
+    Every message you end a turn with reaches the owner's phone as a text. Write it like one: a few short lines to take in at a glance, the answer first, no headings, no debrief. Questions are numbered so each can be answered by number. Detail belongs in the ticket, the PR or the script, not in the messages.
+  TXT
+
   # A build's last message before it stopped, kept as the question it's asking.
   # One can run long; past this it's cut and the session has the rest.
   QUESTION_LIMIT = 4000
@@ -257,7 +264,7 @@ module FeatureBuilder
   # worktree and the branch on its own once it has said yes. False when it
   # didn't answer, and the build is left as it was.
   # rubocop:disable Naming/PredicateMethod -- this sends; the boolean is whether it got there
-  def cancel!(build)
+  def cancel!(build, reason: CANCELED_REASON)
     return true if build.status_finished?
 
     told = ByteLocal.builder(
@@ -271,7 +278,7 @@ module FeatureBuilder
     build.update!(
       status:        :finished,
       finished_at:   Time.current,
-      closed_reason: CANCELED_REASON,
+      closed_reason: reason,
       question:      nil,
       asked_at:      nil,
     )
@@ -304,6 +311,7 @@ module FeatureBuilder
 
   def announce_waiting!(build)
     return if build.status_finished? || build.status_failed?
+    return announce_answer!(build) if build.kind_quick?
 
     text = (
       if build.question.present?
@@ -314,6 +322,24 @@ module FeatureBuilder
       end
     )
     announce!(build, text, "Waiting on you: #{build.full_title}")
+  end
+
+  # A `/q` turn's last message is its answer, so it's said as it is.
+  def announce_answer!(build)
+    return if build.question.blank?
+
+    announce!(build, build.question, build.full_title)
+  end
+
+  # A production script a `/q` session sent: its page, where it's approved, in
+  # the thread. A build's scripts are listed with its PR instead.
+  def script_sent!(script, updated: false)
+    build = script.feature_build
+    return if build.nil? || !build.kind_quick?
+
+    url = Rails.application.routes.url_helpers.system_production_script_url(script)
+    said = updated ? "updated, and needs approving again" : "is waiting on your approval"
+    announce!(build, "[#{script.title}](#{url}) #{said}.", "Script: #{script.title}")
   end
 
   def announce!(build, text, push_title)
@@ -370,9 +396,11 @@ module FeatureBuilder
   end
 
   # Builds with a question out to their owner, oldest first. What Buddy matches
-  # an answer typed without a reply against.
+  # an answer typed without a reply against. A `/q`'s last message is an
+  # answer, not a question, and is replied to directly.
   def asking(user)
-    FeatureBuild.unfinished.where(user: user).where.not(question: nil).order(:asked_at)
+    scope = FeatureBuild.unfinished.where(user: user).where.not(kind: :quick)
+    scope.where.not(question: nil).order(:asked_at)
   end
 
   # Types `text` into the build's session as its owner's next message, with
@@ -614,7 +642,8 @@ module FeatureBuilder
   def kind_of(session, conversations, builds={})
     if session["kind"].to_s == "builder"
       build = builds[session["build_id"].to_i]
-      return :audit if build&.kind_audit?
+      return :auditing if build&.kind_audit?
+      return :quick if build&.kind_quick?
 
       return build && build.planned_at.nil? ? :planning : :builder
     end
@@ -633,6 +662,8 @@ module FeatureBuilder
     if kinds.one?
       {
         audit:    "Auditing…",
+        auditing: "Auditing…",
+        quick:    "Looking into it…",
         planning: "Planning…",
         builder:  "Building…",
         claude:   "Claude working…",
@@ -702,7 +733,7 @@ module FeatureBuilder
     listed = sessions.select { |session| session["build_id"] }.index_by { |session| session["build_id"].to_i }
     reported_at = sessions_reported_at
     waiting = pending(user)
-    asking = waiting[:questions] | builds.select { |build| build.question.present? }
+    asking = waiting[:questions] | builds.select { |build| build.question.present? && !build.kind_quick? }
 
     states = []
     states << :asking if asking.any?
@@ -732,7 +763,8 @@ module FeatureBuilder
   def pending(user)
     idle = sessions.select { |session| session["build_id"] && !session["working"] }
     idle = idle.map { |session| session["build_id"].to_i }
-    live = FeatureBuild.where(user: user, status: [:starting, :running, :stopped]).newest.to_a
+    live = FeatureBuild.where(user: user, status: [:starting, :running, :stopped]).where.not(kind: :quick)
+    live = live.newest.to_a
     {
       prs:       live.select { |build| build.pr_url.present? },
       questions: live.select { |build| build.pr_url.blank? && idle.include?(build.id) },
@@ -747,6 +779,7 @@ module FeatureBuilder
   # Mini's report for it, when it's listed.
   def stage(build, live)
     return build.status.humanize.downcase if build.status_failed? || build.status_finished?
+    return (live["working"] ? "working" : "answered") if live && build.kind_quick?
     return "working" if live&.dig("working") && build.pr_url.present?
     return (build.planned_at ? "building" : "planning") if live&.dig("working")
     return "PR open" if build.pr_url.present?

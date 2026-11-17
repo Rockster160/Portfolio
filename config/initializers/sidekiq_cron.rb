@@ -197,6 +197,12 @@ if Rails.env.production?
       cron:  daily_4am,
     },
     {
+      # Closes every `/q` session nobody has replied to in six hours.
+      name:  "QuickClose",
+      class: "QuickCloseWorker",
+      cron:  daily_4am,
+    },
+    {
       name:  "BuddyActivitySweep",
       class: "BuddyActivitySweepWorker",
       cron:  daily_4am,
