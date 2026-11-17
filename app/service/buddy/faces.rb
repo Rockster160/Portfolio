@@ -23,21 +23,23 @@ module Buddy
     GESTURES = %i[wave].freeze
 
     # Something the pet is busy doing for the person, held while it lasts: at
-    # the laptop while a Feature Builder works. Never a mood either.
-    ACTIVITIES = %i[working].freeze
+    # the laptop while a Feature Builder works, pleased with the job while its
+    # PR waits on a review. Never a mood either.
+    ACTIVITIES = %i[working accomplished].freeze
 
     # Where the faces that are STATES rather than moods sit on the mood axes, so
     # a pet with no art for one wears the nearest face it does have instead of
     # going blank or snapping to neutral. Every other name takes its numbers
     # from the companions that declare it.
     STATE_POINTS = {
-      thinking: { warmth: 0.45, play: 0.15, weight: 0.60, strain: 0.20 },
-      pounce:   { warmth: 0.70, play: 0.90, weight: 0.25, strain: 0.25 },
-      sleeping: { warmth: 0.55, play: 0.05, weight: 0.20, strain: 0.00 },
-      wave:     { warmth: 0.85, play: 0.50, weight: 0.20, strain: 0.05 },
-      clock:    { warmth: 0.45, play: 0.20, weight: 0.50, strain: 0.35 },
-      alarm:    { warmth: 0.80, play: 0.65, weight: 0.55, strain: 0.25 },
-      working:  { warmth: 0.50, play: 0.13, weight: 0.62, strain: 0.15 },
+      thinking:     { warmth: 0.45, play: 0.15, weight: 0.60, strain: 0.20 },
+      pounce:       { warmth: 0.70, play: 0.90, weight: 0.25, strain: 0.25 },
+      sleeping:     { warmth: 0.55, play: 0.05, weight: 0.20, strain: 0.00 },
+      wave:         { warmth: 0.85, play: 0.50, weight: 0.20, strain: 0.05 },
+      clock:        { warmth: 0.45, play: 0.20, weight: 0.50, strain: 0.35 },
+      alarm:        { warmth: 0.80, play: 0.65, weight: 0.55, strain: 0.25 },
+      working:      { warmth: 0.50, play: 0.13, weight: 0.62, strain: 0.15 },
+      accomplished: { warmth: 0.80, play: 0.55, weight: 0.30, strain: 0.05 },
     }.freeze
 
     # The faces the app itself puts on the pet rather than moods: asleep, mid
