@@ -554,6 +554,7 @@
   #notice("Message" Text BR content([who:[%WHO%] icon:String color:String push:Boolean]))::Boolean // A banner in the thread, like a tool receipt, instead of a message: not unread, no push unless push is on. A message opening with a glyph uses it as the icon. color: green/blue/purple/amber/red or a hex.
   #sayEvent("Event" Numeric|Hash|AgendaItem BR "Message" String)::Numeric
   #prompt(Text)::Boolean
+  #command("Key" String)::Boolean // Runs what was attached to this key by telling Buddy "set <key> to ...": saved steps run at once, saved words go to Buddy as a request. False when nothing is attached.
   #photo("Image" String BR "Caption" String)::Boolean
   #checklist("List" String BR "Message" Text)::Numeric
   #alert("Key" String BR "Message" Text BR content([who:[%WHO%] groups:String icon:String warmth:Slider play:Slider weight:Slider strain:Slider reach:Slider face:[%SYSTEM_FACES% *] strength:Numeric]))::Boolean
