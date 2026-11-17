@@ -394,6 +394,7 @@ BUDDY_TOOL_PROBES = {
   edit_routine:           { say: "in my wind-down, make the timer 20 minutes instead of 10", avoid: %i[save_routine], needs: :wind_down_routine },
   edit_plan:              { say: "push the garage stuff back an hour", avoid: %i[move_reminder cancel_reminder], needs: :garage_plan },
   forget_routine:         { say: "delete my wind-down routine, I don't use it", needs: :wind_down_routine },
+  set_command:            { say: "set the hall button to turn on chill mode", avoid: %i[save_routine run_jil_task], needs: :command_slot },
   link_records:           { say: "from now on, whenever I log a Strawberry Celsius, tick off my water chore", needs: :water_chore },
   unlink_records:         { say: "logging coffee shouldn't tick off the chore any more", needs: :coffee_pairing },
 
@@ -512,6 +513,7 @@ BUDDY_EVAL_EXECUTABLE = %i[
   move_idea
   save_routine
   forget_routine
+  set_command
   link_records
   unlink_records
   remember

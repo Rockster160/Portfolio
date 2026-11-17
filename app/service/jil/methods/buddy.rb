@@ -25,6 +25,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #   #notice("Message" Text BR content([who:[%WHO%] icon:String color:String push:Boolean]))::Boolean
   #   #sayEvent("Event" Numeric|Hash|AgendaItem BR "Message" String)::Numeric
   #   #prompt(Text)::Boolean
+  #   #command("Key" String)::Boolean
   #   #photo("Image" String BR "Caption" String)::Boolean
   #   #checklist("List" String BR "Message" Text)::Numeric
   #   #alert("Key" String BR "Message" Text BR "Who" String BR "Groups" String BR "Icon" String)::Boolean
@@ -440,6 +441,14 @@ class Jil::Methods::Buddy < Jil::Methods::Base
       metadata:     { kind: :buddy_trigger, hidden: true, source: :jil },
     )
     true
+  end
+
+  # Runs whatever was attached to this key by telling Buddy "set <key> to ...":
+  # saved tool calls run straight away, saved words go back to Buddy as a fresh
+  # request. The key is the task owner's, since the task is theirs. False when
+  # nothing is attached.
+  def command(key)
+    ::Buddy::Commands.run!(@jil.user, key.to_s)
   end
 
   private
