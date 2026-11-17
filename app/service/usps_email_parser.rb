@@ -109,7 +109,10 @@ class UspsEmailParser
 
       date = digest_bucket_date(label)
       segments[i + 1].to_s.scan(DIGEST_PKG_REGEX) { |src, tracking|
-        packages[tracking] ||= { source: src.squish.presence, tracking: tracking, date: date }
+        # A package with no sender name prints its tracking number twice
+        # ("FROM: 9300… 9300…"), and the first copy lands in the source group.
+        source = src.squish.presence unless src.match?(/\A[\d\s]+\z/)
+        packages[tracking] ||= { source: source, tracking: tracking, date: date }
       }
     }
     packages.values

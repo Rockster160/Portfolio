@@ -87,6 +87,22 @@ RSpec.describe UspsEmailParser do
     expect(AmazonOrder.all.map(&:tracking_number)).not_to include("9111111111111111111111")
   end
 
+  it "leaves the source empty for a digest package with no sender name" do
+    described_class.parse(email(
+      subject:   "Your Daily Digest for Tue, 11/17 is ready to view",
+      body_html: <<~HTML,
+        <div>PACKAGES</div>
+        <div>Awaiting From Sender 1 item(s)</div>
+        <div>FROM: <span>9300120818100744886017</span> <span>9300120818100744886017</span></div>
+        <div>Outbound 0 item(s)</div>
+      HTML
+    ))
+
+    item = AmazonOrder.all.sole
+    expect(item.tracking_number).to eq("9300120818100744886017")
+    expect(item.source).not_to eq("9300120818100744886017")
+  end
+
   it "does not create an item for a digest with only mailpieces (no packages)" do
     result = described_class.parse(email(
       subject:   "Your Daily Digest for Thu, 7/16 is ready to view",

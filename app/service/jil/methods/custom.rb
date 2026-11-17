@@ -27,6 +27,8 @@ class Jil::Methods::Custom < Jil::Methods::Base
       return ups_package(evalargs(line.args).first) if @jil.user.me?
     when :wayfair_package
       return wayfair_package(evalargs(line.args).first) if @jil.user.me?
+    when :usps_package
+      return usps_package(evalargs(line.args).first) if @jil.user.me?
     end
 
     task = @jil.user.tasks.active.enabled.functions.by_method_name(line.methodname).take
@@ -77,6 +79,23 @@ class Jil::Methods::Custom < Jil::Methods::Base
     return nil unless item
 
     item.serialize
+  end
+
+  # A USPS mail off the personal Gmail, kept by the Mac watcher and handed over
+  # by the `mail` trigger. A tracking email updates the one package it names,
+  # while an Informed Delivery digest can list several, so this always answers
+  # with a list.
+  #
+  # Empty when the mail carries no tracking number: USPS marketing, or a digest
+  # holding nothing but letters.
+  def usps_package(email_ref)
+    email = email_ref.is_a?(::Email) ? email_ref : @jil.user.emails.find_by(id: email_ref)
+    return [] if email.blank?
+
+    items = ::UspsEmailParser.parse(email)
+    return [] unless items
+
+    Array.wrap(items).map(&:serialize)
   end
 
   private

@@ -206,4 +206,99 @@ RSpec.describe Jil::Methods::Custom do
       expect(exe.ctx[:error]).to be_present
     end
   end
+
+  # ── USPSPackage: a Gmail USPS mail, via the `mail` trigger → the parser ─
+
+  describe "Custom.USPSPackage" do
+    include ActiveSupport::Testing::TimeHelpers
+
+    around { |ex| travel_to(DateTime.new(2026, 11, 17, 18, 0, 0)) { ex.run } }
+
+    before do
+      allow(user).to receive(:me?).and_return(true)
+      AmazonOrder.clear
+      allow(MeCache).to receive(:get).and_call_original
+      allow(MeCache).to receive(:get).with(:amazon_deliveries).and_return([])
+      allow(AmazonOrder).to receive(:save)
+      allow(AmazonOrder).to receive(:broadcast)
+    end
+
+    def usps_mail(subject:, html:)
+      raw = ::Mail.new {
+        from       "USPS <auto-reply@tracking.usps.com>"
+        to         "someone@example.com"
+        subject    subject
+        message_id "<#{SecureRandom.hex(6)}@usps.test>"
+        date       Time.current
+        html_part {
+          content_type "text/html; charset=UTF-8"
+          body html
+        }
+      }.to_s
+
+      ::Emails::StoreRaw.call(user: user, raw: raw)
+    end
+
+    # What the deployed `mail:action::usps` listener task runs, shape for shape.
+    def usps_code
+      <<~'JIL'
+        input = Global.input_data()::Hash
+        emailId = input.get("id")::Numeric
+        email = Email.find(emailId)::Email
+        packages = Custom.USPSPackage(email)::Array
+        count = packages.length()::Numeric
+        found = Boolean.compare(count, ">", 0)::Boolean
+        filed = Global.if(found, {
+          archived = email.archive(true)::Boolean
+        }, {})::Any
+      JIL
+    end
+
+    it "validates" do
+      expect { ::Jil::Validator.validate!(usps_code) }.not_to raise_error
+    end
+
+    it "opens a delivery from a tracking email and archives the mail" do
+      email = usps_mail(
+        subject: "USPS® Expected Delivery on Thursday, November 19, 2026 arriving by 9:00pm " \
+                 "92055902673388000489875503",
+        html:    "<p>Tracking Number: 92055902673388000489875503</p>" \
+                 "<p>Package Shipped from: <strong>SHOPIFY</strong></p>",
+      )
+
+      exe = jil(usps_code, { action: :usps, id: email.id })
+
+      expect(exe.ctx[:error]).to be_blank
+      item = AmazonOrder.all.sole
+      expect(item.carrier).to eq(:usps)
+      expect(item.name).to eq("SHOPIFY")
+      expect(item.delivery_date).to eq("2026-11-19")
+      expect(item.time_range).to eq("9PM")
+      expect(item.email_ids).to eq([email.id])
+      expect(email.reload).to be_archived
+    end
+
+    it "leaves a mail with no tracking number in the inbox" do
+      email = usps_mail(subject: "Save on Priority Mail", html: "<p>Ship for less this season.</p>")
+
+      exe = jil(usps_code, { action: :usps, id: email.id })
+
+      expect(exe.ctx[:error]).to be_blank
+      expect(AmazonOrder.all).to be_empty
+      expect(email.reload).not_to be_archived
+    end
+
+    it "does not touch User.me's deliveries for another user's task" do
+      allow(user).to receive(:me?).and_return(false)
+      email = usps_mail(
+        subject: "USPS® Expected Delivery",
+        html:    "<p>Tracking Number: 92055902673388000489875503</p>",
+      )
+
+      exe = jil(usps_code, { action: :usps, id: email.id })
+
+      expect(AmazonOrder.all).to be_empty
+      expect(exe.ctx[:error]).to be_present
+    end
+  end
 end
