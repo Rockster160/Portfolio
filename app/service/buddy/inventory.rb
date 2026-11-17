@@ -104,6 +104,93 @@ module Buddy
       found.first
     end
 
+    # How a path is written: "Desk > Tool Drawer > Top Drawer".
+    PATH_SEPARATOR = /\s*[>›]\s*/
+
+    def segments(path)
+      path.to_s.split(PATH_SEPARATOR).map(&:strip).compact_blank
+    end
+
+    # The box at the end of `path`, walked from its first name down through
+    # each box's own contents, so "Desk > Top Drawer" is the drawer in the desk
+    # and not the one in the toolbox. The first name is found anywhere, as a
+    # single name always is.
+    #
+    # With `create`, a name that isn't there is made where the path puts it,
+    # and the rows made come back in `created`. Without, it raises saying which
+    # step is missing. Returns [box, created].
+    def walk!(user, path, create: false, verb: "add to", arg: :inside)
+      names = segments(path)
+      raise "no box named" if names.empty?
+
+      created = []
+      box = (
+        begin
+          resolve!(user, names.first, verb: verb, arg: arg)
+        rescue ::Buddy::Ambiguous
+          raise
+        rescue StandardError
+          raise unless create
+
+          made!(user, names.first, nil, created)
+        end
+      )
+
+      names.drop(1).each { |name|
+        box = child_named(user, box, name) || (
+          raise("nothing inside #{path_of(box)} called #{name.inspect}") unless create
+
+          made!(user, name, box, created)
+        )
+      }
+      [box, created]
+    end
+
+    # Only `parent`'s own contents, and only a close match: the exact name, then
+    # the one name containing it, then a single slip of the keyboard. Siblings
+    # are named apart by small differences - "Top Drawer" and "Bottom Drawer"
+    # are four edits apart - so the usual tolerance would file into the wrong
+    # one of a pair instead of making the second.
+    def child_named(user, parent, name)
+      pool = ::Box.where(user_id: user.id, parent_key: parent.param_key).to_a
+      exact = pool.find { |box| box.name.to_s.casecmp?(name) }
+      return exact if exact
+
+      contained = pool.select { |box| box.name.to_s.downcase.include?(name.downcase) }
+      return contained.first if contained.one?
+      return nil if name.length < FUZZY_FLOOR
+
+      pool.find { |box| distance(box.name.to_s.downcase, name.downcase) <= 1 }
+    end
+
+    def made!(user, name, parent, created)
+      ::Box.create!(user: user, name: name, parent_key: parent&.param_key).tap { |box| created << box }
+    end
+
+    # Where a path WOULD lead, without making anything: the part that exists
+    # and the names still to be made. For saying what a call is about to do
+    # before it does it.
+    def plan(user, path)
+      names = segments(path)
+      found = (
+        begin
+          resolve!(user, names.first, verb: "add to", arg: :inside)
+        rescue ::Buddy::Ambiguous
+          raise
+        rescue StandardError
+          nil
+        end
+      )
+      return { found: nil, missing: names } if found.nil?
+
+      rest = names.drop(1)
+      while rest.any? && (child = child_named(user, found, rest.first))
+        found = child
+        rest = rest.drop(1)
+      end
+      { found: found, missing: rest }
+    end
+
     # The tie, as a choice rather than only a complaint. Each option answers
     # with the box's #HANDLE, which is exact where the name was not, and says
     # where it lives underneath - which is the only thing that tells two boxes
