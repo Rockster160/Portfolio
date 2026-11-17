@@ -28,10 +28,10 @@ module Buddy
       named.presence || pets_named(boards, name)
     end
 
-    # The boards among `boards` whose pet answers to `name` ("Moss" or "Moss's"),
-    # case aside.
+    # The boards among `boards` whose pet answers to `name` ("Moss", "Moss's"
+    # or "Moss's board"), case aside.
     def pets_named(boards, name)
-      name = name.to_s.strip.downcase.sub(/['’]s\z/, "")
+      name = name.to_s.strip.downcase.sub(/\s+board\z/, "").sub(/['’]s\z/, "")
       boards.select { |board| board.buddy_name.to_s.downcase == name }
     end
 

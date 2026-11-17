@@ -96,7 +96,8 @@ module Buddy
         did:      "add that to the list",
         verbs:    %w[added put stuck popped slotted threw],
         about:    /\blists?\b|\bon\s+there\b|\bto\s+(?:\*\*|`)/,
-        also:     %i[schedule_list_items edit_list_item],
+        # A bolded destination is just as often a calendar.
+        also:     %i[schedule_list_items edit_list_item add_agenda_item],
         examples: {
           "Kk! I added those three to **Before Bed**." => "turn spec, silent turn",
           "Popped milk on the grocery list."           => "the same claim, opening the sentence",

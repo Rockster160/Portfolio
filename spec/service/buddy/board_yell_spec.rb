@@ -43,6 +43,13 @@ RSpec.describe Buddy::BoardYell do
       expect(yell!(board: "Moss", key: "lunch")).to contain_exactly(kitchen, office)
     end
 
+    it "takes the pet's board said the way a person says it" do
+      kitchen.update!(buddy_theme: :moss)
+
+      expect(yell!(board: "Moss's board")).to eq([kitchen])
+      expect(yell!(board: "moss’s Board", key: "lunch")).to eq([kitchen])
+    end
+
     it "takes the board so named over the boards a pet of that name is on" do
       kitchen.update!(buddy_theme: :moss)
       moss = board!(user, "Moss")

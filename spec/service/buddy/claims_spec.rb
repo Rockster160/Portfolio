@@ -39,6 +39,12 @@ RSpec.describe Buddy::Claims do
     expect(hits).to be_empty
   end
 
+  it "takes an event added to a bolded calendar as backing an add" do
+    hits = described_class.unbacked("Added Leon's brunch to **Ours** for Saturday at 10.", ran: Set[:add_agenda_item])
+
+    expect(hits).to be_empty
+  end
+
   it "leaves questions, negations, other people and the world alone" do
     [
       "Want me to skip her nap?",
