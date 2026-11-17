@@ -28,3 +28,26 @@
     "#{formatted}\n"
   end
 end
+
+# A long unbroken run of token characters - base64, a key, a signature - is
+# noise in the log. It keeps its ends and its length, "c4Df..2400c..tEMn", so
+# two can still be told apart. Prepended so it wraps the gem's `params`, which
+# both the request line and the error line print from.
+module PrettyLoggerShortTokens
+  TOKEN = %r{[A-Za-z0-9+/=_-]{100,}}
+
+  def params
+    shorten_tokens(super)
+  end
+
+  def shorten_tokens(value)
+    case value
+    when Hash then value.transform_values { |item| shorten_tokens(item) }
+    when Array then value.map { |item| shorten_tokens(item) }
+    when String then value.gsub(TOKEN) { |token| "#{token.first(4)}..#{token.length}c..#{token.last(4)}" }
+    else value
+    end
+  end
+end
+
+::PrettyLogger::RequestLogger.prepend(PrettyLoggerShortTokens)
