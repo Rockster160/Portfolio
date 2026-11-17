@@ -51,11 +51,13 @@ module MergeQueue
 
   def approve!(build)
     build.update!(approved_at: Time.current)
+    FeatureBuilder.refresh_looks!(build.user)
     advance!(build.user)
   end
 
   def unapprove!(build)
     build.update!(approved_at: nil)
+    FeatureBuilder.refresh_looks!(build.user)
   end
 
   def hold!(build, held)
