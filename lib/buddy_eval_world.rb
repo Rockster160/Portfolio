@@ -728,8 +728,23 @@ class BuddyEvalWorld
         )
       }
     }
+
+    command_slot!
   rescue StandardError => e
     warn "[eval world] no jil tasks: #{e.message}"
+  end
+
+  # A button whose task leaves a key for Buddy, so "set the hall button to
+  # ..." has something to fill. Any key they already have is used instead.
+  def command_slot!
+    found = Task.active.enabled.where(user: user).where("code LIKE ?", "%Buddy.command(%").first
+    reuse(found) {
+      Task.create!(
+        user: user, name: "Hall Button", listener: "hall-button", enabled: true,
+        description: "The button in the hall, for the eval world",
+        code: %(cmd = Buddy.command("Hall Button")::Boolean)
+      )
+    }
   end
 
   # `answer_prompt` and `skip_prompt` both need something unanswered sitting
