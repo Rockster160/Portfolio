@@ -1,7 +1,8 @@
 // A rotation quest's card: the week, Monday first, with each day's pick and
 // any extras under it. Tapping a day focuses it and opens every option below;
-// tap an option to record it on that day, the same one again to take it back.
-// A tap anywhere else on the page (the page calls `blur`) folds them away.
+// tap an option to record it on that day (the same one again takes it back),
+// and the options fold away. A tap anywhere else on the page (the page calls
+// `blur`) folds them away too.
 
 import QuestRules from "./rules";
 import QuestRotation from "./rotation";
@@ -57,9 +58,13 @@ export function createRotationCard({ item, getBoard, getToday, onToggle, onEdit 
     render(current);
   });
 
+  // Folded before the toggle, so the repaint the pick causes draws it closed.
   options.addEventListener("click", e => {
     const button = e.target.closest("[data-option]");
-    if (button) onToggle(current, selectedDate(), button.dataset.option);
+    if (!button) return;
+    focused = false;
+    onToggle(current, selectedDate(), button.dataset.option);
+    render(current);
   });
 
   function selectedDate() {
