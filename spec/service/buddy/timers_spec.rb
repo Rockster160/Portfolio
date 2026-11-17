@@ -609,7 +609,36 @@ RSpec.describe Buddy::Timers do
         ctx = Buddy::ToolContext.new(user, conversation: chat)
 
         expect { Buddy::Tools[:set_timer][:confirm].call({ minutes: 5, board: "Garage" }, ctx) }
-          .to raise_error(/no board called "Garage".*Kitchen/)
+          .to raise_error(/no board called "Garage".*Kitchen \(Byte\)/)
+      end
+
+      it "finds a board by its pet's name when no board has that name" do
+        board.update!(buddy_theme: :moss)
+        ctx = Buddy::ToolContext.new(user, conversation: chat)
+
+        resolved = Buddy::Tools[:set_timer][:confirm].call({ minutes: 5, board: "Moss's" }, ctx)
+        expect(resolved[:resolved][:board_id]).to eq(board.id)
+        expect(Buddy::Timers.find_board!(user, "moss")).to eq(board)
+      end
+
+      it "takes a board's own name over a pet of the same name" do
+        board.update!(buddy_theme: :moss)
+        named = user.byte_conversations.create!(
+          mode: :buddy, name: "Moss", metadata: { "board" => true },
+        )
+
+        expect(Buddy::Timers.find_board!(user, "Moss")).to eq(named)
+      end
+
+      it "asks which board when the pet named is on more than one" do
+        board.update!(buddy_theme: :moss)
+        user.byte_conversations.create!(
+          mode: :buddy, name: "Office", buddy_theme: :moss, theme_chosen: true,
+          metadata: { "board" => true },
+        )
+
+        expect { Buddy::Timers.find_board!(user, "Moss") }
+          .to raise_error(/more than one board has Moss.*Kitchen, Office/)
       end
     end
 
