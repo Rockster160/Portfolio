@@ -677,8 +677,7 @@ class ByteController < ApplicationController
     # optimistic bubble has to draw the quote before any echo comes back. Only
     # the id is taken: the rest is client-controlled, and what gets stored is
     # the block ByteMessageIntake builds by reading the row itself.
-    reply_to = params[:reply_to].presence || incoming_meta.symbolize_keys[:reply_to]
-    reply_to = reply_to["id"] if reply_to.is_a?(Hash)
+    reply_to = reply_to_param(incoming_meta)
 
     # Prefer the client-typed timestamp for `created_at` so a burst of
     # rapid sends stays in the user's typing order even when the network
@@ -1947,6 +1946,14 @@ class ByteController < ApplicationController
     " It runs on #{ByteLocal.name_of(conversation.machine)}."
   end
 
+  # The message they long-pressed to reply to, by id. The client sends it on its
+  # own or inside `metadata`, as a descriptor of which only the id is taken.
+  def reply_to_param(incoming_meta=nil)
+    incoming_meta ||= ((params[:metadata] || {}).to_unsafe_h rescue {})
+    reply_to = params[:reply_to].presence || incoming_meta.to_h.symbolize_keys[:reply_to]
+    reply_to.is_a?(Hash) ? reply_to["id"] : reply_to
+  end
+
   def current_cwd(conversation)
     "`#{conversation.metadata.to_h["cwd"].presence || ByteWorkspaces::DEFAULT}`"
   end
@@ -2008,6 +2015,33 @@ class ByteController < ApplicationController
         text:                  arg,
         typed:                 body,
         local_id:              params[:local_id].to_s.presence,
+        attachment_signed_ids: attachment_signed_ids,
+      )
+    when "audit"
+      # A Feature Builder that reads the recent traffic and fixes what it
+      # finds (FeatureBuilder::Audit), with what to look at as the argument.
+      return ack(conversation, "Audits are the owner's.") if buddy_only?
+
+      FeatureBuilder::Audit.start!(
+        user:                  current_user,
+        conversation:          conversation,
+        note:                  arg,
+        typed:                 body,
+        local_id:              params[:local_id].to_s.presence,
+        attachment_signed_ids: attachment_signed_ids,
+      )
+    when "q"
+      # A read-only Claude on the Mini that answers or writes a production
+      # script, and hands code on as a `/feature` (FeatureBuilder::Quick).
+      return ack(conversation, "Quick sessions are the owner's.") if buddy_only?
+
+      FeatureBuilder::Quick.start!(
+        user:                  current_user,
+        conversation:          conversation,
+        text:                  arg,
+        typed:                 body,
+        local_id:              params[:local_id].to_s.presence,
+        reply_to_id:           reply_to_param,
         attachment_signed_ids: attachment_signed_ids,
       )
     when "today"

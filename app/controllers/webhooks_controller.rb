@@ -589,17 +589,19 @@ class WebhooksController < ApplicationController
 
   # A build handed over by a Claude session on the Mini (`bin/feature-build`),
   # with the brief that session wrote. It speaks in the owner's primary Buddy
-  # thread, the same as one started from a feature request.
+  # thread, the same as one started from a feature request, or in the thread of
+  # the `/q` that handed it over (`from_build_id`).
   def byte_create_build
     return head :unauthorized unless byte_authorized?
 
     request_text = params[:request].to_s.strip
     return render json: { error: :"request is empty" }, status: :bad_request if request_text.empty?
 
-    user = User.me
+    quick = FeatureBuild.kind_quick.find_by(id: params[:from_build_id]) if params[:from_build_id].present?
+    user = quick&.user || User.me
     build = FeatureBuilder.launch!(
       user:         user,
-      conversation: ByteConversation.for_self_initiated(user),
+      conversation: quick&.byte_conversation || ByteConversation.for_self_initiated(user),
       request:      request_text,
       title:        params[:title],
     )
@@ -638,6 +640,7 @@ class WebhooksController < ApplicationController
       commit_sha:    params[:commit_sha].to_s,
       edited_by:     :mini,
     )
+    FeatureBuilder.script_sent!(script)
     render json: production_script_json(script)
   rescue ActiveRecord::RecordInvalid => e
     render json: { ok: false, error: e.record.errors.full_messages.to_sentence }, status: :unprocessable_entity
@@ -656,6 +659,7 @@ class WebhooksController < ApplicationController
       commit_sha: params[:commit_sha].presence,
       edited_by:  :mini,
     )
+    FeatureBuilder.script_sent!(script, updated: true)
     render json: production_script_json(script)
   rescue ActiveRecord::RecordInvalid => e
     render json: { ok: false, error: e.record.errors.full_messages.to_sentence }, status: :unprocessable_entity

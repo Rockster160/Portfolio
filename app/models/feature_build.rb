@@ -12,6 +12,7 @@
 #  feedback             :jsonb            not null
 #  finished_at          :datetime
 #  held                 :boolean          default(FALSE), not null
+#  kind                 :integer          default(0), not null
 #  landing_at           :datetime
 #  merge_sha            :string
 #  planned_at           :datetime
@@ -62,6 +63,22 @@ class FeatureBuild < ApplicationRecord
   # `planned_at` is when the session first posted its ticket (`builder-pr plan`).
   enum :status, { starting: 0, running: 1, stopped: 2, finished: 3, failed: 4 }, prefix: :status
 
+  # feature    `/feature`: build what was asked
+  # audit      `/audit`: read the recent traffic, then fix what it turns up
+  #            (FeatureBuilder::Audit)
+  # quick      `/q`: answer a question or write a production script, read-only
+  #            in the Portfolio checkout with no worktree or branch of its own
+  #            (FeatureBuilder::Quick)
+  enum :kind, { feature: 0, audit: 1, quick: 2 }, prefix: :kind
+
+  # What each kind is called in the thread's status line, starting and then
+  # running.
+  KIND_WORDS = {
+    feature: ["a Feature Builder", "Building"],
+    audit:   ["an audit", "Running"],
+    quick:   ["a quick session", "Looking into"],
+  }.freeze
+
   validates :title, :request, presence: true
 
   scope :newest,     -> { order(created_at: :desc) }
@@ -87,13 +104,13 @@ class FeatureBuild < ApplicationRecord
   def status_line
     return "Closed **#{full_title}**: #{closed_reason}" if closed_reason.present?
 
+    what, doing = KIND_WORDS.fetch(kind.to_sym)
     case status.to_sym
     when :starting
-      "Starting a Feature Builder on the Mini for **#{full_title}**#{images_note}… " \
-        "#{link_markdown}"
+      "Starting #{what} on the Mini for **#{full_title}**#{images_note}… #{link_markdown}"
     when :failed
-      "Couldn't start the Feature Builder for **#{full_title}**: #{error} #{link_markdown}"
-    else "Building **#{full_title}** on the Mini. #{link_markdown}"
+      "Couldn't start #{what} for **#{full_title}**: #{error} #{link_markdown}"
+    else "#{doing} **#{full_title}** on the Mini. #{link_markdown}"
     end
   end
 

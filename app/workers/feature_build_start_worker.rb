@@ -7,15 +7,19 @@ class FeatureBuildStartWorker
   # A second start would cut a second worktree for the same build.
   sidekiq_options queue: :default, retry: false
 
-  def perform(build_id)
+  # `title_from` is what a build with no chosen name is named for, before the
+  # Mini is given the name for its session.
+  def perform(build_id, title_from=nil)
     build = FeatureBuild.find_by(id: build_id)
     return unless build&.status_starting?
 
+    name!(build, title_from) if title_from.present?
     fields = {
       build_id:        build.id,
       title:           build.title,
       branch_name:     FeatureBuilder::BranchName.for(build),
-      request:         build.request,
+      request:         "#{build.request}\n\n#{FeatureBuilder::TEXTING}",
+      kind:            build.kind,
       user_id:         build.user_id,
       conversation_id: build.byte_conversation_id,
     }
@@ -29,5 +33,16 @@ class FeatureBuildStartWorker
     build.update!(status: :failed, error: "the Mini didn't answer, so nothing was started.")
     FeatureBuilder.repaint!(build)
     FeatureBuilder.refresh_looks!(build.user)
+  end
+
+  # A name the model couldn't give leaves the build with its request's first
+  # line.
+  def name!(build, text)
+    name = FeatureBuilder::Title.for(text, user: build.user)
+    return if name.nil?
+
+    name = "#{FeatureBuilder::Audit::PREFIX}#{name}" if build.kind_audit?
+    build.update!(title: name)
+    FeatureBuilder.repaint!(build)
   end
 end

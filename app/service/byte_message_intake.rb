@@ -24,8 +24,8 @@ class ByteMessageIntake
   # slash command that silently turns into a spoken one. Mirrors COMMANDS in
   # app/javascript/src/pages/byte/slash_commands.js.
   SLASH_VERBS = (
-    "abort adopt archive buddy cd clear compact continue feature fork help j " \
-      "jarvis join mode new pwd rename reset sessions switch today unwatch " \
+    "abort adopt archive audit buddy cd clear compact continue feature fork help j " \
+      "jarvis join mode new pwd q rename reset sessions switch today unwatch " \
       "wait waits watch watches"
   ).split.freeze
 

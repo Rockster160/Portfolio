@@ -61,6 +61,13 @@ module FeatureBuilder
 
   USAGE = "usage: `/feature add WHAT TO BUILD`".freeze
 
+  # How every build talks, handed to it with its request. Each message a turn
+  # ends with reaches its owner's phone as a push.
+  TEXTING = <<~TXT.chomp.freeze
+    HOW TO TALK
+    Every message you end a turn with reaches the owner's phone as a text. Write it like one: a few short lines to take in at a glance, the answer first, no headings, no debrief. Questions are numbered so each can be answered by number. Detail belongs in the ticket, the PR or the script, not in the messages.
+  TXT
+
   # A build's last message before it stopped, kept as the question it's asking.
   # One can run long; past this it's cut and the session has the rest.
   QUESTION_LIMIT = 4000
@@ -107,12 +114,16 @@ module FeatureBuilder
       user:                  user,
       conversation:          ByteConversation.for_self_initiated(user),
       request:               request,
+      title:                 feature_request.title,
       feature_request:       feature_request,
       attachment_signed_ids: attachment_signed_ids,
     )
   end
 
-  # `title` is for a request written as a brief, whose first line isn't a name.
+  # `title` is a name already chosen, kept as it is. Without one the build is
+  # named for `title_from` (the request, unless given something shorter that
+  # says what it's about) by a model as it starts (FeatureBuilder::Title), and
+  # goes by the request's first line only until then.
   # A block is given the build before its status line is posted, so what's
   # posted there reads above it.
   def launch!(
@@ -121,6 +132,8 @@ module FeatureBuilder
     request:,
     feature_request: nil,
     title: nil,
+    title_from: nil,
+    kind: :feature,
     attachment_signed_ids: [])
     build = FeatureBuild.create!(
       user:              user,
@@ -128,6 +141,7 @@ module FeatureBuilder
       feature_request:   feature_request,
       title:             FeatureBuild.title_for(title.presence || request),
       request:           request,
+      kind:              kind,
     )
     blobs = blobs_for(attachment_signed_ids)
     build.images.attach(blobs) if blobs.any?
@@ -137,7 +151,7 @@ module FeatureBuilder
       build.update!(byte_message: message)
     end
     refresh_looks!(user)
-    FeatureBuildStartWorker.perform_async(build.id)
+    FeatureBuildStartWorker.perform_async(build.id, title.present? ? nil : (title_from.presence || request))
     build
   end
 
@@ -250,7 +264,7 @@ module FeatureBuilder
   # worktree and the branch on its own once it has said yes. False when it
   # didn't answer, and the build is left as it was.
   # rubocop:disable Naming/PredicateMethod -- this sends; the boolean is whether it got there
-  def cancel!(build)
+  def cancel!(build, reason: CANCELED_REASON)
     return true if build.status_finished?
 
     told = ByteLocal.builder(
@@ -264,7 +278,7 @@ module FeatureBuilder
     build.update!(
       status:        :finished,
       finished_at:   Time.current,
-      closed_reason: CANCELED_REASON,
+      closed_reason: reason,
       question:      nil,
       asked_at:      nil,
     )
@@ -297,6 +311,7 @@ module FeatureBuilder
 
   def announce_waiting!(build)
     return if build.status_finished? || build.status_failed?
+    return announce_answer!(build) if build.kind_quick?
 
     text = (
       if build.question.present?
@@ -307,6 +322,24 @@ module FeatureBuilder
       end
     )
     announce!(build, text, "Waiting on you: #{build.full_title}")
+  end
+
+  # A `/q` turn's last message is its answer, so it's said as it is.
+  def announce_answer!(build)
+    return if build.question.blank?
+
+    announce!(build, build.question, build.full_title)
+  end
+
+  # A production script a `/q` session sent: its page, where it's approved, in
+  # the thread. A build's scripts are listed with its PR instead.
+  def script_sent!(script, updated: false)
+    build = script.feature_build
+    return if build.nil? || !build.kind_quick?
+
+    url = Rails.application.routes.url_helpers.system_production_script_url(script)
+    said = updated ? "updated, and needs approving again" : "is waiting on your approval"
+    announce!(build, "[#{script.title}](#{url}) #{said}.", "Script: #{script.title}")
   end
 
   def announce!(build, text, push_title)
@@ -363,9 +396,11 @@ module FeatureBuilder
   end
 
   # Builds with a question out to their owner, oldest first. What Buddy matches
-  # an answer typed without a reply against.
+  # an answer typed without a reply against. A `/q`'s last message is an
+  # answer, not a question, and is replied to directly.
   def asking(user)
-    FeatureBuild.unfinished.where(user: user).where.not(question: nil).order(:asked_at)
+    scope = FeatureBuild.unfinished.where(user: user).where.not(kind: :quick)
+    scope.where.not(question: nil).order(:asked_at)
   end
 
   # Types `text` into the build's session as its owner's next message, with
@@ -447,10 +482,7 @@ module FeatureBuilder
     :syncing
   end
 
-  RETITLE_ACTIONS = %i[opened edited reopened].freeze
-
   def pull_request!(payload)
-    return retitle!(payload) if RETITLE_ACTIONS.include?(payload["action"]&.to_sym)
     return :ignored unless payload["action"] == "closed"
 
     build = FeatureBuild.for_pull_request(payload["pull_request"])
@@ -468,17 +500,6 @@ module FeatureBuilder
 
     finished!(build, merged: merged)
     :finished
-  end
-
-  # A build is named after its request's first line, cut short; its PR's title
-  # is the session's own summary of what it built, so that takes over.
-  def retitle!(payload)
-    build = FeatureBuild.for_pull_request(payload["pull_request"])
-    title = payload.dig("pull_request", "title").to_s.strip
-    return :ignored if build.nil? || title.empty? || build.title == title
-
-    build.update!(title: title)
-    :retitled
   end
 
   # The Mini has closed the session and removed the worktree and the branch.
@@ -617,9 +638,13 @@ module FeatureBuilder
   end
 
   # A builder is planning until it has posted its ticket, and building after.
+  # An audit is auditing throughout.
   def kind_of(session, conversations, builds={})
     if session["kind"].to_s == "builder"
       build = builds[session["build_id"].to_i]
+      return :auditing if build&.kind_audit?
+      return :quick if build&.kind_quick?
+
       return build && build.planned_at.nil? ? :planning : :builder
     end
     return :questions if session["kind"].to_s == "questions"
@@ -637,6 +662,8 @@ module FeatureBuilder
     if kinds.one?
       {
         audit:    "Auditing…",
+        auditing: "Auditing…",
+        quick:    "Looking into it…",
         planning: "Planning…",
         builder:  "Building…",
         claude:   "Claude working…",
@@ -706,7 +733,7 @@ module FeatureBuilder
     listed = sessions.select { |session| session["build_id"] }.index_by { |session| session["build_id"].to_i }
     reported_at = sessions_reported_at
     waiting = pending(user)
-    asking = waiting[:questions] | builds.select { |build| build.question.present? }
+    asking = waiting[:questions] | builds.select { |build| build.question.present? && !build.kind_quick? }
 
     states = []
     states << :asking if asking.any?
@@ -736,7 +763,8 @@ module FeatureBuilder
   def pending(user)
     idle = sessions.select { |session| session["build_id"] && !session["working"] }
     idle = idle.map { |session| session["build_id"].to_i }
-    live = FeatureBuild.where(user: user, status: [:starting, :running, :stopped]).newest.to_a
+    live = FeatureBuild.where(user: user, status: [:starting, :running, :stopped]).where.not(kind: :quick)
+    live = live.newest.to_a
     {
       prs:       live.select { |build| build.pr_url.present? },
       questions: live.select { |build| build.pr_url.blank? && idle.include?(build.id) },
@@ -751,6 +779,7 @@ module FeatureBuilder
   # Mini's report for it, when it's listed.
   def stage(build, live)
     return build.status.humanize.downcase if build.status_failed? || build.status_finished?
+    return (live["working"] ? "working" : "answered") if live && build.kind_quick?
     return "working" if live&.dig("working") && build.pr_url.present?
     return (build.planned_at ? "building" : "planning") if live&.dig("working")
     return "PR open" if build.pr_url.present?
