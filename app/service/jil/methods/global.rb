@@ -335,7 +335,11 @@ class Jil::Methods::Global < Jil::Methods::Base
     # before" reminder produced by a late-materialized phantom or a
     # backfill-touched historical event fires the moment it's created,
     # surfacing as "fired at event start" or "blast of old reminders".
-    if execute_at <= ::Time.current
+    #
+    # A cancelled source refuses the same way: cancelling purges its pending
+    # triggers, and anything that touches the row afterwards would otherwise
+    # re-arm them for an event that isn't happening.
+    if source_item.cancelled? || execute_at <= ::Time.current
       remove_trigger_for(source, name)
       return nil
     end
@@ -392,7 +396,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     offset_secs = compute_offset_seconds(offset, unit)
     execute_at = source_item.end_at + offset_secs.seconds
 
-    if execute_at <= ::Time.current
+    if source_item.cancelled? || execute_at <= ::Time.current
       remove_trigger_for(source, name)
       return nil
     end

@@ -5,6 +5,7 @@ RSpec.describe PrettyLoggerShortTokens do
   let(:request) {
     instance_double(
       ActionDispatch::Request,
+      path:                "/byte/incoming",
       filtered_parameters: {
         "action" => "create",
         "image"  => token,

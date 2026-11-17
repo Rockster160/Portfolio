@@ -41,6 +41,12 @@ class Emails::CalendarInvite
   # kept all of, where every other property is read as the first of its name.
   REPEATED = %w[ATTENDEE].freeze
 
+  # Properties that exist only on a meeting somebody joins, carrying the link
+  # to join it. They beat LOCATION, because a meeting with one of these has no
+  # room: Outlook writes "Microsoft Teams Meeting" there, which is the name of
+  # a program rather than somewhere to be.
+  JOINABLE = %w[X-MICROSOFT-SKYPETEAMSMEETINGURL X-GOOGLE-CONFERENCE].freeze
+
   # A part is the calendar part either by saying so or by being a file with the
   # extension. Both happen and neither is the sender being unusual: Google and
   # Exchange send `text/calendar` inline, while a forwarded invite arrives as an
@@ -75,7 +81,7 @@ class Emails::CalendarInvite
       starts_at:   starts_at,
       ends_at:     time_of(fields["DTEND"]),
       summary:     text_of(fields["SUMMARY"]),
-      location:    text_of(fields["LOCATION"]),
+      location:    place_of(fields),
       description: text_of(fields["DESCRIPTION"]),
       uid:         text_of(fields["UID"]),
       sequence:    text_of(fields["SEQUENCE"]).to_i,
@@ -84,6 +90,27 @@ class Emails::CalendarInvite
       attendees:   Array(fields["ATTENDEE"]).filter_map { |field| person(field) },
       cancelled:   method.casecmp?("CANCEL") || text_of(fields["STATUS"]).to_s.casecmp?("CANCELLED"),
     }
+  end
+
+  # WHERE TO BE, which for everything but an Exchange invite is the LOCATION.
+  # Exchange leaves it empty on every Teams meeting it sends and writes the
+  # join link into the words instead, so the slot arrived with nowhere on it -
+  # and the agenda, the heads-up two minutes before and the beat filed against
+  # the application all read the location.
+  #
+  # Resolved here rather than in each of those, the same way the Google sync
+  # folds a Meet link into the location it stores - see
+  # GoogleCalendar::Sync#event_location. A link in the DESCRIPTION only counts
+  # when there is no location at all: an organizer's words are full of URLs,
+  # and a stated room is not overruled by one of them.
+  def self.place_of(fields)
+    link = JOINABLE.filter_map { |name| text_of(fields[name]) }.first
+    return link if link
+
+    stated = text_of(fields["LOCATION"])
+    return stated if stated
+
+    ::ByteInterviewPrep::HeadsUp.meeting_url(text_of(fields["DESCRIPTION"]))
   end
 
   # A long line continues on the next one after a leading space or tab.

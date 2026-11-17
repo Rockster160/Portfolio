@@ -229,6 +229,38 @@ RSpec.describe SendDueAgendaNotificationsWorker do
         ).once
       end
     end
+
+    # Stamping notified_at on a cancelled row is an update, and that re-fires
+    # :agenda_item, which is how a cancelled interview re-armed its drive home.
+    it "leaves a cancelled event alone at both ends" do
+      starting = create(
+        :agenda_item,
+        agenda:   workout_agenda,
+        kind:     :event,
+        name:     "Interview",
+        start_at: 1.minute.ago,
+        end_at:   1.hour.from_now,
+        status:   :cancelled,
+      )
+      ending = create(
+        :agenda_item,
+        agenda:      workout_agenda,
+        kind:        :event,
+        name:        "Call",
+        start_at:    1.hour.ago,
+        end_at:      1.minute.ago,
+        notified_at: 1.hour.ago,
+        status:      :cancelled,
+      )
+      allow(::Jil).to receive(:trigger)
+
+      described_class.new.perform
+
+      expect(WebPushNotifications).not_to have_received(:send_to)
+      expect(::Jil).not_to have_received(:trigger)
+      expect(starting.reload.notified_at).to be_nil
+      expect(ending.reload.ended_fired_at).to be_nil
+    end
   end
 
   describe "phantom materialization" do

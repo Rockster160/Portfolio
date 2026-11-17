@@ -737,7 +737,7 @@ $cal-week-px-per-hour: 20px;
 
   &:first-child { border-left: 0; }
 
-  &.is-today {
+  &.is-selected-day {
     background: rgba(1, 96, 255, 0.1);
   }
 
@@ -862,7 +862,9 @@ $cal-week-px-per-hour: 20px;
 
   &:first-child { border-left: 0; }
 
-  &.is-today {
+  // Today is marked in the header; the column tint is only the selected
+  // day, which is today until another day is clicked.
+  &.is-selected-day {
     background: rgba(1, 96, 255, 0.08);
   }
 
@@ -1503,13 +1505,6 @@ body.cal-event-drag-blocked * {
   }
 }
 
-// The day a paste will land on — only drawn while something is on the
-// clipboard and no event is selected.
-.cal-week-column.is-paste-target,
-.cal-week-allday-cell.is-paste-target,
-.cal-week-header-day.is-paste-target {
-  background: rgba(1, 96, 255, 0.14);
-}
 
 // Draft block while user is dragging to create.
 .cal-week-drag-sel {

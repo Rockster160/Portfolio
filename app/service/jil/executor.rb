@@ -65,7 +65,7 @@ class Jil::Executor
     end
 
     ::Jarvis.log("\e[35m[#{trigger}] \e[0m" + PrettyLogger.truncate(
-      PrettyLogger.pretty_message({ trigger => raw_trigger_data }), 1000
+      PrettyLogger.pretty_message({ trigger => PrettyLoggerSlices.for_trigger(trigger, raw_trigger_data) }), 1000
     ))
 
     trigger_data = ::Tokenizing::TriggerData.parse(raw_trigger_data, as: user)

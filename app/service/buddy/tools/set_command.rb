@@ -6,20 +6,20 @@ Buddy::Tools.register(
   description: <<~TXT,
     Some of their automations leave a key for you to fill: the task calls
     `Buddy.command("<key>")`, and the items saved under that key run each time
-    the task does. "Set the hall button to turn off the lights" saves turning
-    off the lights under **Hall Button**. The keys, and what each does now, are
-    listed after this tool's summary; match `key` loosely against what they
-    called it, and if none fits, say which keys exist rather than guessing.
+    the task does. The keys, and what each does now, are listed after this
+    tool's summary; match `key` loosely against what they called it, and if
+    none fits, say which keys exist rather than guessing.
 
     `items` is a JSON array, in order, of `{"tool_name": "...", "payload": {...}}`
-    exactly as `save_routine` takes steps. Use real tool calls wherever they
-    can do it - "turn off the lights" is
-    `[{"tool_name":"run_jil_task","payload":{"name":<their lights-off task>}}]` -
-    and they run the instant the automation does.
+    exactly as `save_routine` takes steps. Build it from their real tasks and
+    functions, with the arguments that do what they asked, whenever those can
+    do it: saved calls run the instant the automation does, with no model in
+    between. Read each candidate's options before deciding a request needs
+    more than that - one whose options already cover the action covers it.
 
-    Only when something can't be pinned to fixed calls ahead of time - it
-    depends on how things are at that moment ("close whichever garage door is
-    open"), or should be new each time ("tell me something encouraging") - use
+    Only when the action can't be fixed ahead of time - what to act on, or
+    what to say, depends on how things stand at the moment it runs, or nothing
+    they have can do it - use
     `{"tool_name":"ask_buddy","payload":{"text":<their words>}}`, which hands
     the words back to you as a fresh request on every run.
 

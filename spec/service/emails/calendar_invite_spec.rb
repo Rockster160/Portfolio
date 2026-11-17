@@ -130,6 +130,51 @@ RSpec.describe Emails::CalendarInvite do
     expect(invite[:attendees].first["response_status"]).to eq("needsAction")
   end
 
+  # WHAT EXCHANGE ACTUALLY SENDS for a Teams meeting: LOCATION present and
+  # empty, the join link only in the organizer's words. The slot was being
+  # booked with nowhere on it, so there was nothing to tap on the day.
+  let(:teams) {
+    outlook.sub(
+      "LOCATION;LANGUAGE=en-US:+1 385-259-9640",
+      "LOCATION;LANGUAGE=en-US:\r\nDESCRIPTION;LANGUAGE=en-US:Join the Microsoft Teams " \
+      "meeting: https://gov.teams.microsoft.us/l/meetup-join/19%3agcch%3ameeting_a42a%40thread.v2/0",
+    )
+  }
+
+  it "takes the join link as the place when the invite leaves it empty" do
+    invite = described_class.parse(teams)
+
+    expect(invite[:location])
+      .to eq("https://gov.teams.microsoft.us/l/meetup-join/19%3agcch%3ameeting_a42a%40thread.v2/0")
+  end
+
+  it "takes the link the meeting states over the program it names as the room" do
+    invite = described_class.parse(
+      outlook.sub(
+        "LOCATION;LANGUAGE=en-US:+1 385-259-9640",
+        "LOCATION;LANGUAGE=en-US:Microsoft Teams Meeting\r\n" \
+        "X-MICROSOFT-SKYPETEAMSMEETINGURL:https://teams.microsoft.com/l/meetup-join/19%3ameeting_b7",
+      ),
+    )
+
+    expect(invite[:location]).to eq("https://teams.microsoft.com/l/meetup-join/19%3ameeting_b7")
+  end
+
+  # An organizer's words are full of links - the posting, the calendar's own
+  # "view event", a reschedule page. None of them moves a stated room.
+  it "leaves a stated room alone whatever the words link to" do
+    invite = described_class.parse(
+      teams.sub("LOCATION;LANGUAGE=en-US:", "LOCATION;LANGUAGE=en-US:2600 W Executive Pkwy"),
+    )
+
+    expect(invite[:location]).to eq("2600 W Executive Pkwy")
+  end
+
+  it "has no place for a booking that names none" do
+    expect(described_class.parse(outlook.sub("LOCATION;LANGUAGE=en-US:+1 385-259-9640", ""))[:location])
+      .to be_nil
+  end
+
   it "keeps no guest there is no way to reach" do
     invite = described_class.parse(outlook.sub("BEGIN:VEVENT", "BEGIN:VEVENT\r\nATTENDEE;CN=Big Room:mailto:"))
 

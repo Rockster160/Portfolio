@@ -77,6 +77,10 @@ class Jil::Methods::AgendaItem < Jil::Methods::Base
     cast(item)&.recurring? == true
   end
 
+  def travelable?(item)
+    cast(item)&.travelable? == true
+  end
+
   # Parent AgendaSchedule (or nil for standalone items). The return value is
   # a hash with `metadata` carried inline (via serialize_for_edit) so that
   # downstream Jil casts to AgendaSchedule resolve without an extra DB

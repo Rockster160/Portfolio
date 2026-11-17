@@ -18,7 +18,11 @@ class SendDueAgendaNotificationsWorker
     now = Time.current
     cutoff = now - CATCHUP_WINDOW
 
+    # A cancelled row is a tombstone kept for sync, not something happening.
+    # Stamping it here would also be an update, which re-fires :agenda_item
+    # and lets a task re-arm the triggers the cancel just purged.
     AgendaItem
+      .not_cancelled
       .where(kind: [:task, :event])
       .incomplete
       .where(notified_at: nil)
@@ -28,6 +32,7 @@ class SendDueAgendaNotificationsWorker
     # Triggers skip `incomplete` because FireDueAgendaTriggersWorker
     # auto-completes them after firing; `notified_at` is still the dedup.
     AgendaItem
+      .not_cancelled
       .trigger
       .where(notified_at: nil)
       .where(start_at: cutoff..now)
@@ -38,6 +43,7 @@ class SendDueAgendaNotificationsWorker
     # care about. Dedup via the dedicated `ended_fired_at` column so this
     # doesn't fight with `notified_at` (which already represents start-time).
     AgendaItem
+      .not_cancelled
       .event
       .where(ended_fired_at: nil)
       .where(end_at: cutoff..now)

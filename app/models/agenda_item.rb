@@ -455,6 +455,13 @@ class AgendaItem < ApplicationRecord
     self_response == "declined"
   end
 
+  # Somewhere a car can drive to: not blank, and not a meeting link, phone
+  # number or "online" placeholder. The travel chain skips the same rows, so
+  # anything scheduling drive-time automation should ask this first.
+  def travelable?
+    !::AddressBook.non_travelable?(location)
+  end
+
   def complete!(at: Time.current)
     update!(completed_at: at)
   end

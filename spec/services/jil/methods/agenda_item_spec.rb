@@ -69,6 +69,26 @@ RSpec.describe Jil::Methods::AgendaItem do
     end
   end
 
+  describe "AgendaItem.travelable?" do
+    let(:code) {
+      <<~JIL
+        evt = Global.input_data()::AgendaItem
+        drivable = evt.travelable?()::Boolean
+      JIL
+    }
+
+    it "is true for a place and false for a meeting link or no location" do
+      expect_successful_jil
+      expect(ctx.dig(:vars, :drivable, :value)).to be(true)
+
+      item.update!(location: "https://oli.vi/LJMktEaS")
+      expect(Jil::Executor.call(user, code, input_data).ctx.dig(:vars, :drivable, :value)).to be(false)
+
+      item.update!(location: nil)
+      expect(Jil::Executor.call(user, code, input_data).ctx.dig(:vars, :drivable, :value)).to be(false)
+    end
+  end
+
   describe "AgendaItem.arrive_early_minutes getter" do
     before { item.update!(arrive_early_minutes: 7) }
 

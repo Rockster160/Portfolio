@@ -226,6 +226,26 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
       expect(sched.execute_at).to be_within(1.second).of(event.end_at - 10.minutes)
     end
 
+    describe "a cancelled source" do
+      let(:end_code) {
+        <<~JIL
+          src = Global.input_data()::Hash
+          out = Global.trigger_for_end(src, "nav-home", -10, "minutes", "nav-home", {})::Schedule
+        JIL
+      }
+
+      it "re-arms nothing, from either edge, and removes what was there" do
+        Jil::Executor.call(user, code, event.serialize.merge(id: event.id))
+        Jil::Executor.call(user, end_code, event.serialize.merge(id: event.id))
+        event.update_columns(status: AgendaItem.statuses[:cancelled])
+
+        expect {
+          Jil::Executor.call(user, code, event.reload.serialize.merge(id: event.id))
+          Jil::Executor.call(user, end_code, event.serialize.merge(id: event.id))
+        }.to change { ScheduledTrigger.derived.count }.from(2).to(0)
+      end
+    end
+
     it "Global.remove_trigger_for destroys the row" do
       Jil::Executor.call(user, code, event.serialize.merge(id: event.id))
       removal_code = <<~'JIL'

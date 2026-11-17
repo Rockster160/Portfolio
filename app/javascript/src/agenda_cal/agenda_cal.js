@@ -770,10 +770,11 @@
       tile.classList.toggle("is-selected", !!id && id === calSelection.itemId);
       tile.classList.toggle("is-cut", !!id && id === cutId);
     });
-    // The day tint only means something when there is a paste to land.
-    const pasteDay = (calClipboard && !calSelection.itemId) ? calSelection.dateISO : null;
-    $$(".cal-week-column[data-date], .cal-week-allday-cell[data-date], .cal-week-header-day[data-date]", root).forEach((el) => {
-      el.classList.toggle("is-paste-target", el.dataset.date === pasteDay);
+    // With no day picked the selection rests on today, read from the
+    // is-today markers so it follows the same rollover they do.
+    const selectedDay = calSelection.dateISO || $(".cal-week-column.is-today", root)?.dataset.date;
+    $$(".cal-week-column[data-date], .cal-week-allday-cell[data-date]", root).forEach((el) => {
+      el.classList.toggle("is-selected-day", el.dataset.date === selectedDay);
     });
   }
 
@@ -2468,8 +2469,12 @@
     }
     const shown = Array.from(document.querySelectorAll(".modal.shown"));
     if (shown.length === 0) {
-      if (calClipboard?.mode === "cut") setCalClipboard(null);
-      else calSelection.itemId = null;
+      if (calClipboard?.mode === "cut") {
+        setCalClipboard(null);
+      } else {
+        calSelection.itemId = null;
+        calSelection.dateISO = null;
+      }
       paintCalSelection(weekPageRoot());
       return;
     }
@@ -3295,6 +3300,7 @@
           if (window.location.pathname + window.location.search !== cleanURL.pathname) {
             history.pushState(null, "", cleanURL.href);
           }
+          calSelection.dateISO = null;
           renderWeekFor(root, todayISO);
           return;
         }
@@ -4008,6 +4014,7 @@
       cells.forEach((cell) => {
         cell.classList.toggle("is-today", cell.dataset.date === todayISO);
       });
+      paintCalSelection(root);
       return;
     }
     if (root.classList.contains("agenda-cal-month-page")) {

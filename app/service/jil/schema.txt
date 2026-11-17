@@ -257,6 +257,7 @@
   .agenda::Hash
   .completed?::Boolean
   .recurring?::Boolean
+  .travelable?::Boolean
   .complete::Boolean
   .uncomplete::Boolean
   .update!(content(AgendaItemData))::Hash
