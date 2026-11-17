@@ -406,21 +406,36 @@ module Buddy
       boards.any?(&:shows_every_timer?)
     end
 
-    # The board a spoken name points at, among the boards this person can open.
-    # Raises a readable reason when it matches none, so the tool says which
-    # boards there are instead of quietly attaching to nothing.
+    # The board a spoken name points at, among the boards this person can open:
+    # the board's own name first, then its pet's name, then part of a board's
+    # name. Raises a readable reason when it matches none, or when the pet named
+    # sits on more than one board, so the tool says which boards there are
+    # instead of quietly attaching to nothing or to the wrong one.
     def find_board!(user, name)
       wanted = name.to_s.strip.downcase.sub(/\s+board\z/, "")
       boards = ByteConversation.accessible_boards_for(user).to_a
       found = (
         boards.find { |b| b.display_name.to_s.downcase == wanted } ||
-          boards.find { |b| b.display_name.to_s.downcase.sub(/\s+board\z/, "") == wanted } ||
-          boards.find { |b| b.display_name.to_s.downcase.include?(wanted) }
+          boards.find { |b| b.display_name.to_s.downcase.sub(/\s+board\z/, "") == wanted }
       )
       return found if found && wanted.present?
 
-      names = boards.map(&:display_name).compact_blank
-      raise "no board called \"#{name}\" — the boards are: #{names.any? ? names.join(", ") : "none"}"
+      labels = boards.map { |b| ::Buddy::BoardYell.label(b) }
+      if wanted.present?
+        pets = ::Buddy::BoardYell.pets_named(boards, wanted)
+        return pets.first if pets.one?
+
+        if pets.many?
+          raise "more than one board has #{pets.first.buddy_name} — " \
+                "which one: #{pets.map(&:display_name).join(", ")}"
+        end
+
+        found = boards.find { |b| b.display_name.to_s.downcase.include?(wanted) }
+        return found if found
+      end
+
+      known = labels.join(", ").presence || "none"
+      raise "no board called \"#{name}\" — the boards are: #{known}"
     end
 
     # Stop a countdown for good: kill the scheduled fire and the mid-countdown

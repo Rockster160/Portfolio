@@ -1053,8 +1053,8 @@ RSpec.describe Jil::Methods::Buddy do
 
         expect(ran.ctx[:vars][:a][:value]).to be(false)
         expect(ran.ctx[:vars][:b][:value]).to be(false)
-        expect(ran.ctx[:output]).to include("No board named to yell on - boards: Kitchen")
-        expect(ran.ctx[:output]).to include(%(No board called "Garage" - boards: Kitchen))
+        expect(ran.ctx[:output]).to include("No board named to yell on - boards: Kitchen (Byte)")
+        expect(ran.ctx[:output]).to include(%(No board called "Garage" - boards: Kitchen (Byte)))
         expect(Buddy::BoardYell.yells(kitchen.reload)).to be_empty
       end
     end
@@ -1115,7 +1115,9 @@ RSpec.describe Jil::Methods::Buddy do
 
         expect(ran.ctx[:vars][:a][:value]).to be(false)
         expect(ran.ctx[:vars][:b][:value]).to be(false)
-        expect(ran.ctx[:output]).to include(%(No board called "Garage" - boards: Kitchen, Office))
+        expect(ran.ctx[:output]).to include(
+          %(No board called "Garage" - boards: Kitchen (Byte), Office (Byte)),
+        )
         expect(sent).to be_empty
       end
     end

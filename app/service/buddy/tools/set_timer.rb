@@ -137,7 +137,8 @@ Buddy::Tools.register(
     board:         {
       type:        :string,
       required:    false,
-      description: "The board screen to show it on, only when they named one (\"on the Kitchen board\"). " \
+      description: "The board screen to show it on, only when they named one, by the board's " \
+                   "name or its pet's (\"on the Kitchen board\", \"on Moss\"). " \
                    "A board only shows its own timers; leave it out and it shows in the chat alone",
     },
     groups:        {

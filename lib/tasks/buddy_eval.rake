@@ -1451,6 +1451,15 @@ BUDDY_EDGE_PROBES = [
     needs: :tv_fn,
     note:  "set a 30 minute wait with nothing behind it; the wait rang and the TV stayed on",
   },
+  # A board is reachable by its pet's name: "on Moss" is the board Moss sits
+  # on, and belongs in `board`, not dropped or read as somebody to remind.
+  {
+    case:  "a timer put on a board by its pet's name",
+    say:   "set a 10 minute timer for the laundry on Moss",
+    tool:  :set_timer,
+    args:  { set_timer: { board: /\AMoss(?:['’]s)?(?:\s+board)?\z/i } },
+    note:  "a board named by the pet on it, rather than by the board's own name",
+  },
   {
     case:  "prod 3562",
     say:   "play the nap sound at 11 tonight",

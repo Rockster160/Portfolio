@@ -15,7 +15,8 @@ module Buddy
     ALL = "all".freeze
 
     # The boards `name` points at among the ones `user` may open: the one so
-    # named (case aside), or every one of them for "all". Blank names none.
+    # named (case aside), else every board whose pet has that name, or every
+    # one of them for "all". Blank names none.
     def boards_for(user, name)
       name = name.to_s.strip.downcase
       return [] if name.empty?
@@ -23,12 +24,35 @@ module Buddy
       boards = ::ByteConversation.accessible_boards_for(user).to_a
       return boards if name == ALL
 
-      boards.select { |board| board.display_name.to_s.strip.downcase == name }
+      named = boards.select { |board| board.display_name.to_s.strip.downcase == name }
+      named.presence || pets_named(boards, name)
+    end
+
+    # The boards among `boards` whose pet answers to `name` ("Moss" or "Moss's"),
+    # case aside.
+    def pets_named(boards, name)
+      name = name.to_s.strip.downcase.sub(/['’]s\z/, "")
+      boards.select { |board| board.buddy_name.to_s.downcase == name }
     end
 
     # The names `user` can aim a yell at.
     def board_names(user)
       ::ByteConversation.accessible_boards_for(user).map(&:display_name).sort
+    end
+
+    # The pets on the boards `user` can open, for aiming by pet instead.
+    def pet_names(user)
+      ::ByteConversation.accessible_boards_for(user).map(&:buddy_name).uniq.sort
+    end
+
+    # Each board with its pet, "Kitchen (Moss)", for saying what there is.
+    def board_labels(user)
+      boards = ::ByteConversation.accessible_boards_for(user).to_a
+      boards.map { |board| label(board) }.sort
+    end
+
+    def label(board)
+      "#{board.display_name} (#{board.buddy_name})"
     end
 
     # Yells on every board `name` points at. A leading emoji in `body` becomes

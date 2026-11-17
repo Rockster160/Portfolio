@@ -79,7 +79,7 @@ class Jil::Schema
   # alert can be for - themselves, everyone, or a household member by name -
   # `%SYSTEM_FACES%` the faces every pet can wear (the `*` beside it lets
   # any other face name be typed), and `%BOARDS%` the boards they can open by
-  # name, then "all".
+  # name or by their pet's name, then "all".
   def fill(line)
     return line unless line.include?("%")
 
@@ -90,7 +90,8 @@ class Jil::Schema
 
   def board_choices
     names = @user ? Buddy::BoardYell.board_names(@user) : []
-    [*names, Buddy::BoardYell::ALL]
+    pets = @user ? Buddy::BoardYell.pet_names(@user) : []
+    [*names, *(pets - names), Buddy::BoardYell::ALL]
   end
 
   def who_choices

@@ -35,6 +35,21 @@ RSpec.describe Buddy::BoardYell do
       expect(described_class.wire(office.reload)).to be_empty
     end
 
+    it "yells on every board whose pet has the name when no board does" do
+      kitchen.update!(buddy_theme: :moss)
+      expect(yell!(board: "moss")).to eq([kitchen])
+
+      office.update!(buddy_theme: :moss)
+      expect(yell!(board: "Moss", key: "lunch")).to contain_exactly(kitchen, office)
+    end
+
+    it "takes the board so named over the boards a pet of that name is on" do
+      kitchen.update!(buddy_theme: :moss)
+      moss = board!(user, "Moss")
+
+      expect(yell!(board: "Moss")).to eq([moss])
+    end
+
     it "yells on every board for all" do
       expect(yell!(board: "all")).to contain_exactly(kitchen, office)
     end

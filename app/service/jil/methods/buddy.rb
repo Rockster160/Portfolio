@@ -209,10 +209,10 @@ class Jil::Methods::Buddy < Jil::Methods::Base
 
   # The pet on the board named `board` yells `message`: the thought bubble and
   # the playful/surprised shouting a very high list item gets, with no list
-  # behind it. A leading emoji (or `icon`) shows big. `board` is a board's name,
-  # or "all" for every board this task's owner can open - a blank or unknown
-  # name yells nowhere, returns false, and lists the names it knows in the
-  # output. `sound` plays once as it starts; `minutes` stops it on its own.
+  # behind it. A leading emoji (or `icon`) shows big. `board` is a board's name
+  # or its pet's name, or "all" for every board this task's owner can open - a
+  # blank or unknown name yells nowhere, returns false, and lists the boards it
+  # knows in the output. `sound` plays once as it starts; `minutes` stops it on its own.
   # It also stops on `resolve` with the same key, or a tap on the pet.
   def yell(key, message, options=nil)
     opts = options.to_h
@@ -226,7 +226,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
       minutes: opts[:minutes],
     )
     if boards.empty? && ::Buddy::BoardYell.boards_for(@jil.user, opts[:board]).empty?
-      names = ::Buddy::BoardYell.board_names(@jil.user).join(", ").presence || "none"
+      names = ::Buddy::BoardYell.board_labels(@jil.user).join(", ").presence || "none"
       said = opts[:board].to_s.strip
       missing = said.empty? ? "No board named to yell on" : "No board called \"#{said}\""
       @jil.ctx[:output] << "#{missing} - boards: #{names}"
@@ -234,13 +234,13 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     boards.any?
   end
 
-  # Plays `sound` on the board named `board` (or "all"), and nowhere else. A
-  # name no board has plays nothing, returns false, and lists the names it
-  # knows in the output, as `yell` does.
+  # Plays `sound` on the board named `board` (by its own or its pet's name, or
+  # "all"), and nowhere else. A name no board has plays nothing, returns false,
+  # and lists the boards it knows in the output, as `yell` does.
   def sound(board, sound)
     played = ::Buddy::BoardSound.play!(user: @jil.user, board: board, sound: sound)
     if ::Buddy::BoardYell.boards_for(@jil.user, board).empty?
-      names = ::Buddy::BoardYell.board_names(@jil.user).join(", ").presence || "none"
+      names = ::Buddy::BoardYell.board_labels(@jil.user).join(", ").presence || "none"
       @jil.ctx[:output] << "No board called \"#{board.to_s.strip}\" - boards: #{names}"
     end
     played.any?
