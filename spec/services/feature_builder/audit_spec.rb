@@ -65,6 +65,7 @@ RSpec.describe FeatureBuilder::Audit do
         "NOT FINDINGS",
         "builder-pr close",
         "Daily Audit",
+        "HOW TO TALK",
       )
     end
 

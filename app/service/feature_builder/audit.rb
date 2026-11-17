@@ -86,6 +86,9 @@ module FeatureBuilder
         - When nothing in the window calls for a change, close the build with `builder-pr close --reason "..."`, saying in a sentence or two what you read and that it held up.
         - The **Daily Audit** thread holds the nightly read-only reports. Read the ones that overlap this window before calling anything new: a problem one of them raised may already be fixed, or be exactly the thing worth fixing.
 
+        HOW TO TALK
+        Every message you end a turn with reaches the owner's phone as a text. Write it like one: a few short lines to take in at a glance, the answer first, no headings, no debrief. Questions are numbered so each can be answered by number. The detail belongs in the ticket and the PR, not in the messages.
+
         WHERE THE DAY IS
         #{ByteDailyAudit.data_map}
 
