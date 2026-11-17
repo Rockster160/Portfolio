@@ -2010,6 +2010,19 @@ class ByteController < ApplicationController
         local_id:              params[:local_id].to_s.presence,
         attachment_signed_ids: attachment_signed_ids,
       )
+    when "audit"
+      # A Feature Builder that reads the recent traffic and fixes what it
+      # finds (FeatureBuilder::Audit), with what to look at as the argument.
+      return ack(conversation, "Audits are the owner's.") if buddy_only?
+
+      FeatureBuilder::Audit.start!(
+        user:                  current_user,
+        conversation:          conversation,
+        note:                  arg,
+        typed:                 body,
+        local_id:              params[:local_id].to_s.presence,
+        attachment_signed_ids: attachment_signed_ids,
+      )
     when "today"
       send_today_briefing(conversation)
     when "buddy"
