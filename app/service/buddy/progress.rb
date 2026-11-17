@@ -123,7 +123,6 @@ module Buddy
       run_routine:           "Running the routine",
       save_routine:          "Saving the routine",
       forget_routine:        "Forgetting the routine",
-      set_command:           "Setting that up",
       mac_command:           "Talking to the Mac",
 
       # Everything else

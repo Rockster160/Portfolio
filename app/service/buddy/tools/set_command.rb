@@ -5,119 +5,59 @@ Buddy::Tools.register(
   roster:      ->(user) { Buddy::Commands.roster(user) },
   description: <<~TXT,
     Some of their automations leave a key for you to fill: the task calls
-    `Buddy.command("<key>")`, and whatever is saved under that key runs each
-    time the task does. "Set the bathroom button to turn off the lights" saves
-    turning off the lights under **Bathroom Button**, so the next press does
-    that. The keys, and what each does now, are listed after this tool's
-    summary. `key` is one of them - match it loosely against what they called
-    it, and if none fits, say which keys exist rather than guessing.
+    `Buddy.command("<key>")`, and the items saved under that key run each time
+    the task does. "Set the hall button to turn off the lights" saves turning
+    off the lights under **Hall Button**. The keys, and what each does now, are
+    listed after this tool's summary; match `key` loosely against what they
+    called it, and if none fits, say which keys exist rather than guessing.
 
-    Two ways to fill it, and the first is the one to reach for:
+    `items` is a JSON array, in order, of `{"tool_name": "...", "payload": {...}}`
+    exactly as `save_routine` takes steps. Use real tool calls wherever they
+    can do it - "turn off the lights" is
+    `[{"tool_name":"run_jil_task","payload":{"name":<their lights-off task>}}]` -
+    and they run the instant the automation does.
 
-    - **`steps`** - the tool calls that do what they asked, as a JSON array of
-      `{"tool_name": "...", "payload": {...}}`, exactly as `save_routine` takes
-      them. "Turn off the lights" is
-      `[{"tool_name":"run_jil_task","payload":{"name":<their lights-off task>}}]`.
-      These run the moment the automation does, with nothing in between, and
-      they're checked now, so a name that matches nothing comes back to you
-      while they can still tell you which one they meant. `capture_last`
-      instead saves the last N things you just did for them ("set the button
-      to that").
-    - **`say`** - their words, saved as they said them, and handed back to you
-      as a fresh request every time the automation runs. Only for what can't be
-      pinned to fixed calls ahead of time: something that depends on how
-      things are at that moment ("close whichever garage door is open"),
-      something that needs you to look and decide, or something to say that
-      should be new each time ("tell me something encouraging").
+    Only when something can't be pinned to fixed calls ahead of time - it
+    depends on how things are at that moment ("close whichever garage door is
+    open"), or should be new each time ("tell me something encouraging") - use
+    `{"tool_name":"ask_buddy","payload":{"text":<their words>}}`, which hands
+    the words back to you as a fresh request on every run.
 
-    One or the other, never both. Saving again over a key REPLACES what was
-    there. `clear: true` empties it, so the automation does nothing extra.
+    Saving again REPLACES what was there; an empty array `[]` clears it.
   TXT
   feature:     :jil,
   args:        {
-    key:          { type: :string,  required: true,  description: "The key to fill, from the list after the summary" },
-    steps:        { type: :string,  required: false, description: "JSON array of {tool_name, payload}, in order" },
-    capture_last: { type: :integer, required: false, description: "Save the last N things you just did, instead of `steps`" },
-    say:          { type: :string,  required: false, description: "Their words, to be handled as a fresh request each time. Only when steps can't do it" },
-    clear:        { type: :boolean, required: false, description: "True to empty the key" },
+    key:   { type: :string, required: true, description: "The key to fill, from the list after the summary" },
+    items: { type: :string, required: true, description: "JSON array of {tool_name, payload}, in order; [] clears it" },
   },
   level:       1,
   routinable:  false,
   merge_key:   ->(payload) { "set_command:#{payload[:key].to_s.downcase.strip}" },
   supersedes:  true,
   confirm:     ->(payload, ctx) {
-    slot = Buddy::Commands.slot(ctx.user, payload[:key])
-    if slot.nil?
-      keys = Buddy::Commands.slots(ctx.user).pluck(:name)
+    key = Buddy::Commands.key(ctx.user, payload[:key])
+    if key.nil?
+      keys = Buddy::Commands.keys(ctx.user)
       raise "no automation calls Buddy.command(#{payload[:key].to_s.inspect})" if keys.empty?
 
       raise "#{payload[:key].to_s.inspect} isn't a key - the ones their automations have are #{keys.to_sentence}"
     end
 
-    if ActiveModel::Type::Boolean.new.cast(payload[:clear])
-      next { summary: "Clear **#{slot[:name]}**?", resolved: { key: slot[:name], clear: true } }
-    end
+    rows = Buddy::Routines.parse_rows(payload[:items]).map { |row| row.to_h.deep_stringify_keys }
+    asks, tools = rows.partition { |row| row["tool_name"] == Buddy::Commands::ASK }
+    raise "an ask_buddy item needs its `text`" if asks.any? { |row| row.dig("payload", "text").blank? }
 
-    words = payload[:say].to_s.strip.presence
-    given = [payload[:steps].present?, payload[:capture_last].present?, words.present?].count(true)
-    raise "fill #{slot[:name]} with `steps`, `capture_last` or `say`" if given.zero?
-    raise "fill #{slot[:name]} with ONE of `steps`, `capture_last` or `say`" if given > 1
-
-    next { summary: "Set **#{slot[:name]}**?", resolved: { key: slot[:name], say: words } } if words
-
-    rows = (
-      if payload[:capture_last].present?
-        raise "I need to be in a conversation to save what just happened" if ctx.conversation.nil?
-
-        captured = Buddy::Routines.capture(ctx.conversation, limit: payload[:capture_last])
-        raise "I can't find anything I just ran to save" if captured.empty?
-
-        captured
-      else
-        Buddy::Routines.parse_rows(payload[:steps])
-      end
-    )
-    steps = Buddy::Routines.sanitize(rows, ctx)
-
-    # A step that runs the very task holding this key would press the button
-    # again from inside its own press.
-    own = slot[:tasks].map(&:downcase)
-    looping = steps.find { |step| own.include?(step.dig("payload", "name").to_s.downcase) }
-    if looping
-      raise "#{looping.dig("payload", "name")} is the automation that runs #{slot[:name]}, so it can't " \
-            "be one of its steps"
-    end
-
-    { summary: "Set **#{slot[:name]}**?", resolved: { key: slot[:name], steps: steps } }
+    steps = tools.any? ? Buddy::Routines.sanitize(tools, ctx).each : [].each
+    items = rows.map { |row| row["tool_name"] == Buddy::Commands::ASK ? row.slice("tool_name", "payload") : steps.next }
+    { summary: "Set **#{key}**?", resolved: { key: key, items: items } }
   },
   label:       ->(payload, _ctx) {
-    sub = (
-      if payload[:clear]
-        "does nothing extra"
-      elsif payload[:say].present?
-        "say to Buddy: \"#{payload[:say]}\""
-      else
-        Array(payload[:steps]).map { |s| BuddyRoutine.step_phrase(s) }.join("\n")
-      end
-    )
-    { title: payload[:key].to_s, sub: sub.presence }
+    lines = Array(payload[:items]).map { |item| Buddy::Commands.phrase(item.to_h.deep_stringify_keys) }
+    { title: payload[:key].to_s, sub: lines.join("\n").presence || "does nothing extra" }
   },
   execute:     ->(payload, ctx) {
-    key = payload[:key].to_s
-    cmd = BuddyCommand.named(ctx.user, key)
-
-    if payload[:clear]
-      cmd&.destroy!
-      next { key: key, cleared: true }
-    end
-
-    cmd ||= ctx.user.buddy_commands.new
-    cmd.update!(name: key, steps: Array(payload[:steps]), say: payload[:say].presence)
-    { key: cmd.name, summary: cmd.summary }
+    Buddy::Commands.save!(ctx.user, payload[:key].to_s, Array(payload[:items]))
+    { key: payload[:key].to_s, cleared: Array(payload[:items]).empty? }
   },
-  receipt:     ->(result, _ctx) {
-    next "Cleared **#{result[:key]}** ✓" if result[:cleared]
-
-    "Set **#{result[:key]}** ✓"
-  },
+  receipt:     ->(result, _ctx) { result[:cleared] ? "Cleared **#{result[:key]}** ✓" : "Set **#{result[:key]}** ✓" },
 )

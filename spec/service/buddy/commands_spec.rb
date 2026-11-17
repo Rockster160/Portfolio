@@ -1,9 +1,9 @@
 require "rails_helper"
 
 # A Jil task leaves a key with `Buddy.command("Hall Button")`, Buddy fills it
-# from "set the hall button to ...", and the next run of the task runs what was
-# saved there: tool calls straight away, or words handed back to Buddy.
-RSpec.describe "Buddy commands" do
+# from "set the hall button to ...", and the next run of the task runs the
+# items saved there: tool calls straight away, `ask_buddy` handed back to Buddy.
+RSpec.describe Buddy::Commands do
   let(:user) { create(:user) }
   let(:ctx)  { Buddy::ToolContext.new(user) }
   let(:tool) { Buddy::Tools[:set_command] }
@@ -18,107 +18,84 @@ RSpec.describe "Buddy commands" do
     Task.create!(user: user, name: "Chill Mode", listener: "chill-mode", enabled: true, buddy_enabled: true, code: "")
   }
 
-  let(:chill_steps) { JSON.generate([{ tool_name: :run_jil_task, payload: { name: "Chill Mode" } }]) }
+  let(:chill_item) { { tool_name: :run_jil_task, payload: { name: "Chill Mode" } } }
+  let(:ask_item)   { { tool_name: :ask_buddy, payload: { text: "close whichever garage door is open" } } }
 
   before {
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(WebPushNotifications).to receive(:send_to_byte)
   }
 
-  def set!(payload)
-    resolved = tool[:confirm].call(payload, ctx)[:resolved]
-    tool[:execute].call(payload.merge(resolved), ctx)
+  def set!(key, items)
+    payload = { key: key, items: JSON.generate(items) }
+    tool[:execute].call(payload.merge(tool[:confirm].call(payload, ctx)[:resolved]), ctx)
   end
 
   describe "the keys" do
-    it "are read off the tasks that call Buddy.command", :aggregate_failures do
+    it "are read off the tasks that call Buddy.command, once each" do
       Task.create!(
         user: user, name: "Printer Panel", listener: "printer-panel", enabled: true,
-        code: <<~'JIL',
-          a = Buddy.command("Printer Top")::Boolean
-          b = Buddy.command("hall button")::Boolean
-        JIL
+        code: %(a = Buddy.command("Printer Top")::Boolean\nb = Buddy.command("hall button")::Boolean)
       )
 
-      slots = Buddy::Commands.slots(user)
-      expect(slots.pluck(:name)).to eq(["Hall Button", "Printer Top"])
-      expect(slots.first[:tasks]).to contain_exactly("Hall Button", "Printer Panel")
+      expect(described_class.keys(user)).to eq(["Hall Button", "Printer Top"])
     end
 
     it "leave out a task that's switched off" do
       button.update!(enabled: false)
 
-      expect(Buddy::Commands.slots(user)).to be_empty
+      expect(described_class.keys(user)).to be_empty
     end
 
     it "match loosely, but only the words of a real key", :aggregate_failures do
-      expect(Buddy::Commands.slot(user, "button hall")[:name]).to eq("Hall Button")
-      expect(Buddy::Commands.slot(user, "porch button")).to be_nil
+      expect(described_class.key(user, "button hall")).to eq("Hall Button")
+      expect(described_class.key(user, "porch button")).to be_nil
     end
 
     it "are listed for the model with what each does now" do
-      set!(key: "hall button", steps: chill_steps)
+      set!("hall button", [chill_item, ask_item])
 
-      expect(Buddy::Commands.roster(user)).to eq(["Hall Button (run jil task: Chill Mode)"])
+      expect(described_class.roster(user)).to eq([
+        "Hall Button (run jil task: Chill Mode, ask Buddy: \"close whichever garage door is open\")",
+      ])
     end
   end
 
   describe "set_command" do
-    it "saves the steps under the key's own spelling", :aggregate_failures do
-      set!(key: "hall button", steps: chill_steps)
+    it "saves the items in the cache under the key's own spelling" do
+      set!("hall button", [chill_item, ask_item])
 
-      cmd = BuddyCommand.named(user, "Hall Button")
-      expect(cmd.name).to eq("Hall Button")
-      expect(cmd.steps).to eq([{ "tool_name" => "run_jil_task", "payload" => { "name" => "Chill Mode" } }])
-      expect(cmd.say).to be_nil
+      expect(described_class.items(user, "Hall Button")).to eq([
+        { "tool_name" => "run_jil_task", "payload" => { "name" => "Chill Mode" } },
+        { "tool_name" => "ask_buddy", "payload" => { "text" => "close whichever garage door is open" } },
+      ])
     end
 
-    it "saves words when that's what it's given" do
-      set!(key: "Hall Button", say: "close whichever garage door is open")
+    it "replaces what was there, and an empty list clears it", :aggregate_failures do
+      set!("Hall Button", [chill_item])
+      set!("Hall Button", [ask_item])
+      expect(described_class.items(user, "Hall Button").pluck("tool_name")).to eq(["ask_buddy"])
 
-      expect(BuddyCommand.named(user, "Hall Button").say).to eq("close whichever garage door is open")
-    end
-
-    it "replaces what was there" do
-      set!(key: "Hall Button", steps: chill_steps)
-      set!(key: "Hall Button", say: "tell me something nice")
-
-      cmd = BuddyCommand.named(user, "Hall Button")
-      expect([cmd.steps, cmd.say, BuddyCommand.count]).to eq([[], "tell me something nice", 1])
-    end
-
-    it "clears a key" do
-      set!(key: "Hall Button", steps: chill_steps)
-      set!(key: "Hall Button", clear: true)
-
-      expect(BuddyCommand.named(user, "Hall Button")).to be_nil
+      set!("Hall Button", [])
+      expect(described_class.items(user, "Hall Button")).to be_empty
     end
 
     it "refuses a key no task calls, naming the ones that exist" do
       expect {
-        tool[:confirm].call({ key: "Porch Button", say: "lights" }, ctx)
+        tool[:confirm].call({ key: "Porch Button", items: "[]" }, ctx)
       }.to raise_error(/the ones their automations have are Hall Button/)
     end
 
-    it "refuses steps and words together" do
-      expect {
-        tool[:confirm].call({ key: "Hall Button", say: "lights", steps: chill_steps }, ctx)
-      }.to raise_error(/ONE of/)
-    end
-
-    it "refuses a step that names nothing real" do
+    it "refuses a tool call that names nothing real" do
       bad = JSON.generate([{ tool_name: :run_jil_task, payload: { name: "Porch Lights" } }])
 
-      expect { tool[:confirm].call({ key: "Hall Button", steps: bad }, ctx) }.to raise_error(/Porch Lights/)
+      expect { tool[:confirm].call({ key: "Hall Button", items: bad }, ctx) }.to raise_error(/Porch Lights/)
     end
 
-    it "refuses a step that runs the button's own task" do
-      button.update!(buddy_enabled: true)
-      loop_steps = JSON.generate([{ tool_name: :run_jil_task, payload: { name: "Hall Button" } }])
+    it "refuses an ask_buddy with nothing to ask" do
+      empty = JSON.generate([{ tool_name: :ask_buddy, payload: {} }])
 
-      expect {
-        tool[:confirm].call({ key: "Hall Button", steps: loop_steps }, ctx)
-      }.to raise_error(/is the automation that runs Hall Button/)
+      expect { tool[:confirm].call({ key: "Hall Button", items: empty }, ctx) }.to raise_error(/needs its `text`/)
     end
   end
 
@@ -133,24 +110,23 @@ RSpec.describe "Buddy commands" do
       expect { Jil::Validator.validate!(code) }.not_to raise_error
     end
 
-    it "is false and does nothing when nothing is attached" do
+    it "is false and does nothing when nothing is saved" do
       expect(Jil).not_to receive(:trigger)
 
       expect(press).to be(false)
     end
 
-    it "runs saved steps straight away, with no model turn", :aggregate_failures do
-      set!(key: "Hall Button", steps: chill_steps)
+    it "runs saved tool calls straight away, with no model turn", :aggregate_failures do
+      set!("Hall Button", [chill_item])
       allow(Jil).to receive(:trigger).and_call_original
       expect(BuddyDeliverWorker).not_to receive(:deliver_after_commit)
 
       expect(press).to be(true)
       expect(Jil).to have_received(:trigger).with(user, :"chill-mode", {}, auth: :buddy, auth_id: user.id)
-      expect(BuddyCommand.named(user, "Hall Button").run_count).to eq(1)
     end
 
-    it "hands saved words back to Buddy as a request", :aggregate_failures do
-      set!(key: "Hall Button", say: "close whichever garage door is open")
+    it "hands an ask_buddy item back to Buddy as a request", :aggregate_failures do
+      set!("Hall Button", [ask_item])
       allow(BuddyDeliverWorker).to receive(:deliver_after_commit)
 
       expect(press).to be(true)
@@ -160,13 +136,13 @@ RSpec.describe "Buddy commands" do
       expect(BuddyDeliverWorker).to have_received(:deliver_after_commit).with(seed.id)
     end
 
-    it "does not run itself from inside its own run" do
-      cmd = BuddyCommand.create!(user: user, name: "Hall Button", say: "anything")
-      Thread.current[:buddy_commands_running] = [cmd.id]
+    it "does not press itself again from inside its own run" do
+      button.update!(buddy_enabled: true, code: %(cmd = Buddy.command("Hall Button")::Boolean))
+      set!("Hall Button", [{ tool_name: :run_jil_task, payload: { name: "Hall Button" } }])
+      allow(Jil).to receive(:trigger).and_call_original
 
-      expect(Buddy::Commands.run!(user, "Hall Button")).to be(false)
-    ensure
-      Thread.current[:buddy_commands_running] = nil
+      expect(press).to be(true)
+      expect(Jil).to have_received(:trigger).once
     end
   end
 end
