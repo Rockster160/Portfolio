@@ -32,7 +32,8 @@ module FeatureBuilder
         user:                  user,
         conversation:          conversation,
         request:               brief(user, span, note),
-        title:                 title(span, note),
+        title:                 (title(span) if note.empty?),
+        title_from:            note,
         kind:                  :audit,
         attachment_signed_ids: attachment_signed_ids,
       ) { |build|
@@ -49,9 +50,12 @@ module FeatureBuilder
       from.in_time_zone(user.timezone)..now.in_time_zone(user.timezone)
     end
 
-    def title(span, note)
-      return "Audit: #{note}".truncate(80) if note.present?
+    # Named for its window when it has no note. With one it's named for the
+    # note as it starts, the way any build is (FeatureBuilder::Title), under
+    # this prefix.
+    PREFIX = "Audit: ".freeze
 
+    def title(span)
       "Audit of the last #{ByteDailyAudit.span_length(span)}"
     end
 

@@ -107,12 +107,16 @@ module FeatureBuilder
       user:                  user,
       conversation:          ByteConversation.for_self_initiated(user),
       request:               request,
+      title:                 feature_request.title,
       feature_request:       feature_request,
       attachment_signed_ids: attachment_signed_ids,
     )
   end
 
-  # `title` is for a request written as a brief, whose first line isn't a name.
+  # `title` is a name already chosen, kept as it is. Without one the build is
+  # named for `title_from` (the request, unless given something shorter that
+  # says what it's about) by a model as it starts (FeatureBuilder::Title), and
+  # goes by the request's first line only until then.
   # A block is given the build before its status line is posted, so what's
   # posted there reads above it.
   def launch!(
@@ -121,6 +125,7 @@ module FeatureBuilder
     request:,
     feature_request: nil,
     title: nil,
+    title_from: nil,
     kind: :feature,
     attachment_signed_ids: [])
     build = FeatureBuild.create!(
@@ -139,7 +144,7 @@ module FeatureBuilder
       build.update!(byte_message: message)
     end
     refresh_looks!(user)
-    FeatureBuildStartWorker.perform_async(build.id)
+    FeatureBuildStartWorker.perform_async(build.id, title.present? ? nil : (title_from.presence || request))
     build
   end
 
@@ -449,10 +454,7 @@ module FeatureBuilder
     :syncing
   end
 
-  RETITLE_ACTIONS = %i[opened edited reopened].freeze
-
   def pull_request!(payload)
-    return retitle!(payload) if RETITLE_ACTIONS.include?(payload["action"]&.to_sym)
     return :ignored unless payload["action"] == "closed"
 
     build = FeatureBuild.for_pull_request(payload["pull_request"])
@@ -470,17 +472,6 @@ module FeatureBuilder
 
     finished!(build, merged: merged)
     :finished
-  end
-
-  # A build is named after its request's first line, cut short; its PR's title
-  # is the session's own summary of what it built, so that takes over.
-  def retitle!(payload)
-    build = FeatureBuild.for_pull_request(payload["pull_request"])
-    title = payload.dig("pull_request", "title").to_s.strip
-    return :ignored if build.nil? || title.empty? || build.title == title
-
-    build.update!(title: title)
-    :retitled
   end
 
   # The Mini has closed the session and removed the worktree and the branch.

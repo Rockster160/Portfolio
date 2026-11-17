@@ -86,11 +86,8 @@ RSpec.describe FeatureBuilder::Audit do
   end
 
   describe ".title" do
-    it "names the note when there is one, and the window when there isn't" do
-      span = (now - 24.hours)..now
-
-      expect(described_class.title(span, "reminders fire twice")).to eq("Audit: reminders fire twice")
-      expect(described_class.title(span, "")).to eq("Audit of the last 24 hours")
+    it "names the window" do
+      expect(described_class.title((now - 24.hours)..now)).to eq("Audit of the last 24 hours")
     end
   end
 end

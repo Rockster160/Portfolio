@@ -472,17 +472,14 @@ RSpec.describe FeatureBuilder do
   end
 
   describe "a PR's title" do
-    it "names the build once the PR opens, and again when it's edited" do
-      build.update!(title: "Clicking ANY link in Byte should ALWAYS open in a new tab…")
+    it "leaves the build's own name alone" do
+      build.update!(title: "Open links in a new tab")
 
       opened = pull_request.merge("title" => "Open every Byte link outside the app")
       said = described_class.github!(:pull_request, { "action" => "opened", "pull_request" => opened })
-      expect(said).to eq(:retitled)
-      expect(build.reload.title).to eq("Open every Byte link outside the app")
 
-      edited = pull_request.merge("title" => "Open Byte links in a new tab")
-      described_class.github!(:pull_request, { "action" => "edited", "pull_request" => edited })
-      expect(build.reload.title).to eq("Open Byte links in a new tab")
+      expect(said).to eq(:ignored)
+      expect(build.reload.title).to eq("Open links in a new tab")
     end
   end
 
@@ -526,7 +523,7 @@ RSpec.describe FeatureBuilder do
       expect(build.byte_conversation).to eq(primary)
       expect(primary.byte_messages.last.body).to include("Starting a Feature Builder", "Repeating timers")
       expect(feature_request.reload).to be_status_planned
-      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id, nil)
     end
 
     it "leaves the notes out when there aren't any" do

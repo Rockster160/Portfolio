@@ -63,7 +63,7 @@ RSpec.describe "Feature Builder webhooks", type: :request do
       expect(build.user).to eq(user)
       expect(build.byte_conversation).to eq(primary)
       expect(build.byte_message.body).to include("Starting a Feature Builder")
-      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id, nil)
     end
 
     it "names it from the brief when no title is given" do

@@ -50,4 +50,49 @@ RSpec.describe FeatureBuildStartWorker do
     expect(build.reload).to be_status_failed
     expect(build.byte_message.reload.body).to include("Couldn't start", "the Mini didn't answer")
   end
+
+  describe "naming the build" do
+    before { allow(FeatureBuilder::BranchName).to receive(:for).and_return("dark-mode") }
+
+    it "names it before the Mini is told, and shows the name in its message" do
+      allow(FeatureBuilder::Title).to receive(:for).with("dark mode", user: user).and_return("Dark mode")
+      start = stub_request(:post, %r{/byte/builder\z}).with(
+        body: hash_including("action" => "start", "title" => "Dark mode"),
+      ).to_return(status: 200, body: "{}")
+
+      described_class.new.perform(build.id, "dark mode")
+
+      expect(start).to have_been_requested
+      expect(build.reload.title).to eq("Dark mode")
+      expect(build.byte_message.reload.body).to include("**Dark mode**")
+    end
+
+    it "puts an audit's name under its prefix" do
+      allow(FeatureBuilder::Title).to receive(:for).and_return("Reminders firing twice")
+      stub_request(:post, %r{/byte/builder\z}).to_return(status: 200, body: "{}")
+      build.update!(kind: :audit)
+
+      described_class.new.perform(build.id, "reminders keep firing twice")
+
+      expect(build.reload.title).to eq("Audit: Reminders firing twice")
+    end
+
+    it "keeps the request's first line when the model gives nothing" do
+      allow(FeatureBuilder::Title).to receive(:for).and_return(nil)
+      stub_request(:post, %r{/byte/builder\z}).to_return(status: 200, body: "{}")
+
+      described_class.new.perform(build.id, "dark mode")
+
+      expect(build.reload.title).to eq("dark mode")
+    end
+
+    it "leaves a chosen name alone" do
+      allow(FeatureBuilder::Title).to receive(:for)
+      stub_request(:post, %r{/byte/builder\z}).to_return(status: 200, body: "{}")
+
+      described_class.new.perform(build.id)
+
+      expect(FeatureBuilder::Title).not_to have_received(:for)
+    end
+  end
 end

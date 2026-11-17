@@ -29,7 +29,7 @@ RSpec.describe ByteController, type: :controller do
       expect(status).to eq(build.byte_message)
       expect(status.body).to include("Starting a Feature Builder", "build buttons on the requests page")
       expect(response.parsed_body["id"]).to eq(request.id)
-      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id, build.request)
     end
 
     it "starts the build with the images sent alongside the command, and shows them on the request" do
@@ -84,12 +84,11 @@ RSpec.describe ByteController, type: :controller do
       build = FeatureBuild.last
       request, status = convo.byte_messages.order(:id).to_a
       expect(build).to be_kind_audit
-      expect(build.title).to eq("Audit: reminders keep firing twice")
       expect(build.request).to include("**reminders keep firing twice**", "WHERE THE DAY IS")
       expect(request.body).to eq("/audit reminders keep firing twice")
       expect(request.metadata).to include("feature_build_id" => build.id, "local_id" => "local-2")
       expect(status.body).to include("Starting an audit on the Mini")
-      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id, "reminders keep firing twice")
     end
 
     it "runs without a note" do
@@ -97,8 +96,10 @@ RSpec.describe ByteController, type: :controller do
 
       post :create_message, params: { conversation_id: convo.id, body: "/audit" }
 
-      expect(FeatureBuild.last.title).to eq("Audit of the last 24 hours")
-      expect(FeatureBuild.last.request).to include("judge for yourself")
+      build = FeatureBuild.last
+      expect(build.title).to eq("Audit of the last 24 hours")
+      expect(build.request).to include("judge for yourself")
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id, nil)
     end
 
     it "is the owner's alone" do
