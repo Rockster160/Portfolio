@@ -11,6 +11,8 @@ class ByteController < ApplicationController
   # signed-in owner), so take it off the forgery check: an unauthenticated beat
   # now falls through to a quiet auth rejection instead of a reported exception.
   skip_before_action :verify_authenticity_token, only: :presence, raise: false
+  # Every beat would otherwise be a line in custom.log, drowning real requests.
+  skip_before_action :pretty_logit, only: :presence, raise: false
 
   MONITOR_CHANNEL = :byte
   # Page size for both the initial render and paginated back-scroll.
