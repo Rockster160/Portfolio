@@ -3,11 +3,11 @@
 # Table name: buddy_idea_notes
 #
 #  id            :bigint           not null, primary key
-#  buddy_idea_id :bigint           not null
 #  body          :text             not null
 #  source        :integer          default("person"), not null
 #  created_at    :datetime         not null
 #  updated_at    :datetime         not null
+#  buddy_idea_id :bigint           not null
 #
 class BuddyIdeaNote < ApplicationRecord
   belongs_to :buddy_idea

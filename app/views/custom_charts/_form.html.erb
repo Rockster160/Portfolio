@@ -71,6 +71,12 @@
         <%= label_tag "cc-invert-sign", "Invert sign — flip which direction counts as positive" %>
       </div>
 
+      <div class="cc-field cc-field-inline">
+        <%= hidden_field_tag "custom_chart[config][break_outliers]", "0" %>
+        <%= check_box_tag "custom_chart[config][break_outliers]", "1", @chart.break_outliers, id: "cc-break-outliers" %>
+        <%= label_tag "cc-break-outliers", "Break the axis around outliers — keep ordinary values readable" %>
+      </div>
+
       <div class="cc-field cc-form-row">
         <div>
           <%= label_tag nil, "Bucket" %>

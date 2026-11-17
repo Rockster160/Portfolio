@@ -3,14 +3,14 @@
 # Table name: avatars
 #
 #  id           :integer          not null, primary key
-#  user_id      :integer
-#  created_at   :datetime         not null
-#  updated_at   :datetime         not null
+#  from_session :boolean
 #  location_x   :integer
 #  location_y   :integer
 #  timestamp    :string
 #  uuid         :integer          not null
-#  from_session :boolean
+#  created_at   :datetime         not null
+#  updated_at   :datetime         not null
+#  user_id      :integer
 #
 
 class Avatar < ApplicationRecord

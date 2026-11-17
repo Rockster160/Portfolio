@@ -1,6 +1,8 @@
 // A ChartBuilder payload as a Chart.js config. Shared by the Charts page and a
 // chart Buddy draws in the thread, so the two draw the same chart the same way.
 
+import { registerBrokenAxis } from "./broken_axis.js"
+
 const MARKER_COLOR = "rgba(250, 178, 25, 0.85)"
 
 export function fmtValue(v, unit) {
@@ -44,6 +46,7 @@ export function loadChartJs() {
 }
 
 export function chartConfig(payload) {
+  registerBrokenAxis()
   // Raw per-event data (bucket: none) has no categories to anchor bars to, so
   // hundreds of events render as hairline slivers. Always draw it as a line.
   const asLine = payload.chart_type === "line" || payload.time_axis
@@ -77,9 +80,11 @@ export function chartConfig(payload) {
 
   const scales = {
     y: {
+      // Payloads saved before the option existed have no key, and get the default.
+      type: payload.break_outliers === false ? "linear" : "broken",
       stacked: stacked,
       beginAtZero: true,
-      ticks: { color: "#C9D1D9", callback: function(v) { return unit === "$" ? "$" + v : v } },
+      ticks: { color: "#C9D1D9", callback: function(v) { return fmtValue(v, unit) } },
       grid: { color: "rgba(255,255,255,0.05)" },
     },
     x: {

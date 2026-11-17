@@ -150,7 +150,32 @@ function enqueue(op) {
     q.push(stamped);
   }
   saveQueue(q);
+  // `requestedId` is the id the caller made, which a dedup collapse
+  // above may have swapped for the earlier op's.
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("agenda:mutation-enqueued", {
+      detail: { requestedId: op.client_mutation_id, op: stamped },
+    }));
+  }
   return stamped;
+}
+
+// Resolves with the server's response once the op with this id
+// drains, or null if the server refused it. Only this tab's waiters:
+// another tab draining the op leaves them pending.
+const resolvedWaiters = new Map();
+function whenResolved(clientMutationId) {
+  return new Promise((resolve) => {
+    const waiting = resolvedWaiters.get(clientMutationId) || [];
+    waiting.push(resolve);
+    resolvedWaiters.set(clientMutationId, waiting);
+  });
+}
+function settleWaiters(op, payload) {
+  const waiting = resolvedWaiters.get(op.client_mutation_id);
+  if (!waiting) return;
+  resolvedWaiters.delete(op.client_mutation_id);
+  waiting.forEach((resolve) => resolve(payload));
 }
 
 // ----- flush -----
@@ -216,6 +241,7 @@ async function flush() {
           try { onMutationResolved(op, payload, { conflict: res.status === 409 }); }
           catch (err) { console.warn("[agenda queue] reconcile hook error", err); }
         }
+        settleWaiters(op, payload || {});
         backoffMs = 0;
         continue;
       }
@@ -234,6 +260,7 @@ async function flush() {
           dropped_at:         new Date().toISOString(),
         });
         saveDropped(dropped);
+        settleWaiters(op, null);
         continue;
       }
 
@@ -316,6 +343,7 @@ const AgendaMutationQueue = {
   dismissDropped,
   subscribe,
   setReconcileHook,
+  whenResolved,
   newMutationId,
   newTempId,
   tabId,

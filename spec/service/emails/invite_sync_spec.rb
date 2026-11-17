@@ -101,6 +101,91 @@ RSpec.describe Emails::InviteSync do
     expect(item.attendees.find { |a| a["self"] }["email"]).to eq("rocco@example.com")
   end
 
+  # A STANDUP IS NOT ONE MORNING. The repeat rule is the whole of what the
+  # invite says, and the first occurrence on its own is a meeting that happens
+  # once and then is never heard from again.
+  describe "a meeting that repeats" do
+    def repeating(rule: "RRULE:FREQ=WEEKLY;BYDAY=MO,WE", **args)
+      ics(**args).sub("DTSTART:", "#{rule}\r\nDTSTART:")
+    end
+
+    # Rows of the SERIES' own making are not the thing under test here - a
+    # schedule materializes its occurrences, and every one of them is an
+    # AgendaItem on this agenda. What matters is the rows nothing generated.
+    def loose_items
+      AgendaItem.where(agenda: agenda, agenda_schedule_id: nil)
+    end
+
+    it "becomes a schedule rather than one row" do
+      deliver(calendar: repeating)
+
+      series = AgendaSchedule.find_by(agenda: agenda)
+      expect(series.name).to eq("Interview: Rocco Nicholls and Erin McDonald")
+      expect(series.recurrence["freq"]).to eq("weekly")
+      expect(series.recurrence["by_day"]).to match_array(%w[mon wed])
+      expect(series.duration_minutes).to eq(45)
+      expect(loose_items).to be_empty
+    end
+
+    it "changes the series it already wrote rather than starting a second one" do
+      deliver(calendar: repeating)
+      deliver(calendar: repeating(rule: "RRULE:FREQ=WEEKLY;BYDAY=TU", sequence: 1))
+
+      expect(AgendaSchedule.where(agenda: agenda).count).to eq(1)
+      expect(AgendaSchedule.find_by(agenda: agenda).recurrence["by_day"]).to eq(["tue"])
+    end
+
+    it "takes the whole series off when the organizer calls it off" do
+      deliver(calendar: repeating)
+      deliver(calendar: repeating(method: "CANCEL", sequence: 1))
+
+      expect(AgendaSchedule.where(agenda: agenda)).to be_empty
+    end
+
+    # The rule has a grain this app does not model. The first occurrence is
+    # still a real meeting, and better on the day than nowhere.
+    it "still books the first one when it cannot keep the rule" do
+      deliver(calendar: repeating(rule: "RRULE:FREQ=HOURLY;INTERVAL=6"))
+
+      expect(AgendaSchedule.where(agenda: agenda)).to be_empty
+      expect(loose_items.sole.start_at).to eq(Time.utc(2026, 11, 3, 15, 0))
+    end
+
+    describe "one morning of it" do
+      def occurrence(on: "20261103T150000Z", **args)
+        ics(**args).sub("DTSTART:", "RECURRENCE-ID:#{on}\r\nDTSTART:")
+      end
+
+      it "is struck off the series when that one is cancelled" do
+        deliver(calendar: repeating)
+        deliver(calendar: occurrence(method: "CANCEL", sequence: 1))
+
+        series = AgendaSchedule.find_by(agenda: agenda)
+        expect(series.excluded_dates.map(&:to_s)).to include("2026-11-03")
+        expect(loose_items).to be_empty
+      end
+
+      it "is struck off and rebooked at its new time when that one moves" do
+        deliver(calendar: repeating)
+        moved = deliver(calendar: occurrence(sequence: 1, starts: "20261103T190000Z"))
+
+        expect(AgendaSchedule.find_by(agenda: agenda).excluded_dates.map(&:to_s)).to include("2026-11-03")
+        expect(moved.start_at).to eq(Time.utc(2026, 11, 3, 19, 0))
+      end
+
+      # Keyed on the morning it came from as well as the UID, so the series and
+      # the one morning pulled out of it cannot be taken for each other.
+      it "lands on the row it already moved rather than making a second" do
+        deliver(calendar: repeating)
+        first = deliver(calendar: occurrence(sequence: 1, starts: "20261103T190000Z"))
+        again = deliver(calendar: occurrence(sequence: 2, starts: "20261103T200000Z"))
+
+        expect(again.id).to eq(first.id)
+        expect(loose_items.count).to eq(1)
+      end
+    end
+  end
+
   it "moves the row it already wrote rather than booking a second meeting" do
     first = deliver
     second = deliver(calendar: ics(sequence: 1, starts: "20261104T160000Z"))

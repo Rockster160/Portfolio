@@ -3,10 +3,10 @@
 # Table name: box_images
 #
 #  id         :bigint           not null, primary key
+#  box_key    :text             not null
 #  caption    :text
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
-#  box_key    :text             not null
 #  user_id    :bigint           not null
 #
 

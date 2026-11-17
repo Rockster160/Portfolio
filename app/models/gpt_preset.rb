@@ -3,11 +3,11 @@
 # Table name: gpt_presets
 #
 #  id           :bigint           not null, primary key
-#  user_id      :bigint           not null
-#  name         :text             not null
 #  instructions :text             not null
+#  name         :text             not null
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
+#  user_id      :bigint           not null
 #
 class GPTPreset < ApplicationRecord
   belongs_to :user

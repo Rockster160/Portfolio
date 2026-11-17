@@ -111,6 +111,16 @@ RSpec.describe ChartBuilder do
     end
   end
 
+  describe "break_outliers" do
+    it "breaks the axis unless the chart turns it off" do
+      on = described_class.new(chart(query: "name::Pullups")).call
+      off = described_class.new(chart(query: "name::Pullups", break_outliers: false)).call
+
+      expect(on[:break_outliers]).to be(true)
+      expect(off[:break_outliers]).to be(false)
+    end
+  end
+
   describe "invert_sign" do
     def transactions
       event("Transaction", at: tz.local(2026, 1, 5, 12),  data: { "amount" => 100.0 })

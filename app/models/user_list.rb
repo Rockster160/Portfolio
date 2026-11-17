@@ -3,11 +3,11 @@
 # Table name: user_lists
 #
 #  id         :integer          not null, primary key
-#  user_id    :integer
-#  list_id    :integer
+#  default    :boolean          default(FALSE)
 #  is_owner   :boolean
 #  sort_order :integer
-#  default    :boolean          default(FALSE)
+#  list_id    :integer
+#  user_id    :integer
 #
 
 class UserList < ApplicationRecord

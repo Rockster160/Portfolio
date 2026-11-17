@@ -842,7 +842,7 @@ class JobNote < ApplicationRecord
   # calendar row had. The brief written off this row then reported the ellipsis
   # as a fact about the interview.
   def item_notes
-    link = ::ByteInterviewPrep::HeadsUp.meeting_url(body)
+    link = ::MeetingLink.in(body)
     join = ("Join: #{link}" if link.present?)
     [join, job_application.interview_url, body.to_s.strip.presence].compact.join("\n\n")
   end

@@ -47,6 +47,12 @@ class Emails::CalendarInvite
   # a program rather than somewhere to be.
   JOINABLE = %w[X-MICROSOFT-SKYPETEAMSMEETINGURL X-GOOGLE-CONFERENCE].freeze
 
+  # The repeat rule, kept as the lines RFC 5545 writes it in rather than read
+  # here. `GoogleCalendar::RRule` already translates exactly these strings -
+  # Google's API hands them over verbatim - so a standup that arrives as mail
+  # and one that arrives through the calendar are understood by one reader.
+  REPEATS = /\A(?:RRULE|EXDATE|RDATE)[;:]/
+
   # A part is the calendar part either by saying so or by being a file with the
   # extension. Both happen and neither is the sender being unusual: Google and
   # Exchange send `text/calendar` inline, while a forwarded invite arrives as an
@@ -86,10 +92,20 @@ class Emails::CalendarInvite
       uid:         text_of(fields["UID"]),
       sequence:    text_of(fields["SEQUENCE"]).to_i,
       method:      method.upcase.presence,
+      recurrence:  repeats_of(lines),
+      occurrence:  time_of(fields["RECURRENCE-ID"]),
       organizer:   person(fields["ORGANIZER"]),
       attendees:   Array(fields["ATTENDEE"]).filter_map { |field| person(field) },
       cancelled:   method.casecmp?("CANCEL") || text_of(fields["STATUS"]).to_s.casecmp?("CANCELLED"),
     }
+  end
+
+  # INSIDE THE EVENT ONLY. Every VTIMEZONE above it carries RRULEs of its own,
+  # saying when a daylight-saving rule began - and a standup that inherited one
+  # of those would repeat on the first Sunday in November, forever.
+  def self.repeats_of(lines)
+    inside = lines.drop_while { |line| line != "BEGIN:VEVENT" }.drop(1)
+    inside.take_while { |line| line != "END:VEVENT" }.grep(REPEATS).presence
   end
 
   # WHERE TO BE, which for everything but an Exchange invite is the LOCATION.
@@ -110,7 +126,7 @@ class Emails::CalendarInvite
     stated = text_of(fields["LOCATION"])
     return stated if stated
 
-    ::ByteInterviewPrep::HeadsUp.meeting_url(text_of(fields["DESCRIPTION"]))
+    ::MeetingLink.in(text_of(fields["DESCRIPTION"]))
   end
 
   # A long line continues on the next one after a leading space or tab.

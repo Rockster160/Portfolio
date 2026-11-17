@@ -569,10 +569,16 @@
   //
   // `data` is a tile's dataset or a clipboard snapshot of one, so a cut
   // can be pasted after its tile has scrolled out of the visible week.
-  // `btn` is the on-screen tile when there is one.
-  function commitEventMove(data, newStartAt, newEndAt, scope, btn) {
+  // `btn` is the on-screen tile when there is one. `record: false` is an
+  // undo putting the event back, which isn't itself undone.
+  function commitEventMove(data, newStartAt, newEndAt, scope, btn, { record = true } = {}) {
     const itemId = data.itemId;
     if (!itemId) return;
+    // Read before the tile's dataset is rewritten: `data` is often that
+    // same dataset.
+    const fromStartAt = Number(data.startAt);
+    const fromEndAt = Number(data.endAt) || fromStartAt;
+    const detached = data.detached === "true";
     if (btn) {
       btn.dataset.startAt = String(newStartAt);
       btn.dataset.endAt = String(newEndAt);
@@ -598,7 +604,7 @@
     // occurrence-only branch in AgendaItemsController#update.
     if (scope) payload.scope = scope;
 
-    window.AgendaMutationQueue.enqueue({
+    const resolved = queueCalMutation({
       client_mutation_id: mid,
       kind:               "update",
       url,
@@ -607,7 +613,35 @@
       target_id:          String(itemId),
       dedup_key:          `update:${url}`,
     });
-    window.AgendaMutationQueue.flush();
+    if (!record) return;
+    if (scope === "future") {
+      forgetCalUndo();
+      return;
+    }
+    recordCalUndo(`moving “${data.name || "the event"}”`, async () => {
+      if (!scope) {
+        const id = await liveItemId(itemId);
+        commitEventMove({ itemId: id }, fromStartAt, fromEndAt, null, null, { record: false });
+        return;
+      }
+      // A date of a repeating event comes back from the server as a row
+      // of its own. One that was on the series goes back to it; one that
+      // was already an exception moves back.
+      const row = await resolved;
+      if (!row?.id) return;
+      if (!detached) {
+        restoreToSeries(String(row.id));
+        return;
+      }
+      commitEventMove(
+        { itemId: String(row.id), recurring: "true" },
+        fromStartAt,
+        fromEndAt,
+        "occurrence",
+        null,
+        { record: false },
+      );
+    });
   }
 
   // Top-level move dispatcher. For non-recurring items, commits
@@ -700,8 +734,9 @@
   // On a desktop pointer a click selects an event and a double click
   // opens its details. Clicking empty grid clears the selection and makes
   // that day the paste target. Delete/Backspace deletes the selection,
-  // Cmd/Ctrl+C and +X put it on the clipboard, Cmd/Ctrl+V lands it on the
-  // selected day at the same time of day.
+  // E opens it in the edit form, Cmd/Ctrl+C and +X put it on the
+  // clipboard, Cmd/Ctrl+V lands it on the selected day at the same time
+  // of day, and Cmd/Ctrl+Z undoes (see WEEK VIEW UNDO).
   //
   // A cut leaves the original in place, faded, until the paste moves it
   // through sendEventMove, the same move a drag makes, so a recurring
@@ -790,6 +825,96 @@
     paintCalSelection(root);
   }
 
+  // ============================================================
+  // WEEK VIEW UNDO
+  // ============================================================
+  // Cmd/Ctrl+Z reverses the last move, paste or delete made on the grid,
+  // newest first. A one-off moves back, a date of a repeating event goes
+  // back to its series, a paste is deleted and a delete is pasted back
+  // from its snapshot. A write that can't be reversed (a "this and
+  // following" move, deleting a date of a repeating event) and any write
+  // made elsewhere (the edit form, the add modal, a tick) empties the
+  // history, so a later Cmd+Z never skips past it to something older.
+  const UNDO_LIMIT = 50;
+  const calUndo = [];
+  const trackedMutations = new Set();
+  // A delete undone by pasting the snapshot back has a new id, and older
+  // entries still name the old one.
+  const recreatedIds = new Map();
+
+  window.addEventListener("agenda:mutation-enqueued", (e) => {
+    if (trackedMutations.delete(e.detail.requestedId)) return;
+    forgetCalUndo();
+  });
+
+  // Every write this file makes goes through here, so the listener above
+  // knows it from one made elsewhere. Resolves with the server's row, or
+  // null when the server refused it.
+  function queueCalMutation(op) {
+    trackedMutations.add(op.client_mutation_id);
+    const queued = window.AgendaMutationQueue.enqueue(op);
+    window.AgendaMutationQueue.flush();
+    return window.AgendaMutationQueue.whenResolved(queued.client_mutation_id);
+  }
+
+  function recordCalUndo(label, undo) {
+    calUndo.push({ label, undo });
+    if (calUndo.length > UNDO_LIMIT) calUndo.shift();
+  }
+
+  function forgetCalUndo() {
+    calUndo.length = 0;
+  }
+
+  async function liveItemId(itemId) {
+    const recreated = recreatedIds.get(String(itemId));
+    if (!recreated) return String(itemId);
+    const row = await recreated;
+    return row?.id ? String(row.id) : String(itemId);
+  }
+
+  function undoLastCalAction() {
+    const entry = calUndo.pop();
+    if (!entry) {
+      window.AgendaToast?.("Nothing to undo");
+      return;
+    }
+    window.AgendaToast?.(`Undid ${entry.label}`);
+    entry.undo();
+  }
+
+  // Off the screen straight away. The delete waits for the server's id,
+  // since a temp id has no URL to send it to.
+  async function undoCreate({ tempId, resolved }) {
+    window.AgendaStore.removeItem(tempId);
+    const row = await resolved;
+    if (row?.id) destroyCalItem({ itemId: String(row.id), scope: "occurrence" });
+  }
+
+  function restoreToSeries(itemId) {
+    const itemUrl = `/agenda_items/${itemId}`;
+    queueCalMutation({
+      client_mutation_id: window.AgendaMutationQueue.newMutationId(),
+      kind:               "restore",
+      url:                `${itemUrl}/restore`,
+      method:             "POST",
+      dedup_key:          `restore:${itemUrl}`,
+    });
+  }
+
+  function destroyCalItem({ itemId, itemUrl, scope }) {
+    const url = itemUrl || `/agenda_items/${itemId}`;
+    window.AgendaStore.removeItem(String(itemId));
+    return queueCalMutation({
+      client_mutation_id: window.AgendaMutationQueue.newMutationId(),
+      kind:               "destroy",
+      url:                `${url}?scope=${scope}`,
+      method:             "DELETE",
+      target_id:          String(itemId),
+      dedup_key:          `delete:${url}`,
+    });
+  }
+
   function snapshotTile(tile, mode) {
     const snap = { mode };
     CLIPBOARD_FIELDS.forEach((key) => {
@@ -843,7 +968,8 @@
     const slot = clipboardSlotOn(root, clip);
     if (!slot) return false;
     if (clip.mode !== "cut") {
-      createFromClipboard(clip, slot.startAt, slot.endAt);
+      const created = createFromClipboard(clip, slot.startAt, slot.endAt);
+      recordCalUndo(`pasting “${clip.name || "the event"}”`, () => undoCreate(created));
       return true;
     }
     if (slot.days === 0) {
@@ -898,7 +1024,7 @@
       },
     };
     if (clip.navAddress) body.agenda_item.travel_nav_address = clip.navAddress;
-    window.AgendaMutationQueue.enqueue({
+    const resolved = queueCalMutation({
       client_mutation_id: mid,
       kind:               "create",
       url:                "/agenda_items",
@@ -906,7 +1032,7 @@
       body,
       target_id:          tempId,
     });
-    window.AgendaMutationQueue.flush();
+    return { tempId, resolved };
   }
 
   // The destroy endpoint's `series` scope cancels this occurrence and
@@ -932,18 +1058,18 @@
     if (calClipboard?.itemId === data.itemId && calClipboard.mode === "cut") setCalClipboard(null);
     paintCalSelection(page);
 
-    const itemUrl = data.itemUrl || `/agenda_items/${data.itemId}`;
-    const mid = window.AgendaMutationQueue.newMutationId();
-    window.AgendaStore.removeItem(String(data.itemId));
-    window.AgendaMutationQueue.enqueue({
-      client_mutation_id: mid,
-      kind:               "destroy",
-      url:                `${itemUrl}?scope=${scope}`,
-      method:             "DELETE",
-      target_id:          String(data.itemId),
-      dedup_key:          `delete:${itemUrl}`,
+    destroyCalItem({ itemId: data.itemId, itemUrl: data.itemUrl, scope });
+    // A deleted date of a repeating event is excluded from its rule,
+    // which nothing here can take back.
+    if (data.recurring === "true") {
+      forgetCalUndo();
+      return;
+    }
+    recordCalUndo(`deleting “${data.name || "the event"}”`, () => {
+      const startAt = Number(data.startAt);
+      const created = createFromClipboard(data, startAt, Number(data.endAt) || startAt);
+      recreatedIds.set(String(data.itemId), created.resolved);
     });
-    window.AgendaMutationQueue.flush();
   }
 
   document.addEventListener("keydown", (e) => {
@@ -958,9 +1084,19 @@
       deleteCalSelection(root);
       return;
     }
+    if (!mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "e") {
+      const tile = selectedEditableTile(root);
+      if (!tile || !window.__openAgendaEdit) return;
+      e.preventDefault();
+      window.__openAgendaEdit(tile);
+      return;
+    }
     if (!mod || e.altKey || e.shiftKey) return;
     const key = e.key.toLowerCase();
-    if (key === "c" || key === "x") {
+    if (key === "z") {
+      e.preventDefault();
+      undoLastCalAction();
+    } else if (key === "c" || key === "x") {
       if (copyCalSelection(root, key === "x" ? "cut" : "copy")) e.preventDefault();
     } else if (key === "v") {
       if (pasteCalClipboard(root)) e.preventDefault();

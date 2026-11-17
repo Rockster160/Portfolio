@@ -3,13 +3,13 @@
 # Table name: avatar_clothes
 #
 #  id         :integer          not null, primary key
-#  avatar_id  :integer
+#  color      :string
+#  garment    :string
 #  gender     :string
 #  placement  :string
-#  garment    :string
-#  color      :string
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
+#  avatar_id  :integer
 #
 
 class AvatarCloth < ApplicationRecord

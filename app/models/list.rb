@@ -4,6 +4,9 @@
 #
 #  id                 :integer          not null, primary key
 #  description        :text
+#  icon               :string
+#  icon_color         :string
+#  icon_png           :binary
 #  important          :boolean          default(FALSE)
 #  name               :string(255)
 #  parameterized_name :text

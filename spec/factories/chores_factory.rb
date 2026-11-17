@@ -1,3 +1,37 @@
+# == Schema Information
+#
+# Table name: chores
+#
+#  id                  :bigint           not null, primary key
+#  aliases             :jsonb            not null
+#  archived_at         :datetime
+#  dismissed_until     :date
+#  hot_eligibility     :integer          default("when_available"), not null
+#  icon                :text
+#  marked_due_at       :datetime
+#  name                :text             not null
+#  notes               :text
+#  notes_template      :text
+#  one_off             :boolean          default(FALSE), not null
+#  priority            :integer          default("normal"), not null
+#  recurrence          :jsonb
+#  reward_pebbles      :integer          default(0), not null
+#  sharing_mode        :integer          default("personal"), not null
+#  short_name          :text
+#  show_on_today_view  :integer          default("when_scheduled"), not null
+#  sort_order          :integer
+#  starts_on           :date
+#  tags                :text             default([]), not null, is an Array
+#  target_count        :integer          default(1), not null
+#  threshold_seconds   :integer
+#  who_did_it          :jsonb            not null
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
+#  assigned_to_user_id :bigint
+#  chore_household_id  :bigint           not null
+#  created_by_user_id  :bigint           not null
+#  parent_chore_id     :bigint
+#
 FactoryBot.define do
   factory :chore_household do
     name { "Household" }

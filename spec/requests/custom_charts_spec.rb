@@ -107,6 +107,19 @@ RSpec.describe "CustomCharts", type: :request do
       end
     end
 
+    it "round-trips the break_outliers checkbox, checked and unchecked" do
+      [["1", true], ["0", false]].each do |box, expected|
+        post custom_charts_path, params: {
+          custom_chart: {
+            name:   "Spend #{box}",
+            query:  "name::Transaction",
+            config: { break_outliers: box },
+          },
+        }
+        expect(user.custom_charts.last.break_outliers).to be(expected)
+      end
+    end
+
     it "round-trips the series_key field" do
       post custom_charts_path, params: {
         custom_chart: {

@@ -295,6 +295,7 @@
     clearTimeout(node.__t);
     node.__t = setTimeout(() => node.classList.remove("show"), 2400);
   }
+  window.AgendaToast = toast;
 
   function ajax(method, url, body) {
     // Stamp every mutation with the wall-clock instant of the user's
@@ -1440,6 +1441,9 @@
       if (window.hideModal) window.hideModal("#agenda-item-details");
       openModal(target);
     });
+    // The week view's `e` shortcut opens a selected tile straight into
+    // the form, skipping the details modal.
+    window.__openAgendaEdit = (itemEl) => openModal(itemEl);
 
     // Follow up straight from details — the same day picker the edit
     // modal's "Follow up" opens, sourced from the row's data-* instead of

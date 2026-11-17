@@ -21,32 +21,6 @@ module ByteInterviewPrep
     TRIGGER = "interview-join".freeze
     SOURCE = "interview_join".freeze
 
-    # Hosts that are a call you JOIN. Deliberately a list rather than "any
-    # URL": the notes are full of links - the application page, the calendar's
-    # own "view event", `tel.meet` dial-ins - and none of them is the one to
-    # tap with two minutes left.
-    MEETING_HOSTS = [
-      "meet.google.com",
-      "zoom.us",
-      "zoomgov.com",
-      "teams.microsoft.com",
-      "teams.microsoft.us",
-      "teams.live.com",
-      "webex.com",
-      "whereby.com",
-      "chime.aws",
-      "meet.jit.si",
-      "gotomeet.me",
-      "meet.goto.com",
-      "around.co",
-      "hirevue.com",
-      "coderpad.io",
-      "codesignal.com",
-      "hackerrank.com",
-    ].freeze
-
-    URL_RE = %r{https?://[^\s<>"')\]]+}
-
     # A street number then a word - "2600 W Executive Pkwy". A phone number in
     # the location field starts with a digit too, but never a digit and a space.
     ADDRESS_RE = /\A\s*\d+\s+[[:alpha:]]/
@@ -118,7 +92,7 @@ module ByteInterviewPrep
 
       rows = [item, *twins(item, application, user)]
       texts = rows.flat_map { |row| [row.location, row.notes] }
-      url = texts.lazy.filter_map { |text| meeting_url(text) }.first
+      url = texts.lazy.filter_map { |text| ::MeetingLink.in(text) }.first
       url ||= invite_note_url(item, application, user)
       return { kind: :link, url: url } if url
 
@@ -158,18 +132,7 @@ module ByteInterviewPrep
       day   = item.start_at.in_time_zone(user.timezone)
       dates = [day.strftime("%b %-d, %Y"), day.strftime("%B %-d, %Y"), day.to_date.iso8601]
       notes = application.notes.recent.to_a.select { |note| dates.any? { |date| note.body.to_s.include?(date) } }
-      notes.lazy.filter_map { |note| meeting_url(note.body) }.first
-    end
-
-    def meeting_url(text)
-      text.to_s.scan(URL_RE).find { |url| meeting_host?(url) }&.sub(/[.,;:!?]+\z/, "")
-    end
-
-    def meeting_host?(url)
-      host = URI.parse(url).host.to_s.downcase
-      MEETING_HOSTS.any? { |known| host == known || host.end_with?(".#{known}") }
-    rescue URI::InvalidURIError
-      false
+      notes.lazy.filter_map { |note| ::MeetingLink.in(note.body) }.first
     end
 
     def said(application, how)

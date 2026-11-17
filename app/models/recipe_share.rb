@@ -3,10 +3,10 @@
 # Table name: recipe_shares
 #
 #  id           :integer          not null, primary key
-#  recipe_id    :integer
-#  shared_to_id :integer
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
+#  recipe_id    :integer
+#  shared_to_id :integer
 #
 
 class RecipeShare < ApplicationRecord

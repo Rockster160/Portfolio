@@ -88,8 +88,39 @@ module Emails
       scope.where("metadata -> 'invite' ->> 'uid' = ?", uid).order(:id).first
     end
 
+    # The same lookup for a repeating one. A series is a SCHEDULE, not a row,
+    # and it is keyed the way the row is rather than through `external_uid` -
+    # for the reason above, which does not stop being true because the meeting
+    # happens every week.
+    def existing_series(user, uid)
+      scope = ::AgendaSchedule.where(agenda_id: user.editable_agendas.select(:id))
+      scope.where("metadata -> 'invite' ->> 'uid' = ?", uid).order(:id).first
+    end
+
+    # A STANDUP IS NOT ONE MORNING. An invite carrying a repeat rule describes
+    # every occurrence of it, and filed as a single row it is one meeting on
+    # one day and silence after that - which is how a recurring catch-up looked
+    # here until it was noticed missing.
+    #
+    # Three shapes arrive and only the first is the series itself:
+    #   RRULE                -> the series. A schedule.
+    #   RECURRENCE-ID+CANCEL -> that one is off. A date excluded on the series.
+    #   RECURRENCE-ID        -> that one moved. Excluded there, and a row of its
+    #                           own at the new time, keyed so the two cannot be
+    #                           mistaken for each other.
     def place(agenda, email, invite)
-      item = existing(agenda.user, invite[:uid])
+      return place_series(agenda, email, invite) if invite[:recurrence].present?
+      return place_occurrence(agenda, email, invite) if invite[:occurrence].present?
+
+      place_row(agenda, email, invite, invite[:uid])
+    end
+
+    # ONE ROW, under the key it is remembered by. Everything that is not a
+    # series ends up here - an ordinary booking under its UID, and one morning
+    # pulled out of a series under a key of its own - so the two guards below
+    # hold for all of them rather than for whichever path was written first.
+    def place_row(agenda, email, invite, key)
+      item = existing(agenda.user, key)
       # A cancellation of something that was never on the day. Writing a
       # cancelled row for it would be filing a tombstone for a meeting nobody
       # had - and `cancelled` is a soft delete here, so it would never be seen
@@ -103,13 +134,93 @@ module Emails
       return item if item.persisted? && invite[:sequence] < stored_sequence(item)
 
       item.assign_attributes(attrs(email, invite, item))
+      item.metadata = item.metadata.to_h.deep_merge("invite" => { "uid" => key })
       item.save!
       item.agenda.broadcast!
       item
     end
 
+    def place_series(agenda, email, invite)
+      series = existing_series(agenda.user, invite[:uid])
+      return call_off(series) if invite[:cancelled] && series.present?
+
+      parsed = ::GoogleCalendar::RRule.translate(invite[:recurrence])
+      # Nothing we can represent. A rule measured in hours has no honest shape
+      # in a model whose finest grain is a day, and a made-up daily one would
+      # be worse than the single row this is replacing. The first occurrence is
+      # still a real meeting and is better on the day than nowhere - and a
+      # cancellation with no series to call off is one of those rows too.
+      return place_row(agenda, email, invite, invite[:uid]) if parsed.nil? || parsed[:skip] || invite[:cancelled]
+
+      series ||= agenda.agenda_schedules.new
+      return series if series.persisted? && invite[:sequence] < stored_sequence(series)
+
+      series.assign_attributes(series_attrs(agenda.user, email, invite, parsed, series))
+      series.save!
+      series.agenda.broadcast!
+      series
+    end
+
+    # Wall-clock in HIS zone, because every reader of `start_time` interprets
+    # it there - see the note on the column. The invite states the time in the
+    # organizer's.
+    def series_attrs(user, email, invite, parsed, series)
+      starts = invite[:starts_at].in_time_zone(user.timezone)
+      ends = invite[:ends_at]&.in_time_zone(user.timezone)
+      {
+        kind:             :event,
+        name:             invite[:summary].presence || email.subject.presence || "Invitation",
+        location:         invite[:location],
+        notes:            notes_for(email, invite),
+        start_time:       starts.strftime("%H:%M"),
+        starts_on:        starts.to_date,
+        duration_minutes: (((ends - starts) / 60).round if ends && ends > starts),
+        until_on:         parsed[:until_on],
+        occurrence_count: parsed[:occurrence_count],
+        # Dates already struck off here are kept. They were struck off by
+        # cancellations of single mornings, which the organizer's rule knows
+        # nothing about and would otherwise put back.
+        recurrence:       keeping_exclusions(parsed[:recurrence], series),
+        metadata:         series.metadata.to_h.merge(invite_metadata(email, invite)),
+      }
+    end
+
+    def keeping_exclusions(recurrence, series)
+      kept = series.persisted? ? series.excluded_dates.map(&:to_s) : []
+      incoming = Array(recurrence[:excluded_dates]).map(&:to_s)
+      union = (kept + incoming).uniq
+      union.any? ? recurrence.merge(excluded_dates: union) : recurrence
+    end
+
+    # ONE MORNING OF A SERIES, named by the occurrence it replaces.
+    #
+    # Struck off the series either way: a cancelled one simply goes, and a moved
+    # one goes from where it was and comes back as a row of its own. That row is
+    # keyed on the UID AND the morning it came from, so the next move of the
+    # same meeting lands on it instead of making a second copy.
+    def place_occurrence(agenda, email, invite)
+      series = existing_series(agenda.user, invite[:uid])
+      on = invite[:occurrence].in_time_zone(agenda.user.timezone).to_date
+      series&.add_excluded_date!(on)
+
+      placed = place_row(agenda, email, invite, "#{invite[:uid]}##{on}")
+      # The strike-off above is a change to the day even when nothing was
+      # written, which is exactly the cancelled case.
+      series&.agenda&.broadcast! if placed.nil?
+      placed
+    end
+
+    # The whole series called off. A soft delete would leave a cancelled row
+    # repeating down the calendar forever, so this is the one place an invite
+    # removes something outright.
+    def call_off(series)
+      agenda = series.agenda
+      series.destroy
+      agenda.broadcast!
+      nil
+    end
+
     def attrs(email, invite, item)
-      attendees = attendees_for(email, invite)
       {
         kind:     :event,
         name:     invite[:summary].presence || email.subject.presence || "Invitation",
@@ -121,24 +232,31 @@ module Emails
         # Only what this invite says, over whatever the row said before. The
         # guest list on a reschedule is the authoritative one, and a dropped
         # interviewer has to actually disappear.
-        metadata: item.metadata.to_h.merge(
-          "attendees"     => attendees,
-          "organizer"     => invite[:organizer],
-          "self_response" => self_response(attendees),
-          "invite"        => {
-            "uid"          => invite[:uid],
-            "sequence"     => invite[:sequence],
-            "method"       => invite[:method],
-            "email_id"     => email.id,
-            # Two addresses, because they are not always the same one. The
-            # organizer's calendar matches a reply by the attendee it invited -
-            # which can be the Gmail address, a domain nothing here is allowed
-            # to send mail as. So the answer says who it is FROM separately,
-            # and `Emails::InviteReply` puts that in SENT-BY.
-            "replying_as"  => ours(email).first,
-            "sending_from" => email.reply_from,
-          }.compact,
-        ),
+        metadata: item.metadata.to_h.merge(invite_metadata(email, invite)),
+      }
+    end
+
+    # What a row or a series remembers about the invitation behind it: who is
+    # coming, and the handle a reschedule or an answer lands on.
+    def invite_metadata(email, invite)
+      attendees = attendees_for(email, invite)
+      {
+        "attendees"     => attendees,
+        "organizer"     => invite[:organizer],
+        "self_response" => self_response(attendees),
+        "invite"        => {
+          "uid"          => invite[:uid],
+          "sequence"     => invite[:sequence],
+          "method"       => invite[:method],
+          "email_id"     => email.id,
+          # Two addresses, because they are not always the same one. The
+          # organizer's calendar matches a reply by the attendee it invited -
+          # which can be the Gmail address, a domain nothing here is allowed
+          # to send mail as. So the answer says who it is FROM separately,
+          # and `Emails::InviteReply` puts that in SENT-BY.
+          "replying_as"  => ours(email).first,
+          "sending_from" => email.reply_from,
+        }.compact,
       }
     end
 

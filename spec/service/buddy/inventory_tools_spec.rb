@@ -80,6 +80,53 @@ RSpec.describe "Buddy inventory tools" do
       bags = Box.where(user: user).detect { |b| b.name == "Sleeping Bags" }
       expect(bags.hierarchy).to eq("Garage > Attic Bin > Sleeping Bags")
     end
+
+    # A turn confirms every call before it runs any of them, so a box one call
+    # makes isn't there yet when the next call is checked.
+    it "makes a whole setup described at once, checked together and then run in order", :aggregate_failures do
+      calls = [
+        { item: "Black Nails", inside: "Desk > Tool Drawer", make_boxes: true },
+        { item: "Wire Clips", inside: "Desk > Tool Drawer", notes: "4", make_boxes: true },
+        { item: "Mini Kobalt Toolbox", inside: "Desk > Tool Drawer", make_boxes: true },
+        { item: "Blue Marker", inside: "Desk > Tool Drawer > Mini Kobalt Toolbox > Top Drawer", make_boxes: true },
+        { item: "Pencil", inside: "Desk > Tool Drawer > Mini Kobalt Toolbox > Top Drawer", make_boxes: true },
+        { item: "Mini Tape Measure", inside: "Desk > Tool Drawer > Mini Kobalt Toolbox > Bottom Drawer", make_boxes: true },
+      ]
+      tool = Buddy::Tools[:add_inventory_item]
+      confirmed = calls.map { |payload| payload.merge(tool[:confirm].call(payload, ctx)[:resolved]) }
+      results = confirmed.map { |payload| tool[:execute].call(payload, ctx) }
+
+      filed = Box.where(user: user).index_by(&:hierarchy)
+      expect(filed.keys).to include(
+        "Desk > Tool Drawer > Black Nails",
+        "Desk > Tool Drawer > Wire Clips",
+        "Desk > Tool Drawer > Mini Kobalt Toolbox > Top Drawer > Blue Marker",
+        "Desk > Tool Drawer > Mini Kobalt Toolbox > Top Drawer > Pencil",
+        "Desk > Tool Drawer > Mini Kobalt Toolbox > Bottom Drawer > Mini Tape Measure",
+      )
+      expect(Box.where(user: user, name: %w[Desk Tool\ Drawer Mini\ Kobalt\ Toolbox Top\ Drawer]).count).to eq(4)
+      expect(filed["Desk > Tool Drawer > Wire Clips"].notes).to eq("4")
+      expect(results.first[:made]).to eq(["Desk", "Tool Drawer"])
+      expect(results.second[:made]).to be_empty
+    end
+
+    it "walks a path down through each box, so a drawer is the one in the box named before it" do
+      desk = create(:box, user: user, name: "Desk")
+      create(:box, user: user, name: "Top Drawer", parent: desk)
+      toolbox = create(:box, user: user, name: "Toolbox", parent: garage)
+      drawer = create(:box, user: user, name: "Top Drawer", parent: toolbox)
+
+      run(:add_inventory_item, { item: "Pencil", inside: "Garage > Toolbox > Top Drawer" })
+
+      expect(Box.where(user: user).find_by(name: "Pencil").parent_key).to eq(drawer.param_key)
+    end
+
+    it "names the missing step of a path when it isn't asked to make it" do
+      expect {
+        run(:add_inventory_item, { item: "Skis", inside: "Garage > Ski Locker" })
+      }.to raise_error(/no "Ski Locker" inside Garage/)
+      expect(Box.where(user: user, name: "Skis")).to be_empty
+    end
   end
 
   describe "edit_inventory_item" do

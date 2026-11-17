@@ -5,6 +5,8 @@
 // search — and the table, the totals and the category bars all have to move
 // with it. Re-rendering the canvas alone would leave four numbers on screen
 // describing a different set of rows than the chart above them.
+import { registerBrokenAxis } from "../support/broken_axis.js"
+
 $(document).ready(function() {
   if ($(".ctr-system.act-banking").length == 0) { return }
 
@@ -273,9 +275,15 @@ $(document).ready(function() {
         },
         scales: {
           y: {
+            type: "broken",
             stacked: true,
             beginAtZero: true,
-            ticks: { color: "#C9D1D9", callback: function(v) { return unit + v } },
+            ticks: {
+              color: "#C9D1D9",
+              callback: function(v) {
+                return unit + Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
+              },
+            },
             grid: { color: "rgba(255,255,255,0.05)" },
           },
           x: {
@@ -299,5 +307,6 @@ $(document).ready(function() {
   // category PICKER and has to list every category the rest of the search
   // allows, including the ones this chart is not showing.
   setEmpty(payload.message || null)
+  registerBrokenAxis()
   if ((payload.datasets || []).length) { new Chart(canvas, build()) }
 })

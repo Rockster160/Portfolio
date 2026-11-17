@@ -3226,6 +3226,48 @@ BUDDY_EDGE_PROBES = [
       )
     },
   },
+  # A drawer and a toolbox described as they were being set up, none of it
+  # filed yet.
+  {
+    case:  "prod 11241",
+    say:   "Inventory, put Black Nails in Desk > Tool Drawer\n" \
+           "Also put in measuring tape, level, AA Batteries, wire clips x4\n\n" \
+           "Then inside that same drawer, should be \"Mini Kobalt Toolbox\"\n" \
+           "With top drawer: blue marker, box cutter knife, pencil\n" \
+           "Bottom drawer: Mini tape measure x2, flathead screwdriver",
+    tool:  :add_inventory_item,
+    args:  { add_inventory_item: { inside: /\ADesk\s*>\s*Tool Drawer/i, make_boxes: true } },
+    avoid: %i[add_list_item search_inventory],
+    note:  "asked for the existing box names rather than make the desk drawer they were describing",
+  },
+  # Told outright to make them, after refusing once.
+  {
+    case:  "prod 11243",
+    say:   "Those should be created if they don't already exist.",
+    tool:  :add_inventory_item,
+    args:  { add_inventory_item: { inside: /Tool Drawer/i, make_boxes: true } },
+    avoid: %i[search_inventory],
+    note:  "made only Desk, then asked again for existing box names - every other call failed its check",
+    seed:  ->(user, convo) {
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :outbound,
+        state:     :sent,
+        body:      "Inventory, put Black Nails in Desk > Tool Drawer\nAlso put in measuring tape and a level\n\n" \
+                   "Then inside that same drawer, should be \"Mini Kobalt Toolbox\"\n" \
+                   "With top drawer: blue marker, pencil",
+      )
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :sent,
+        metadata:  { "kind" => "buddy", "opened_tools" => ["add_inventory_item", "search_inventory"] },
+        body:      "I need the exact box name that already exists before I can file those into inventory. " \
+                   "`Desk > Tool Drawer` and `Mini Kobalt Toolbox` might be right, but I'd rather not invent a " \
+                   "shelf and have you go hunting for it later.",
+      )
+    },
+  },
   # The board and the message were both in the sentence.
   {
     case:  "prod 11121",

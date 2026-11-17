@@ -5,7 +5,6 @@
 #  id               :integer          not null, primary key
 #  auth             :string
 #  channel          :string           default("jarvis"), not null
-#  device_id        :string
 #  endpoint         :string
 #  endpoint_changes :integer          default(0), not null
 #  p256dh           :string
@@ -14,6 +13,7 @@
 #  sub_auth         :string
 #  created_at       :datetime         not null
 #  updated_at       :datetime         not null
+#  device_id        :string
 #  user_id          :integer
 #
 
