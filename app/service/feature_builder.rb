@@ -121,6 +121,7 @@ module FeatureBuilder
     request:,
     feature_request: nil,
     title: nil,
+    kind: :feature,
     attachment_signed_ids: [])
     build = FeatureBuild.create!(
       user:              user,
@@ -128,6 +129,7 @@ module FeatureBuilder
       feature_request:   feature_request,
       title:             FeatureBuild.title_for(title.presence || request),
       request:           request,
+      kind:              kind,
     )
     blobs = blobs_for(attachment_signed_ids)
     build.images.attach(blobs) if blobs.any?
@@ -617,9 +619,12 @@ module FeatureBuilder
   end
 
   # A builder is planning until it has posted its ticket, and building after.
+  # An audit is auditing throughout.
   def kind_of(session, conversations, builds={})
     if session["kind"].to_s == "builder"
       build = builds[session["build_id"].to_i]
+      return :audit if build&.kind_audit?
+
       return build && build.planned_at.nil? ? :planning : :builder
     end
     return :questions if session["kind"].to_s == "questions"

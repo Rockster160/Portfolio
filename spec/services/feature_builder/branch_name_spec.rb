@@ -17,6 +17,14 @@ RSpec.describe FeatureBuilder::BranchName do
     )
   end
 
+  it "names an audit's branch for what it is, without asking the model" do
+    allow(Buddy::GPT::Client).to receive(:new)
+    build.update!(kind: :audit)
+
+    expect(described_class.for(build)).to eq("audit")
+    expect(Buddy::GPT::Client).not_to have_received(:new)
+  end
+
   it "uses the model's name for the request" do
     answering("dynamic-pwas")
 

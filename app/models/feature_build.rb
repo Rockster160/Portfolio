@@ -12,6 +12,7 @@
 #  feedback             :jsonb            not null
 #  finished_at          :datetime
 #  held                 :boolean          default(FALSE), not null
+#  kind                 :integer          default(0), not null
 #  landing_at           :datetime
 #  merge_sha            :string
 #  planned_at           :datetime
@@ -62,6 +63,11 @@ class FeatureBuild < ApplicationRecord
   # `planned_at` is when the session first posted its ticket (`builder-pr plan`).
   enum :status, { starting: 0, running: 1, stopped: 2, finished: 3, failed: 4 }, prefix: :status
 
+  # feature    `/feature`: build what was asked
+  # audit      `/audit`: read the recent traffic, then fix what it turns up
+  #            (FeatureBuilder::Audit)
+  enum :kind, { feature: 0, audit: 1 }, prefix: :kind
+
   validates :title, :request, presence: true
 
   scope :newest,     -> { order(created_at: :desc) }
@@ -89,11 +95,11 @@ class FeatureBuild < ApplicationRecord
 
     case status.to_sym
     when :starting
-      "Starting a Feature Builder on the Mini for **#{full_title}**#{images_note}… " \
-        "#{link_markdown}"
+      what = kind_audit? ? "an audit" : "a Feature Builder"
+      "Starting #{what} on the Mini for **#{full_title}**#{images_note}… #{link_markdown}"
     when :failed
       "Couldn't start the Feature Builder for **#{full_title}**: #{error} #{link_markdown}"
-    else "Building **#{full_title}** on the Mini. #{link_markdown}"
+    else "#{kind_audit? ? "Running" : "Building"} **#{full_title}** on the Mini. #{link_markdown}"
     end
   end
 

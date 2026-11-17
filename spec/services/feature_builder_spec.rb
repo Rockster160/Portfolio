@@ -101,6 +101,19 @@ RSpec.describe FeatureBuilder do
 
       expect(chip.call.name).to eq("Building…")
     end
+
+    it "says an audit is auditing, before its ticket and after" do
+      build.update!(kind: :audit)
+      described_class.report_sessions!(machine: :mini, sessions: [
+        { "build_id" => build.id, "kind" => "builder", "working" => true },
+      ])
+      chip = -> { BackgroundProcess.live_find(user, described_class::CHIP_KEY) }
+      expect(chip.call.name).to eq("Auditing…")
+
+      described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 })
+
+      expect(chip.call.name).to eq("Auditing…")
+    end
   end
 
   describe "a turn that ends waiting on the owner" do
