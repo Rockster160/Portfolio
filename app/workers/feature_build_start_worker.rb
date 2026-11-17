@@ -28,5 +28,6 @@ class FeatureBuildStartWorker
 
     build.update!(status: :failed, error: "the Mini didn't answer, so nothing was started.")
     FeatureBuilder.repaint!(build)
+    FeatureBuilder.refresh_looks!(build.user)
   end
 end

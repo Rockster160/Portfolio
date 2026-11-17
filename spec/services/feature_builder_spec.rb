@@ -853,8 +853,10 @@ RSpec.describe FeatureBuilder do
     end
   end
 
-  describe "the pet's look while a build works" do
-    let(:look) { -> { BuddyAlert.open_for(user, described_class::LOOK_KEY) } }
+  describe "the pet's looks while builds are going" do
+    def look(state)
+      BuddyAlert.open_for(user, described_class::LOOKS.dig(state, :key))
+    end
 
     def report(**session)
       described_class.report_sessions!(machine: :mini, sessions: [
@@ -862,34 +864,63 @@ RSpec.describe FeatureBuilder do
       ])
     end
 
+    def running!
+      build.update!(status: :running)
+    end
+
     before { thread }
 
+    it "is at the laptop from the moment a build is asked for" do
+      expect(build).to be_status_starting
+      expect(look(:building)).to be_present
+      expect(look(:building).expression).to eq("working")
+    end
+
+    it "keeps working until the Mini's report says otherwise" do
+      report(working: true)
+      running!
+      described_class.refresh_needs_you!(user)
+
+      expect(look(:building)).to be_present
+    end
+
+    it "lets go of it when the Mini couldn't start the build" do
+      build
+      allow(ByteLocal).to receive(:builder).and_return(false)
+      allow(FeatureBuilder::BranchName).to receive(:for).and_return("byte/1-dark-mode")
+      FeatureBuildStartWorker.new.perform(build.id)
+
+      expect(look(:building)).to be_nil
+    end
+
     it "holds the working face, low, while a builder is working" do
+      running!
       report(working: true)
 
-      expect(look.call).to be_present
-      expect(look.call.expression).to eq("working")
-      expect(look.call.face_for(:byte)).to eq("working")
-      expect(look.call.strength).to eq(described_class::LOOK_STRENGTH)
-      expect(look.call.strength).to be < Buddy::FaceStrength::MOOD
-      expect(look.call.groups).to be_blank
+      expect(look(:building).face_for(:byte)).to eq("working")
+      expect(look(:building).strength).to eq(20)
+      expect(look(:building).strength).to be < Buddy::FaceStrength::MOOD
+      expect(look(:building).groups).to be_blank
     end
 
     it "lets go once the build stops working" do
+      running!
       report(working: true)
       report(working: false)
 
-      expect(look.call).to be_nil
+      expect(look(:building)).to be_nil
     end
 
     it "lets go once the build leaves the report" do
+      running!
       report(working: true)
       described_class.report_sessions!(machine: :mini, sessions: [])
 
-      expect(look.call).to be_nil
+      expect(look(:building)).to be_nil
     end
 
     it "sends nothing new when the report hasn't changed" do
+      running!
       report(working: true)
       allow(Buddy::Alerts).to receive(:broadcast_outstanding!)
 
@@ -899,12 +930,61 @@ RSpec.describe FeatureBuilder do
     end
 
     it "isn't worn for a Claude session that isn't a build" do
+      build.update!(status: :finished)
       described_class.report_sessions!(machine: :mini, sessions: [
         { "conversation_id" => thread.id, "kind" => "claude", "working" => true },
         { "kind" => "questions", "working" => true },
       ])
 
-      expect(look.call).to be_nil
+      expect(BuddyAlert.status_open.where(user: user, key: described_class::LOOK_KEYS)).to be_empty
+    end
+
+    it "thinks, a little stronger than working, while a build is asking something" do
+      running!
+      report(working: false)
+
+      expect(look(:asking).expression).to eq("thinking")
+      expect(look(:asking).strength).to be > described_class::LOOKS.dig(:building, :strength)
+      expect(look(:asking).strength).to be < Buddy::FaceStrength::MOOD
+    end
+
+    it "stops thinking once the question is answered" do
+      running!
+      report(working: false)
+      build.update!(question: "1. Which one?", asked_at: Time.current)
+      allow(ByteLocal).to receive(:builder).and_return(true)
+
+      described_class.answer!(build, "the first")
+      report(working: true)
+
+      expect(look(:asking)).to be_nil
+      expect(look(:building)).to be_present
+    end
+
+    it "looks pleased, weaker than the others, while a PR waits on a review" do
+      running!
+      build.update!(pr_url: "https://github.com/x/pull/42", pr_number: 42)
+      report(working: false)
+
+      expect(look(:reviewed).expression).to eq("accomplished")
+      expect(look(:reviewed).face_for(:byte)).to eq("thumbs_up")
+      expect(look(:reviewed).strength).to be < described_class::LOOKS.dig(:building, :strength)
+      expect(look(:asking)).to be_nil
+    end
+
+    it "lets the PR go once it's approved, and once it's finished" do
+      running!
+      build.update!(pr_url: "https://github.com/x/pull/42", pr_number: 42)
+      report(working: false)
+
+      MergeQueue.approve!(build)
+      expect(look(:reviewed)).to be_nil
+
+      MergeQueue.unapprove!(build)
+      expect(look(:reviewed)).to be_present
+
+      described_class.finished!(build, merged: true)
+      expect(look(:reviewed)).to be_nil
     end
   end
 end

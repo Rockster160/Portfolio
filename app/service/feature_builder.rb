@@ -44,12 +44,17 @@ module FeatureBuilder
   # Raised while any build has a question or a PR waiting on its owner.
   NEEDS_YOU_KEY = :"mini:needs_you"
 
-  # The look a builder's owner's own pet holds while that build is working: at
-  # the laptop. Low, so a mood in a reply or an alert shows over it and the pet
-  # comes back to it when idle.
-  LOOK_KEY = :"mini:building"
-  LOOK_FACE = :working
-  LOOK_STRENGTH = 20
+  # The looks a builder's owner's own pet holds while their builds are in each
+  # state: at the laptop while one works, thinking while one is asking them
+  # something, pleased with the job while a PR waits on their review. All low,
+  # so a mood in a reply or an alert shows over them and the pet comes back to
+  # them when idle. Asking outranks working, and a PR gives way to both.
+  LOOKS = {
+    building: { key: :"mini:building", face: :working,      strength: 20 },
+    asking:   { key: :"mini:asking",   face: :thinking,     strength: 25 },
+    reviewed: { key: :"mini:pr_ready", face: :accomplished, strength: 15 },
+  }.freeze
+  LOOK_KEYS = LOOKS.values.pluck(:key).freeze
 
   # The request, posted as the person's own message.
   REQUEST_KIND = :feature_request
@@ -131,6 +136,7 @@ module FeatureBuilder
       message = say(conversation, build.status_line, feature_build_id: build.id)
       build.update!(byte_message: message)
     end
+    refresh_looks!(user)
     FeatureBuildStartWorker.perform_async(build.id)
     build
   end
@@ -580,7 +586,7 @@ module FeatureBuilder
 
   def report_sessions!(machine:, sessions:)
     listed = Array(sessions).map { |session| session.to_h.stringify_keys.slice(*SESSION_FIELDS) }
-    DataStorage[storage_key(machine)] = { reported_at: Time.current.iso8601, sessions: listed }
+    DataStorage[storage_key(machine)] = { reported_at: Time.current.iso8601(6), sessions: listed }
     if machine.to_s == "mini"
       answered_elsewhere!(listed)
       refresh_chip!(User.me)
@@ -592,10 +598,9 @@ module FeatureBuilder
 
   # What the Mini last said is running, or nothing once that report is stale.
   def sessions(machine: :mini)
-    stored = DataStorage[storage_key(machine)].to_h.with_indifferent_access
-    at = Time.zone.parse(stored[:reported_at].to_s) if stored[:reported_at].present?
-    return [] if at.nil? || at < REPORT_STALE_AFTER.ago
+    return [] if sessions_reported_at(machine: machine).nil?
 
+    stored = DataStorage[storage_key(machine)].to_h.with_indifferent_access
     Array(stored[:sessions]).map { |session| session.to_h.stringify_keys }
   end
 
@@ -661,25 +666,66 @@ module FeatureBuilder
     )
   end
 
-  # Held on the owner of every build with a working session, and let go of
-  # for everyone else. Holding an unchanged look again sends nothing.
+  # Every owner of an unfinished build, and everyone still wearing one of the
+  # looks, has theirs worked out again.
   def refresh_look!
-    ids = sessions.select { |session| session["working"] && session["kind"].to_s == "builder" }
-    ids = ids.filter_map { |session| session["build_id"]&.to_i }
-    owner_ids = FeatureBuild.where(id: ids).distinct.pluck(:user_id)
+    owner_ids = FeatureBuild.unfinished.distinct.pluck(:user_id)
+    owner_ids |= BuddyAlert.status_open.where(key: LOOK_KEYS).distinct.pluck(:user_id)
+    User.where(id: owner_ids).find_each { |user| refresh_looks!(user) }
+  end
 
-    User.where(id: owner_ids).find_each do |user|
-      Buddy::Alerts.hold!(
-        user:       user,
-        key:        LOOK_KEY,
-        body:       nil,
-        expression: LOOK_FACE,
-        strength:   LOOK_STRENGTH,
-      )
+  # Holds each look whose state one of the person's builds is in, and lets go
+  # of the rest. Holding an unchanged look again sends nothing.
+  def refresh_looks!(user)
+    states = look_states(user)
+    LOOKS.each do |state, look|
+      if states.include?(state)
+        Buddy::Alerts.hold!(
+          user:       user,
+          key:        look[:key],
+          body:       nil,
+          expression: look[:face],
+          strength:   look[:strength],
+        )
+      else
+        Buddy::Alerts.resolve!(user: user, key: look[:key])
+      end
     end
-    BuddyAlert.status_open.where(key: LOOK_KEY).where.not(user_id: owner_ids).find_each do |alert|
-      Buddy::Alerts.resolve!(user: alert.user, key: LOOK_KEY)
-    end
+  end
+
+  # The states the person's builds are in, of :building, :asking, :reviewed.
+  #
+  # A build is working while its session is, and also before the Mini has
+  # reported it at all: from the moment it's asked for, and after a change the
+  # last report predates, for as long as a report would still hold. An approved PR is the merge queue's to land, so it no
+  # longer waits on them.
+  def look_states(user)
+    builds = FeatureBuild.unfinished.where(user: user).to_a
+    return [] if builds.empty?
+
+    listed = sessions.select { |session| session["build_id"] }.index_by { |session| session["build_id"].to_i }
+    reported_at = sessions_reported_at
+    waiting = pending(user)
+    asking = waiting[:questions] | builds.select { |build| build.question.present? }
+
+    states = []
+    states << :asking if asking.any?
+    states << :reviewed if (waiting[:prs] - asking).any? { |build| build.approved_at.nil? }
+    states << :building if builds.any? { |build|
+      session = listed[build.id]
+      next session["working"] && session["kind"].to_s == "builder" if session
+      next true if build.status_starting?
+
+      build.status_running? && build.updated_at > [reported_at, REPORT_STALE_AFTER.ago].compact.max
+    }
+    states
+  end
+
+  # When the Mini last reported its sessions, while that report still holds.
+  def sessions_reported_at(machine: :mini)
+    stored = DataStorage[storage_key(machine)].to_h.with_indifferent_access
+    at = Time.zone.parse(stored[:reported_at].to_s) if stored[:reported_at].present?
+    at if at && at >= REPORT_STALE_AFTER.ago
   end
 
   # ---- waiting on the owner ----
@@ -712,9 +758,12 @@ module FeatureBuilder
     live ? "waiting on you" : build.status.humanize.downcase
   end
 
+  # The chip counting what waits on them, and the looks their pet wears for
+  # it: every change to a build that might move either comes through here.
   def refresh_needs_you!(user)
     return if user.nil?
 
+    refresh_looks!(user)
     count = pending_count(user)
     return BackgroundProcess.clear(user: user, key: NEEDS_YOU_KEY) if count.zero?
 
