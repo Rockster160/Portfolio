@@ -3,17 +3,17 @@
 # Table name: locations
 #
 #  id           :integer          not null, primary key
-#  ip           :string
+#  city         :string
 #  country_code :string
 #  country_name :string
-#  region_code  :string
-#  region_name  :string
-#  city         :string
-#  zip_code     :string
-#  time_zone    :string
+#  ip           :string
 #  latitude     :float
 #  longitude    :float
 #  metro_code   :string
+#  region_code  :string
+#  region_name  :string
+#  time_zone    :string
+#  zip_code     :string
 #
 
 class Location < ApplicationRecord

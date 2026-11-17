@@ -30,18 +30,19 @@ class ChartBuilder
       }
 
       {
-        labels:      (bucket == :none ? nil : labels),
-        datasets:    datasets,
-        time_axis:   bucket == :none,
-        chart_type:  @chart.chart_type,
-        unit:        @chart.unit,
-        metric:      @chart.metric,
-        bucket:      bucket,
-        range_label: range_label,
-        window:      window_bounds,
-        markers:     markers,
-        buckets_ms:  buckets_ms,
-        stats:       stats,
+        labels:         (bucket == :none ? nil : labels),
+        datasets:       datasets,
+        time_axis:      bucket == :none,
+        chart_type:     @chart.chart_type,
+        unit:           @chart.unit,
+        break_outliers: @chart.break_outliers,
+        metric:         @chart.metric,
+        bucket:         bucket,
+        range_label:    range_label,
+        window:         window_bounds,
+        markers:        markers,
+        buckets_ms:     buckets_ms,
+        stats:          stats,
       }
     }
   rescue ActiveRecord::StatementInvalid

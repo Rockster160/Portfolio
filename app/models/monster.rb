@@ -3,21 +3,21 @@
 # Table name: monsters
 #
 #  id           :integer          not null, primary key
-#  name         :string
-#  url          :string
-#  image_url    :string
-#  stars        :integer
-#  element      :integer
-#  archetype    :integer
-#  health       :integer
-#  attack       :integer
-#  defense      :integer
-#  speed        :integer
-#  crit_rate    :integer
-#  crit_damage  :integer
-#  resistance   :integer
 #  accuracy     :integer
+#  archetype    :integer
+#  attack       :integer
+#  crit_damage  :integer
+#  crit_rate    :integer
+#  defense      :integer
+#  element      :integer
+#  health       :integer
+#  image_url    :string
 #  last_updated :datetime
+#  name         :string
+#  resistance   :integer
+#  speed        :integer
+#  stars        :integer
+#  url          :string
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
 #

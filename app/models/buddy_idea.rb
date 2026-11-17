@@ -3,16 +3,17 @@
 # Table name: buddy_ideas
 #
 #  id              :bigint           not null, primary key
-#  user_id         :bigint           not null
-#  category        :integer
 #  body            :text             not null
-#  summary         :text
-#  status          :integer          default("active"), not null
-#  surfaced_at     :datetime
+#  category        :integer
+#  last_touched_at :datetime
 #  remind_after    :datetime
+#  status          :integer          default("active"), not null
+#  summary         :text
+#  surfaced_at     :datetime
 #  created_at      :datetime         not null
 #  updated_at      :datetime         not null
-#  last_touched_at :datetime
+#  user_id         :bigint           not null
+#
 
 #
 # LEGACY — merged into BuddyMemory (`kind: :stash`).

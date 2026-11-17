@@ -3,10 +3,10 @@
 # Table name: recipe_favorites
 #
 #  id              :integer          not null, primary key
-#  recipe_id       :integer
-#  favorited_by_id :integer
 #  created_at      :datetime         not null
 #  updated_at      :datetime         not null
+#  favorited_by_id :integer
+#  recipe_id       :integer
 #
 
 class RecipeFavorite < ApplicationRecord

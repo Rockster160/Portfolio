@@ -3,14 +3,14 @@
 # Table name: household_glossary_terms
 #
 #  id                 :bigint           not null, primary key
-#  chore_household_id :bigint
-#  term               :text             not null
-#  meaning            :text             not null
 #  aliases            :jsonb            not null
 #  kind               :integer
+#  meaning            :text             not null
 #  notes              :text
+#  term               :text             not null
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
+#  chore_household_id :bigint
 #
 class HouseholdGlossaryTerm < ApplicationRecord
   belongs_to :chore_household

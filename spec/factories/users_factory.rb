@@ -1,3 +1,22 @@
+# == Schema Information
+#
+# Table name: users
+#
+#  id                 :integer          not null, primary key
+#  buddy_features     :jsonb            not null
+#  byte_prefs         :jsonb            not null
+#  chore_notify_prefs :jsonb            not null
+#  dark_mode          :boolean
+#  email              :string
+#  invitation_token   :string
+#  password_digest    :string
+#  phone              :string
+#  role               :integer          default("standard")
+#  username           :string
+#  created_at         :datetime         not null
+#  updated_at         :datetime         not null
+#  chore_household_id :bigint
+#
 FactoryBot.define do
   factory :user do
     sequence(:email) { |n| "user#{n}@example.com" }

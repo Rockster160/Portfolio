@@ -3,13 +3,13 @@
 # Table name: monster_skills
 #
 #  id                :integer          not null, primary key
-#  monster_id        :integer
-#  name              :string
 #  description       :text
 #  muliplier_formula :string
+#  name              :string
 #  sort_order        :integer
 #  created_at        :datetime         not null
 #  updated_at        :datetime         not null
+#  monster_id        :integer
 #
 
 class MonsterSkill < ApplicationRecord

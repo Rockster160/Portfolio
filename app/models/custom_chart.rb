@@ -32,20 +32,21 @@ class CustomChart < ApplicationRecord
   CHART_TYPES   = [:bar, :line, :stacked_bar].freeze
 
   DEFAULTS = {
-    value_source: :count,
-    data_key:     nil,
-    series_key:   nil,
-    metric:       :count,
-    series_by:    :none,
-    bucket:       :month,
-    chart_type:   :bar,
-    range:        "12mo",
-    unit:         "",
-    queries:      "",
-    marker_query: "",
-    colors:       "",
-    colors_task:  "",
-    invert_sign:  false,
+    value_source:   :count,
+    data_key:       nil,
+    series_key:     nil,
+    metric:         :count,
+    series_by:      :none,
+    bucket:         :month,
+    chart_type:     :bar,
+    range:          "12mo",
+    unit:           "",
+    queries:        "",
+    marker_query:   "",
+    colors:         "",
+    colors_task:    "",
+    invert_sign:    false,
+    break_outliers: true,
   }.freeze
 
   # A symbolized, default-filled view of the jsonb config.
@@ -75,6 +76,10 @@ class CustomChart < ApplicationRecord
   # once at the value, so series split, bar heights, tooltip labels and the
   # total/average headline all agree.
   def invert_sign = ::ActiveModel::Type::Boolean.new.cast(settings[:invert_sign])
+
+  # Lets the y-axis cut out the empty stretch below a few far-off values, so one
+  # huge month doesn't flatten every other bar into the baseline.
+  def break_outliers = ::ActiveModel::Type::Boolean.new.cast(settings[:break_outliers])
 
   # Name of a Jil `function()::Hash` task returning { "Series label" => "#hex" }.
   # Lets a chart whose series come from a maintained vocabulary follow that

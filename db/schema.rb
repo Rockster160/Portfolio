@@ -10,10 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_13_161725) do
+ActiveRecord::Schema[8.0].define(version: 2026_11_13_161725) do
   # These are extensions that must be enabled in order to support this database
+  enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
-  enable_extension "plpgsql"
   enable_extension "uuid-ossp"
 
   create_table "action_events", id: :serial, force: :cascade do |t|

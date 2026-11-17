@@ -3,19 +3,19 @@
 # Table name: users
 #
 #  id                 :integer          not null, primary key
-#  username           :string
-#  password_digest    :string
-#  created_at         :datetime         not null
-#  updated_at         :datetime         not null
-#  phone              :string
-#  invitation_token   :string
-#  role               :integer          default("standard")
-#  dark_mode          :boolean
-#  email              :string
-#  chore_household_id :bigint
-#  chore_notify_prefs :jsonb            not null
 #  buddy_features     :jsonb            not null
 #  byte_prefs         :jsonb            not null
+#  chore_notify_prefs :jsonb            not null
+#  dark_mode          :boolean
+#  email              :string
+#  invitation_token   :string
+#  password_digest    :string
+#  phone              :string
+#  role               :integer          default("standard")
+#  username           :string
+#  created_at         :datetime         not null
+#  updated_at         :datetime         not null
+#  chore_household_id :bigint
 #
 
 # Should have `invited_at` and `invited_by`

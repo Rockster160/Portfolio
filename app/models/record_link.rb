@@ -3,21 +3,21 @@
 # Table name: record_links
 #
 #  id                 :bigint           not null, primary key
-#  user_id            :bigint           not null
+#  ask_who            :boolean          default(FALSE), not null
+#  enabled            :boolean          default(TRUE), not null
+#  note               :text
+#  reverse            :boolean          default(FALSE), not null
 #  source_kind        :integer          not null
 #  source_name        :text             not null
-#  source_scope       :text
 #  source_name_match  :integer          default("exactly"), not null
+#  source_scope       :text
 #  source_scope_match :integer          default("exactly"), not null
 #  target_kind        :integer          not null
 #  target_name        :text             not null
 #  target_scope       :text
-#  ask_who            :boolean          default(FALSE), not null
-#  reverse            :boolean          default(FALSE), not null
-#  enabled            :boolean          default(TRUE), not null
-#  note               :text
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
+#  user_id            :bigint           not null
 #
 class RecordLink < ApplicationRecord
   belongs_to :user

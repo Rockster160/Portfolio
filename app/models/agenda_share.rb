@@ -3,7 +3,7 @@
 # Table name: agenda_shares
 #
 #  id         :bigint           not null, primary key
-#  permission :integer          default("editor"), not null
+#  permission :integer          default("viewer"), not null
 #  created_at :datetime         not null
 #  updated_at :datetime         not null
 #  agenda_id  :bigint           not null

@@ -5,6 +5,7 @@
 #  id                  :bigint           not null, primary key
 #  aliases             :jsonb            not null
 #  archived_at         :datetime
+#  dismissed_until     :date
 #  hot_eligibility     :integer          default("when_available"), not null
 #  icon                :text
 #  marked_due_at       :datetime
@@ -20,12 +21,11 @@
 #  show_on_today_view  :integer          default("when_scheduled"), not null
 #  sort_order          :integer
 #  starts_on           :date
+#  tags                :text             default([]), not null, is an Array
 #  target_count        :integer          default(1), not null
 #  threshold_seconds   :integer
 #  who_did_it          :jsonb            not null
 #  created_at          :datetime         not null
-#  dismissed_until     :date
-#  tags                :text             default([]), not null, is an Array
 #  updated_at          :datetime         not null
 #  assigned_to_user_id :bigint
 #  chore_household_id  :bigint           not null

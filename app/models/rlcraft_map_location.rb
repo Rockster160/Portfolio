@@ -3,11 +3,11 @@
 # Table name: rlcraft_map_locations
 #
 #  id            :integer          not null, primary key
+#  description   :string
+#  location_type :string
+#  title         :string
 #  x_coord       :integer
 #  y_coord       :integer
-#  title         :string
-#  location_type :string
-#  description   :string
 #  created_at    :datetime         not null
 #  updated_at    :datetime         not null
 #

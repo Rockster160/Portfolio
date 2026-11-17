@@ -1,3 +1,28 @@
+# == Schema Information
+#
+# Table name: tasks
+#
+#  id              :bigint           not null, primary key
+#  archived_at     :datetime
+#  buddy_enabled   :boolean          default(FALSE), not null
+#  code            :text
+#  cron            :text
+#  description     :text
+#  enabled         :boolean          default(TRUE)
+#  last_status     :integer
+#  last_trigger_at :datetime
+#  listener        :text
+#  name            :text
+#  next_trigger_at :datetime
+#  short_key       :text
+#  sort_order      :integer
+#  tree_order      :integer
+#  uuid            :uuid
+#  created_at      :datetime         not null
+#  updated_at      :datetime         not null
+#  task_folder_id  :bigint
+#  user_id         :bigint
+#
 FactoryBot.define do
   factory :task do
     user

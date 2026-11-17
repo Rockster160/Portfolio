@@ -3,6 +3,9 @@
 # Table name: timer_pages
 #
 #  id          :bigint           not null, primary key
+#  icon        :string
+#  icon_color  :string
+#  icon_png    :binary
 #  layout_mode :integer          default("auto"), not null
 #  meta        :jsonb            not null
 #  name        :text             default(""), not null

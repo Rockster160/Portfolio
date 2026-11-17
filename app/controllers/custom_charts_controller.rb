@@ -93,6 +93,7 @@ class CustomChartsController < ApplicationController
         :colors,
         :colors_task,
         :invert_sign,
+        :break_outliers,
       ],
     )
     permitted[:config] = permitted[:config].to_h if permitted[:config].present?

@@ -175,6 +175,42 @@ RSpec.describe Emails::CalendarInvite do
       .to be_nil
   end
 
+  # EVERY Exchange invite carries RRULEs that are nothing to do with the
+  # meeting: each VTIMEZONE block above the event states when a daylight-saving
+  # rule began. Read as the event's own, a one-off catch-up would repeat on the
+  # first Sunday in November for the rest of time.
+  it "takes no repeat rule from the time zone blocks above the event" do
+    with_zone_rule = outlook.sub(
+      "DTSTART:16010101T020000",
+      "DTSTART:16010101T020000\r\nRRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=1SU;BYMONTH=11",
+    )
+
+    expect(described_class.parse(with_zone_rule)[:recurrence]).to be_nil
+  end
+
+  it "reads the repeat rule the meeting states, and the dates struck off it" do
+    invite = described_class.parse(
+      outlook.sub(
+        "BEGIN:VEVENT",
+        "BEGIN:VEVENT\r\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE\r\n" \
+        "EXDATE;TZID=Eastern Standard Time:20261104T133000",
+      ),
+    )
+
+    expect(invite[:recurrence]).to eq(
+      ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE", "EXDATE;TZID=Eastern Standard Time:20261104T133000"],
+    )
+  end
+
+  # Which morning of the series this one is about.
+  it "reads the occurrence a single instance replaces" do
+    invite = described_class.parse(
+      outlook.sub("BEGIN:VEVENT", "BEGIN:VEVENT\r\nRECURRENCE-ID:20261027T173000Z"),
+    )
+
+    expect(invite[:occurrence]).to eq(Time.utc(2026, 10, 27, 17, 30))
+  end
+
   it "keeps no guest there is no way to reach" do
     invite = described_class.parse(outlook.sub("BEGIN:VEVENT", "BEGIN:VEVENT\r\nATTENDEE;CN=Big Room:mailto:"))
 
