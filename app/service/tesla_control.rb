@@ -58,13 +58,16 @@ class TeslaControl
     raise
   end
 
+  # Tesla's only trunk command is a toggle, so an explicit open or close reads
+  # the car first and leaves it alone when it's already there. Returns
+  # :already in that case, so a caller can say so instead of claiming it moved.
   def pop_boot(direction=:toggle)
     direction = parse_to(direction, :open, :close)
     return proxy_command(:actuate_trunk, which_trunk: :rear) if direction == :toggle
 
-    rt_open = vehicle_data.dig(:doors, :trunk) == true
-    state = rt_open ? :open : :close
-    return if state == direction
+    state = vehicle_data.dig(:doors, :trunk)
+    raise TeslaError, "couldn't read whether the trunk is open" if state.nil?
+    return :already if open?(state) == (direction == :open)
 
     proxy_command(:actuate_trunk, which_trunk: :rear)
   end
@@ -100,6 +103,41 @@ class TeslaControl
 
   def off_car
     proxy_command(:auto_conditioning_stop)
+  end
+
+  def climate(direction=:toggle)
+    direction = parse_to(direction, :on, :off)
+    direction = vehicle_data.dig(:climate, :hvac_on) ? :off : :on if direction == :toggle
+    direction == :on ? start_car : off_car
+  end
+
+  def charging(direction=:toggle)
+    direction = parse_to(direction, :start, :stop)
+    direction = vehicle_data.dig(:charging, :active) ? :stop : :start if direction == :toggle
+    proxy_command(direction == :start ? :charge_start : :charge_stop)
+  end
+
+  def charge_port(direction)
+    direction = parse_to(direction, :open, :close)
+    proxy_command(direction == :close ? :charge_port_door_close : :charge_port_door_open)
+  end
+
+  def sentry(on)
+    proxy_command(:set_sentry_mode, on: on)
+  end
+
+  def steering_heat(on)
+    proxy_command(:remote_steering_wheel_heater_request, on: on)
+  end
+
+  # heater 0 is the driver's seat, 1 the passenger's; level 0 is off, 3 high.
+  def seat_heat(seat, level)
+    heater = seat.to_s.to_sym == :passenger ? 1 : 0
+    proxy_command(:remote_seat_heater_request, heater: heater, level: level.to_i.clamp(0, 3))
+  end
+
+  def flash_lights
+    proxy_command(:flash_lights)
   end
 
   def honk
@@ -187,11 +225,11 @@ class TeslaControl
   end
 
   def heat_driver
-    proxy_command(:remote_seat_heater_request, heater: 0, level: 3)
+    seat_heat(:driver, 3)
   end
 
   def heat_passenger
-    proxy_command(:remote_seat_heater_request, heater: 1, level: 3)
+    seat_heat(:passenger, 3)
   end
 
   def defrost(direction=true)
@@ -381,6 +419,12 @@ class TeslaControl
     }
   rescue StandardError => e
     err("command:#{cmd}", e)
+  end
+
+  # Telemetry reports a door as true/false, the endpoint poll as 0 or a
+  # non-zero position.
+  def open?(state)
+    state == true || (state.is_a?(::Numeric) && state.positive?)
   end
 
   def parse_to(val, truthy, falsy)

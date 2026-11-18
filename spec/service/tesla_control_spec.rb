@@ -207,4 +207,71 @@ RSpec.describe TeslaControl do
       end
     end
   end
+
+  describe "controls with a direction" do
+    let(:ctrl) { TeslaControl.new(User.me) }
+
+    before { allow(ctrl).to receive(:proxy_command).and_return({}) }
+
+    def car(data)
+      allow(ctrl).to receive(:vehicle_data).and_return(data)
+    end
+
+    it "closes an open trunk and leaves a closed one alone" do
+      car(doors: { trunk: true })
+      ctrl.pop_boot(:close)
+      expect(ctrl).to have_received(:proxy_command).with(:actuate_trunk, which_trunk: :rear).once
+
+      car(doors: { trunk: false })
+      expect(ctrl.pop_boot(:close)).to eq(:already)
+      expect(ctrl).to have_received(:proxy_command).once
+    end
+
+    it "reads the endpoint poll's numeric trunk position as open" do
+      car(doors: { trunk: 1 })
+      expect(ctrl.pop_boot(:open)).to eq(:already)
+      car(doors: { trunk: 0 })
+      ctrl.pop_boot(:open)
+      expect(ctrl).to have_received(:proxy_command).with(:actuate_trunk, which_trunk: :rear)
+    end
+
+    it "refuses to guess when it can't tell where the trunk is" do
+      car({})
+      expect { ctrl.pop_boot(:close) }.to raise_error(TeslaError)
+      expect(ctrl).not_to have_received(:proxy_command)
+    end
+
+    it "toggles the trunk without reading the car" do
+      expect(ctrl).not_to receive(:vehicle_data)
+      ctrl.pop_boot(:toggle)
+      expect(ctrl).to have_received(:proxy_command).with(:actuate_trunk, which_trunk: :rear)
+    end
+
+    it "toggles climate and charging from what the car reports" do
+      car(climate: { hvac_on: true }, charging: { active: false })
+      ctrl.climate(:toggle)
+      ctrl.charging(:toggle)
+      expect(ctrl).to have_received(:proxy_command).with(:auto_conditioning_stop)
+      expect(ctrl).to have_received(:proxy_command).with(:charge_start)
+    end
+
+    it "sends each switch as the car expects it" do
+      ctrl.climate(:on)
+      ctrl.charging(:stop)
+      ctrl.charge_port(:close)
+      ctrl.charge_port(:open)
+      ctrl.sentry(true)
+      ctrl.steering_heat(false)
+      ctrl.seat_heat(:passenger, 2)
+      ctrl.seat_heat(:driver, 9)
+      expect(ctrl).to have_received(:proxy_command).with(:auto_conditioning_start)
+      expect(ctrl).to have_received(:proxy_command).with(:charge_stop)
+      expect(ctrl).to have_received(:proxy_command).with(:charge_port_door_close)
+      expect(ctrl).to have_received(:proxy_command).with(:charge_port_door_open)
+      expect(ctrl).to have_received(:proxy_command).with(:set_sentry_mode, on: true)
+      expect(ctrl).to have_received(:proxy_command).with(:remote_steering_wheel_heater_request, on: false)
+      expect(ctrl).to have_received(:proxy_command).with(:remote_seat_heater_request, heater: 1, level: 2)
+      expect(ctrl).to have_received(:proxy_command).with(:remote_seat_heater_request, heater: 0, level: 3)
+    end
+  end
 end

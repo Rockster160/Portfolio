@@ -148,7 +148,7 @@ RSpec.describe Jarvis do
   context "with car" do
     address = "123 fake street"
     actions = {
-      start_car:  {
+      start_car:     {
         res:  "Starting car",
         opts: [
           "start climate",
@@ -158,7 +158,7 @@ RSpec.describe Jarvis do
           "car on",
         ],
       },
-      off_car:    {
+      off_car:       {
         res:  "Stopping car",
         opts: [
           "stop the car",
@@ -166,7 +166,7 @@ RSpec.describe Jarvis do
           "car off",
         ],
       },
-      honk:       {
+      honk:          {
         res:  "Honking the horn",
         opts: [
           "honk the horn",
@@ -175,7 +175,7 @@ RSpec.describe Jarvis do
           "horn",
         ],
       },
-      defrost:    {
+      defrost:       {
         others: [:start_car, [:set_temp, 82], :heat_driver, :heat_passenger],
         res:    "Defrosting the car",
         opts:   [
@@ -183,7 +183,7 @@ RSpec.describe Jarvis do
           "defrost",
         ],
       },
-      doors:      {
+      doors:         {
         res:  "Unlocking car doors",
         opts: [
           "unlock my car",
@@ -191,7 +191,7 @@ RSpec.describe Jarvis do
           "unlock doors",
         ],
       },
-      windows:    {
+      windows:       {
         res:  "Opening car windows",
         opts: [
           "vent",
@@ -200,7 +200,7 @@ RSpec.describe Jarvis do
           "open windows",
         ],
       },
-      pop_boot:   {
+      pop_boot:      {
         res:  "Popping the boot",
         opts: [
           "boot",
@@ -209,7 +209,7 @@ RSpec.describe Jarvis do
           "Open the car trunk!",
         ],
       },
-      x_pop_boot: { # x_ allows multiple keys at the same time
+      x_pop_boot:    { # x_ allows multiple keys at the same time
         res:  "Closing the boot",
         opts: [
           "close boot",
@@ -217,7 +217,54 @@ RSpec.describe Jarvis do
           "close the trunk",
         ],
       },
-      pop_frunk:  {
+      sentry:        {
+        res:  "Turning sentry mode on",
+        opts: [
+          "sentry on",
+          "turn on sentry",
+          "turn sentry mode on",
+        ],
+      },
+      x_sentry:      {
+        res:  "Turning sentry mode off",
+        opts: [
+          "sentry off",
+          "turn off sentry mode",
+        ],
+      },
+      charge_port:   {
+        res:  "Opening the charge port",
+        opts: [
+          "open the charge port",
+          "open charge port",
+        ],
+      },
+      x_charge_port: {
+        res:  "Closing the charge port",
+        opts: [
+          "close the charge port",
+        ],
+      },
+      charging:      {
+        res:  "Stopping charging",
+        opts: [
+          "stop charging the car",
+          "car stop charging",
+        ],
+      },
+      steering_heat: {
+        res:  "Turning steering wheel heat on",
+        opts: [
+          "turn on the car steering wheel heat",
+        ],
+      },
+      seat_heat:     {
+        res:  "Turning off passenger seat heater",
+        opts: [
+          "turn off the passenger seat heat",
+        ],
+      },
+      pop_frunk:     {
         res:  "Opening frunk",
         opts: [
           "frunk",
@@ -225,7 +272,7 @@ RSpec.describe Jarvis do
           "open the car frunk",
         ],
       },
-      set_temp:   {
+      set_temp:      {
         others: [:start_car, [:set_temp, 71]],
         res:    "Car temp set to 71",
         opts:   [
@@ -234,7 +281,7 @@ RSpec.describe Jarvis do
           "set car temp 71",
         ],
       },
-      heat:       {
+      heat:          {
         skip:   true,
         others: [:start_car, [:set_temp, 82], :heat_driver, :heat_passenger, :defrost],
         res:    "Defrosting the car",
@@ -244,7 +291,7 @@ RSpec.describe Jarvis do
           "car heat",
         ],
       },
-      cool:       {
+      cool:          {
         skip:   true,
         others: [:start_car, [:set_temp, 59]],
         res:    "Car temp set to 59",
@@ -253,7 +300,7 @@ RSpec.describe Jarvis do
           "car cool",
         ],
       },
-      navigate:   {
+      navigate:      {
         res:  "Navigating to #{address} — about 1 hour away",
         opts: [
           address.to_s,
@@ -307,6 +354,22 @@ RSpec.describe Jarvis do
         stub: [[:navigate, "3852 13400 S, Riverton, UT 84065"]],
       },
     }
+
+    it "carries the direction through to the car", :aggregate_failures do
+      {
+        "close the trunk"                  => [:pop_boot, :close],
+        "shut the car trunk"               => [:pop_boot, :close],
+        "open the trunk"                   => [:pop_boot, :open],
+        "stop charging the car"            => [:charging, :stop],
+        "sentry off"                       => [:sentry, false],
+        "close the charge port"            => [:charge_port, :close],
+        "turn off the passenger seat heat" => [:seat_heat, :passenger, 0],
+      }.each do |said, (method, *args)|
+        control = stub_control("TeslaControl for #{said.inspect}")
+        expect(control).to receive(method).with(*args)
+        jarvis(said)
+      end
+    end
 
     it "navigates to named places at their stored address", :aggregate_failures do
       specific_actions.each do |action, data|
