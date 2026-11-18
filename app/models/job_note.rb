@@ -446,6 +446,8 @@ class JobNote < ApplicationRecord
   after_commit :sync_waiting_alert
   after_commit :settle_application
   after_commit :refresh_fitness, on: :create
+  after_commit :announce_application, on: [:create, :update],
+    if: -> { applied? && saved_change_to_tag? }
   # ON CREATE ONLY, and never again by itself. A second pass overwrites a
   # version he has edited, and the whole point of the readable one being a
   # column rather than a render is that his edits to it stick - so re-cleaning
@@ -892,6 +894,30 @@ class JobNote < ApplicationRecord
   # landing — so the applications row, which is neither, says so itself or
   # sits a day stale on a wall somebody is reading to decide whether they are
   # done for the day.
+  # Fires `job_application:action:applied` so a Jil task can count the
+  # submission (the Apply to Jobs chore). Once per application: a second
+  # `applied` beat on the same row, a receipt filed as one, is the same
+  # submission. Only when the beat is dated today in the owner's zone, so
+  # back-filling last month's applications counts nothing.
+  def announce_application
+    user = job_application&.user
+    return if user.nil?
+
+    others = JobNote.where(job_application_id: job_application_id, tag: :applied).where.not(id: id)
+    return if others.exists?
+    return unless user.timezone { occurred_at.to_date == Time.current.to_date }
+
+    payload = {
+      action:      :applied,
+      id:          job_application_id,
+      company:     job_application.company,
+      role:        job_application.role,
+      source:      source,
+      occurred_at: occurred_at.iso8601,
+    }
+    ::Jil.trigger(user, :job_application, payload, auth: :trigger)
+  end
+
   def refresh_fitness
     return unless applied?
     return unless job_application.user&.me?
