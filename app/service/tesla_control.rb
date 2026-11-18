@@ -246,17 +246,16 @@ class TeslaControl
     return @vehicle_data = cached_vehicle_data unless perform_requests?
     return @vehicle_data if defined?(@vehicle_data)
 
-    @vehicle_data ||= cached_vehicle_data
-    get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
-      response = json.is_a?(::Hash) && json[:response]
-      cached_data = cached_vehicle_data
-      break cached_data if response.blank?
+    @vehicle_data = cached_vehicle_data
+    json = get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)
+    response = json[:response] if json.is_a?(::Hash)
+    return @vehicle_data if response.blank?
 
-      car_data = ::TeslaCacheStore.record_endpoint(response)
-      break car_data if response[:state] == "asleep"
-
-      maintain_tire_pressure_alerts!(car_data)
-    } || cached_vehicle_data
+    # Callers read the composed car data (`doors`, `climate`, ...), never the
+    # raw response, whether the car answered awake or asleep.
+    @vehicle_data = ::TeslaCacheStore.record_endpoint(response)
+    maintain_tire_pressure_alerts!(@vehicle_data) unless response[:state] == "asleep"
+    @vehicle_data
   rescue StandardError => e
     err("Vehicle Data Error", e)
     cached_vehicle_data

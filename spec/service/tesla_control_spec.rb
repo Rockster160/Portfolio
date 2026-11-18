@@ -241,6 +241,17 @@ RSpec.describe TeslaControl do
       expect(ctrl).not_to have_received(:proxy_command)
     end
 
+    it "closes the trunk an awake car reports open" do
+      allow(ctrl).to receive(:vehicle_data).and_call_original
+      allow(ctrl).to receive_messages(perform_requests?: true, maintain_tire_pressure_alerts!: nil)
+      allow(ctrl).to receive(:get).and_return(
+        response: { state: "online", vehicle_state: { rt: 32, timestamp: 1 } },
+      )
+
+      ctrl.pop_boot(:close)
+      expect(ctrl).to have_received(:proxy_command).with(:actuate_trunk, which_trunk: :rear)
+    end
+
     it "toggles the trunk without reading the car" do
       expect(ctrl).not_to receive(:vehicle_data)
       ctrl.pop_boot(:toggle)

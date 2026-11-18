@@ -314,6 +314,14 @@ class Jil::Methods::Tesla < Jil::Methods::Base
     false
   end
 
+  # How long the drive to `destination` is from where the car is now, in
+  # words ("18 minutes"), or "" when there's no estimate to give.
+  def travelTime(input)
+    return "" unless @jil.user&.me?
+
+    travel_time_words(input.to_s).to_s
+  end
+
   private
 
   # Second half of the line for a nav command — the drive time, or nil when
@@ -322,12 +330,17 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   # unresolvable destination costs the travel time rather than failing the
   # whole call through #wrap.
   def travel_time_body(dest)
+    words = travel_time_words(dest)
+    "TT: #{words}" if words
+  end
+
+  def travel_time_words(dest)
     seconds = @jil.user&.address_book&.traveltime_seconds(dest)
     return if seconds.blank?
 
-    "TT: #{::ActionController::Base.helpers.distance_of_time_in_words(seconds)}"
+    ::ActionController::Base.helpers.distance_of_time_in_words(seconds)
   rescue StandardError => e
-    ::PrettyLogger.error("[JIL TESLA] travel_time_body: #{e.class}: #{e.message}")
+    ::PrettyLogger.error("[JIL TESLA] travel_time_words: #{e.class}: #{e.message}")
     nil
   end
 
