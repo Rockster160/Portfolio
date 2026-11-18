@@ -455,6 +455,10 @@ BUDDY_TOOL_PROBES = {
     avoid: %i[view_image show_inventory_image search_inventory search_memories],
     needs: :described_photo,
   },
+  # `avoid: request_feature` because that is where "make me a picture" went
+  # before this tool existed, and `find_photo` because "a picture of X" is also
+  # how they ask for one they already sent.
+  generate_image:         { say: "can you make me an image of a blue rose?", avoid: %i[request_feature find_photo] },
   # Seeds the photo one turn before asking, because "this is the camping tote"
   # is only a sensible thing to say when a picture has just arrived. Without
   # one the honest answer is a question, and the probe would be scoring the
