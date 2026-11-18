@@ -113,7 +113,8 @@ module Buddy
       # without the picture at all. A sentence costs a few dozen tokens once and
       # carries forward for nothing.
       def build(conversation, upto:, briefing: false)
-        rows = drop_stale_quick_actions(scope(conversation, upto), upto)
+        rows = without_audit_notes(scope(conversation, upto))
+        rows = drop_stale_quick_actions(rows, upto)
         rows = Buddy::GPT::RetriedRequest.without_old_answers(rows, upto)
         rows = without_routine_reminders(rows) if briefing
         described = descriptions_for(rows)
@@ -121,6 +122,13 @@ module Buddy
           current = upto.present? && msg.id == upto.id
           item_for(msg, replay_images: current, described: described, current: current)
         }
+      end
+
+      # A note is for the nightly audit, which reads it from the table. Any
+      # sign of it in the transcript reads to the model as a request, however
+      # it is labelled, and gets acted on.
+      def without_audit_notes(rows)
+        rows.reject { |msg| Buddy::AuditNotes.note?(msg) || Buddy::AuditNotes.receipt?(msg) }
       end
 
       # A daily reminder that already RANG, replayed into a briefing prompt.
@@ -398,9 +406,6 @@ module Buddy
         if jarvis_aside?(message)
           return "[asked Jarvis directly] #{ByteMessageIntake.jarvis_words(body)}"
         end
-        # Nothing answered it, so without the bracket it reads as a message
-        # left hanging.
-        return "[a note for the app's nightly review, not for you] #{body}" if Buddy::AuditNotes.note?(message)
         # It went into a Feature Builder's session (the `/feature` command, or a
         # reply to one of its messages), which answers in its own time, so it
         # isn't a turn waiting on a reply here.

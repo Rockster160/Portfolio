@@ -134,7 +134,9 @@ module Buddy
           "take it all") - you can't work either out from memory.
         - lists: the person's lists, each with its SECTIONS. Check this before
           add_list_item so you can file an item under an existing section
-          (produce, dairy, a store) instead of guessing.
+          (produce, dairy, a store) instead of guessing. Name one in `list` to
+          get its unchecked items too, each with its section (null when it has
+          none) - what's on it, or which items still need a section.
         - jil_functions / jil_triggers: what you're allowed to fire, with
           signatures and a description of what each one does. Fuzzy-match on
           purpose, not name. These cover status QUESTIONS too, not just
@@ -189,8 +191,12 @@ module Buddy
                 description: "Which sections to fetch. Null or empty returns everything, " \
                              "which is only worth it for a full day orientation.",
               },
+              list:     {
+                type:        [:string, :null],
+                description: "A list's name, to get its items with `lists`",
+              },
             },
-            required:             [:sections],
+            required:             [:sections, :list],
             additionalProperties: false,
           },
         }
@@ -212,6 +218,7 @@ module Buddy
       # Returns the JSON string handed back as the function_call_output.
       def call(args)
         payload = filtered(named_sections(args).presence && requested_sections(args))
+        payload = with_list_items(payload, list_name(args))
         @served = @served.merge(payload)
         JSON.generate(payload)
       rescue StandardError => e
@@ -466,8 +473,30 @@ module Buddy
         Array(raw).map { |s| s.to_s.to_sym }
       end
 
+      def list_name(args)
+        args.is_a?(Hash) ? (args["list"] || args[:list]).to_s.strip : ""
+      end
+
+      # Items ride on the one list named, never on all of them: every list's
+      # items on every turn would dwarf the rest of the section.
+      def with_list_items(payload, name)
+        return payload if name.empty? || !payload.key?(:lists) || !@user.respond_to?(:list_by_name)
+
+        list = @user.list_by_name(name)
+        return payload if list.nil?
+
+        items = list.list_items.includes(:section).map { |item|
+          { name: item.name, section: item.section&.name }
+        }
+        rows = payload[:lists][:items].map { |entry|
+          entry[:id] == list.id ? entry.merge(items: items) : entry
+        }
+        payload.merge(lists: payload[:lists].merge(items: rows))
+      end
+
       def requested_sections(args)
         sections = named_sections(args)
+        sections |= [:lists] if list_name(args).present?
         sections |= BRIEFING_ALWAYS if @briefing
         sections &= (SECTIONS - self.class.withheld(@user, briefing: @briefing))
         # Whether an automation is a trigger or a function is OUR filing system,

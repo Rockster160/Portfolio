@@ -40,6 +40,8 @@ Buddy::Tools.register(
                  (leave `assignee` out), not a group called Household.
       notes    - anything to keep with it: a packing list, what to bring, how
                  it's done.
+      times_a_day - how many times a day it's done before it counts as
+                 done ("apply to 5 jobs a day" is 5). Leave it out for once.
     An icon is chosen automatically from the name.
   TXT
   feature:     :chores,
@@ -55,6 +57,7 @@ Buddy::Tools.register(
     one_off:  { type: :string, required: false, description: "Pass 'true' for a one-off chore" },
     priority: { type: :string, required: false, description: "Urgency: critical, high, normal, low, or none. Omit for normal" },
     groups:   { type: :string, required: false, description: "Comma-separated groups to file it under. \"A household chore\" is a shared one, filed under no group" },
+    times_a_day: { type: :integer, required: false, description: "Times a day it's done before it counts as done (1-99); omit for once" },
   },
   confirm:     ->(payload, ctx) {
     household = ctx.user.chore_household
@@ -80,6 +83,8 @@ Buddy::Tools.register(
     raise "no parent chore matching #{payload[:parent].inspect}" if payload[:parent].present? && parent.nil?
 
     reward = payload[:reward].present? ? payload[:reward].to_i : Buddy::PebbleGuide.guess(payload[:name])
+    times = payload[:times_a_day]
+    raise "times_a_day has to be 1 to 99" if times.present? && !times.to_i.between?(1, 99)
 
     priority = Chore.priority_key(payload[:priority]) if payload[:priority].present?
     if payload[:priority].present? && priority.nil?
@@ -138,6 +143,7 @@ Buddy::Tools.register(
     end
     subs << "#{payload[:priority]} priority" if payload[:priority].present?
     subs << "in #{Array(payload[:tags]).join(", ")}" if payload[:tags].present?
+    subs << "#{payload[:times_a_day]}× a day" if payload[:times_a_day].to_i > 1
     subs << "#{payload[:reward_pebbles]}p" if payload[:reward_pebbles].present?
     if payload[:marked_due_at_iso].present?
       subs << "due #{ctx.friendly_future(Time.zone.parse(payload[:marked_due_at_iso].to_s))}"
@@ -171,6 +177,7 @@ Buddy::Tools.register(
       parent_chore_id:     payload[:parent_chore_id],
       tags:                Array(payload[:tags]),
       notes:               payload[:notes].presence,
+      target_count:        payload[:times_a_day].presence || 1,
       marked_due_at:       (Time.zone.parse(payload[:marked_due_at_iso].to_s) if payload[:marked_due_at_iso].present?),
     )
     {

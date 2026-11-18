@@ -41,6 +41,28 @@ RSpec.describe Buddy::DeviceStates do
       expect(rows["Doorbell"]).to include(ago: "5h ago", stale: true)
     end
 
+    it "reads a weather sensor as its readings, never as the name of the last one" do
+      cache!({
+        "Garage Weather" => sensor("humidity", 60).merge("temperature" => 58.3, "humidity" => 41),
+        "Desk Temp"      => sensor("humidity", 60),
+      })
+
+      rows = described_class.for_user(owner, now: now).index_by { |r| r[:device] }
+
+      expect(rows["Garage Weather"]).to include(state: "58.3°F", humidity: "41%")
+      expect(rows["Desk Temp"]).not_to have_key(:state)
+    end
+
+    it "reports the garage door from its own cache" do
+      owner.caches.set(described_class::GARAGE_KEY, {
+        "was" => "closed", "state" => "closed", "timestamp" => (now - 3 * 3_600).iso8601,
+      })
+
+      garage = described_class.for_user(owner, now: now).find { |r| r[:device] == "Garage Door" }
+
+      expect(garage).to include(state: "closed", ago: "3h ago", stale: true)
+    end
+
     it "survives a malformed cache rather than taking the turn down" do
       cache!({ "Broken" => "not a hash", "Fine" => sensor("open", 60) })
 

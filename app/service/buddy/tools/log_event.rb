@@ -24,12 +24,17 @@ Buddy::Tools.register(
 
     `at` is for when it happened earlier than now - "I got sick yesterday
     morning", "had a coffee at 8". Leave it out for something happening now.
+
+    `data` holds the event's own measurements, by name, when they gave them:
+    a workout read off a screenshot is `{ "Calories": 1394, "Duration": 146 }`,
+    with Duration in minutes. Numbers that go in `data` stay out of `notes`.
   TXT
   feature:     :events,
   args:        {
     name:  { type: :string, required: true,  description: "Short event label (e.g. 'Coffee', 'Push-ups')" },
     notes: { type: :string, required: false, description: "Optional free-form notes" },
     at:    { type: :iso_time, required: false, description: "When it happened (ISO), if earlier than now" },
+    data:  { type: :object, required: false, description: "Measurements by name, e.g. Calories, Duration (minutes)" },
   },
   # `at` is a Time straight from the model and an ISO string once the proposal
   # has been stored and run from there, so both read it through resolve_time.
@@ -54,7 +59,7 @@ Buddy::Tools.register(
       name:      payload[:name],
       notes:     payload[:notes],
       timestamp: at || Time.current,
-      data:      { source: "buddy" },
+      data:      payload[:data].to_h.symbolize_keys.transform_values(&:to_s).merge(source: "buddy"),
     )
     # Same side effects as an in-app log: fire the :event trigger (so watches +
     # automations react) and broadcast to open views. ActionEvent has no model

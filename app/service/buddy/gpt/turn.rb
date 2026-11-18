@@ -1658,6 +1658,7 @@ module Buddy
         hits = unbacked_claims(spoken)
         return nil if hits.empty?
 
+        @claim_nudged = hits.map { |hit| hit.claim.target.to_s }
         format(CLAIM_NUDGE, claims: hits.map { |hit| "- \"#{hit.sentence}\" - #{claim_call(hit.claim)}" }.join("\n"))
       end
 
@@ -3570,6 +3571,11 @@ module Buddy
         # tools, and silent is not the same as invisible. Stamped here rather
         # than at create_reply, which runs before any round has fired.
         @reply.update!(metadata: @reply.metadata.to_h.merge("kept" => true)) if @kept
+        # A nudge that gets answered leaves the reply looking ordinary, so the
+        # claim that set it off goes on the reply where the audit can read it.
+        if @claim_nudged.present?
+          @reply.update!(metadata: @reply.metadata.to_h.merge("claim_nudged" => @claim_nudged))
+        end
         # Which repairs FIRED, on the reply itself.
         #
         # Every one of them only fills a silence, so one firing is the model
@@ -5006,7 +5012,23 @@ module Buddy
           Buddy::Routines.expand(@user, tool, payload) ||
             [{ tool_name: call[:name], payload: payload }]
         }
+        markers = drop_lone_questions(markers)
+        return { action: nil, auto_ran: false, forms: [] } if markers.empty?
+
         Buddy::ProposalBuilder.create(user: @user, byte_message: @reply, markers: markers)
+      end
+
+      # An `ask_me` with no step behind it holds nothing, so its answer is
+      # filed under a name no step reads and the form goes nowhere. When the
+      # reply already asks in words, a typed answer comes back as an ordinary
+      # turn, which is the one place an answer to it can land. A reply that
+      # asks nothing keeps the form, since it is then the only question.
+      def drop_lone_questions(markers)
+        return markers unless @reply.body.to_s.include?("?")
+
+        markers = markers.dup
+        markers.pop while markers.last&.dig(:tool_name).to_s == "ask_me"
+        markers
       end
 
       # Resolve the transient `thinking` overlay set at turn start, and hand the

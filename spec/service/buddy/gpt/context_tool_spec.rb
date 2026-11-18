@@ -31,6 +31,38 @@ RSpec.describe Buddy::GPT::ContextTool do
     end
   end
 
+  describe "a list named in `list`" do
+    let!(:shopping) { create(:list, name: "Shopping", user: user) }
+    let!(:other)    { create(:list, name: "Hardware", user: user) }
+
+    before do
+      produce = create(:section, list: shopping, name: "Produce")
+      create(:list_item, list: shopping, name: "Apples", section: produce)
+      create(:list_item, list: shopping, name: "Tape")
+      create(:list_item, list: other, name: "Screws")
+    end
+
+    def lists_for(args)
+      JSON.parse(tool.call(args))["lists"]["items"].index_by { |entry| entry["name"] }
+    end
+
+    it "carries that list's items with their sections, and no other list's" do
+      lists = lists_for({ "sections" => ["chores_all"], "list" => "shopping" })
+
+      expect(lists["Shopping"]["items"]).to contain_exactly(
+        { "name" => "Apples", "section" => "Produce" },
+        { "name" => "Tape", "section" => nil },
+      )
+      expect(lists["Hardware"]).not_to have_key("items")
+    end
+
+    it "leaves every list without items when none is named" do
+      lists = lists_for({ "sections" => ["lists"], "list" => nil })
+
+      expect(lists.values.pluck("items").compact).to be_empty
+    end
+  end
+
   # A briefing names what's due today and isn't a habit, or it says nothing
   # about chores. The full roster is WITHHELD from that turn rather than
   # discouraged: "THREE NAMES, TOTAL", "a daily is never one of your three" and

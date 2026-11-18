@@ -275,6 +275,16 @@ RSpec.describe "Buddy chore tools" do
       expect(chore.reload.notes).to be_nil
     end
 
+    it "sets how many times a day a chore is done, on a new chore and on an edit" do
+      expect(created(name: "Water Plants").target_count).to eq(1)
+      chore = created(name: "Apply to Jobs", times_a_day: 5)
+      expect(chore.target_count).to eq(5)
+
+      run(:edit_chore, { chore: "Apply to Jobs", times_a_day: 3 })
+      expect(chore.reload.target_count).to eq(3)
+      expect { run(:edit_chore, { chore: "Apply to Jobs", times_a_day: 100 }) }.to raise_error(/1 to 99/)
+    end
+
     # The chore day runs 4am to 4am, so at 12:40 AM Saturday it is still
     # Friday's, and "tomorrow" is the Saturday they wake up into.
     it "counts 'tomorrow' from the chore day, not the calendar" do

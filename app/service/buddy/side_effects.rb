@@ -96,7 +96,8 @@ module Buddy
         schema(
           :remember,
           "Write a durable fact about the person, carried into every future conversation. " \
-          "Durable facts only - preferences, names, routines, ongoing projects, and anything they " \
+          "Durable facts only - preferences, names, routines, ongoing projects, how something in " \
+          "their home works or what one of its readings means, and anything they " \
           "tell you about THEMSELVES so you'll hold it in mind for a while: what they're going " \
           "through, what is coming up for them, how they want to be handled while it lasts. That " \
           "last kind takes `expires_in`, and `check_in_days` too when it is the sort of thing you " \

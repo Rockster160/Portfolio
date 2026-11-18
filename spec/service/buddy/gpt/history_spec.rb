@@ -30,6 +30,14 @@ RSpec.describe Buddy::GPT::History do
       ])
     end
 
+    it "leaves out a note for the audit and the chip that confirmed it" do
+      said("Morning!", direction: :inbound, kind: "buddy")
+      said("note: generate image should use GPT", kind: "audit_note")
+      Buddy::AuditNotes.receipt!(user, convo)
+
+      expect(build).to eq([{ role: :assistant, content: "Morning!" }])
+    end
+
     it "includes hidden seed prompts, which are how Buddy gets told to speak up" do
       said("[scheduled prompt] Rocco just added an event, give her a heads-up", kind: "buddy_trigger")
 

@@ -583,7 +583,9 @@ module Buddy
     end
 
     # The moment the countdown should count FROM: the most recent message the
-    # person sent in this thread (the timer request itself). Clamped to a recent
+    # person sent in this thread (the timer request itself), or the seed a Button
+    # press writes when that is newer - a press sends no message, so without it
+    # the countdown would start at whatever was last typed. Clamped to a recent
     # window and never the future, so a queued/replayed turn can't anchor the
     # timer hours in the past. Falls back to now when there's nothing to anchor.
     #
@@ -598,7 +600,11 @@ module Buddy
       return Time.current unless anchor == :message
       return Time.current if conversation.nil?
 
-      sent = conversation.byte_messages.where(direction: :outbound).order(:created_at).last&.created_at
+      messages = conversation.byte_messages
+      sent = [
+        messages.where(direction: :outbound).maximum(:created_at),
+        messages.where("metadata->>'source' = 'quick_action'").maximum(:created_at),
+      ].compact.max
       return Time.current if sent.nil? || sent > Time.current || sent < 1.hour.ago
 
       sent

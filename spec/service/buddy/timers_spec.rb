@@ -265,6 +265,26 @@ RSpec.describe Buddy::Timers do
         expect(timer.remaining_ms).to be < 180_000
       end
 
+      it "counts a Button's countdown from the press, not the last typed message" do
+        convo = user.byte_conversations.create!(mode: :buddy)
+        convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: "set button", created_at: 30.seconds.ago,
+        )
+        pressed_at = 2.seconds.ago
+        convo.byte_messages.create!(
+          user:       user,
+          direction:  :inbound,
+          state:      :delivered,
+          body:       "…",
+          metadata:   { kind: :buddy_reply, source: :quick_action, hidden: true },
+          created_at: pressed_at,
+        )
+
+        timer = described_class.create!(user: user, seconds: 60, conversation: convo, anchor: :message)
+
+        expect(timer.end_at).to be_within(1.second).of(pressed_at + 60.seconds)
+      end
+
       # The back-date is NOT clamped to protect short countdowns. A "5 minute
       # timer" ends five minutes after it was asked for, and trimming that to keep
       # a short one alive would make every timer end at a slightly different offset

@@ -2,7 +2,7 @@ Buddy::Tools.register(
   name:        :edit_chore,
   summary:     "Mark a chore DUE - still to do (\"mark X as due\", \"we need to do X today\"/" \
                "\"tomorrow\") - or change one: rename, schedule, assignee, urgency, groups, " \
-               "notes, archive.",
+               "notes, daily count, archive.",
   description: <<~TXT,
     Edit an existing chore. Use to rename, change the schedule, reassign, set
     when it's next due, change how urgent it is, or archive/unarchive a chore
@@ -29,6 +29,9 @@ Buddy::Tools.register(
 
     `notes` REPLACES the chore's notes. To add to them, include what's there.
 
+    `times_a_day` is how many times a day it's done before it counts as
+    done - "make it 5 a day" is `times_a_day: 5`, and 1 puts it back to once.
+
     `groups` REPLACES the groups the chore is filed under (comma-separated);
     a board shows the chores in the groups it watches. To add one, include
     the ones it already has. Pass "none" to clear them.
@@ -44,6 +47,7 @@ Buddy::Tools.register(
     disabled: { type: :string, required: false, description: "'true' to archive, 'false' to unarchive" },
     groups:   { type: :string, required: false, description: "The FULL comma-separated list of groups, or 'none'" },
     notes:    { type: :string, required: false, description: "The chore's notes in full, or 'none' to clear" },
+    times_a_day: { type: :integer, required: false, description: "Times a day it's done before it counts as done (1-99)" },
   },
   confirm:     ->(payload, ctx) {
     chore = ctx.resolve_chore(payload[:chore])
@@ -56,10 +60,14 @@ Buddy::Tools.register(
     # nothing (prod byte_action 493). A phantom confirmation is worse than an
     # error, because the error is the thing that makes the model say what it
     # actually wants changed.
-    given = payload.values_at(:name, :schedule, :due, :assignee, :priority, :disabled, :groups, :notes)
+    given = payload.values_at(
+      :name, :schedule, :due, :assignee, :priority, :disabled, :groups, :notes, :times_a_day,
+    )
     if given.all? { |v| v.to_s.strip.blank? }
       raise "nothing to change on #{chore.name} - say what should be different"
     end
+    times = payload[:times_a_day]
+    raise "times_a_day has to be 1 to 99" if times.present? && !times.to_i.between?(1, 99)
 
     assignee_id = payload[:assignee].present? ? ctx.resolve_household_user(payload[:assignee])&.id : nil
     # Parse the schedule to the real recurrence hash here (the old code assigned
@@ -111,6 +119,7 @@ Buddy::Tools.register(
     diffs << "groups → #{Array(payload[:tags]).join(", ").presence || "none"}" unless payload[:tags].nil?
     diffs << "assign → #{User.find_by(id: payload[:assignee_id])&.first_name}" if payload[:assignee_id]
     diffs << "notes → #{payload[:notes].to_s.first(30)}" if payload[:notes].present?
+    diffs << "#{payload[:times_a_day]}× a day" if payload[:times_a_day].present?
     diffs << (payload[:disabled] == "true" ? "archive" : "unarchive") if payload.key?(:disabled)
     { title: base, sub: diffs.join("\n").presence }
   },
@@ -126,6 +135,7 @@ Buddy::Tools.register(
     attrs[:recurrence]          = payload[:recurrence]  if payload[:recurrence].present?
     attrs[:priority]            = payload[:priority]    if payload[:priority].present?
     attrs[:tags]                = Array(payload[:tags]) unless payload[:tags].nil?
+    attrs[:target_count]        = payload[:times_a_day] if payload[:times_a_day].present?
     if payload[:notes].present?
       attrs[:notes] = (payload[:notes] unless payload[:notes].to_s.strip.casecmp?("none"))
     end

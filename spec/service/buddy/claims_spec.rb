@@ -62,6 +62,7 @@ RSpec.describe Buddy::Claims do
       "Your reminder went off at 5.",
       "Sent you the link.",
       "I set a timer for 10 minutes.",
+      "I've added Generate images to the feature list.",
     ].each do |honest|
       expect(described_class.unbacked(honest, ran: Set.new)).to be_empty, "false positive: #{honest}"
     end

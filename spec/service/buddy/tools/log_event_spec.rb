@@ -29,6 +29,12 @@ RSpec.describe "log_event tool" do
     expect(log(name: "Sick", at: (at - 1.day).iso8601).timestamp).to eq(at - 1.day)
   end
 
+  it "stores the measurements it was given beside its own source" do
+    event = log(name: "Workout", data: { "Calories" => 1394, "Duration" => 146 })
+
+    expect(event.data).to eq("Calories" => "1394", "Duration" => "146", "source" => "buddy")
+  end
+
   it "refuses a time that hasn't come yet" do
     expect { tool[:confirm].call({ name: "Lunch", at: 2.hours.from_now }, ctx) }.to raise_error(/hasn't happened/)
     expect { tool[:confirm].call({ name: "Lunch", at: 2.hours.from_now.iso8601 }, ctx) }.to raise_error(/hasn't happened/)

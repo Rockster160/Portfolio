@@ -29,11 +29,18 @@ module Buddy
     # streams fill it. The `hass` rows for the same units only say which
     # stream spoke last ("temperature"), so these replace them.
     THERMOSTAT_KEY = :thermostat
+    # The garage door keeps its own cache too, written by the opener's tasks:
+    # `was` is the last settled position, `timestamp` when it got there.
+    GARAGE_KEY = :garage
 
     # Past this, a reading is history rather than a state. Still reported — the
     # last thing a sensor said is usually the answer — but the phrasing has to
     # stop implying "right now", which is what STALE_AFTER drives in the prompt.
     STALE_AFTER = 2.hours
+
+    # A weather sensor keeps each reading under what it measures, and its
+    # `state` only names which of them arrived last, so that is never shown.
+    MEASURES = %w[temperature humidity pressure].freeze
 
     def available?(user)
       owner = ::User.me
@@ -70,14 +77,37 @@ module Buddy
         row = info.with_indifferent_access
         at  = seen_at(row)
         {
-          device:  device.to_s,
-          state:   row[:state].presence,
-          ago:     (ago_phrase(at, now) if at),
-          stale:   (at.nil? || at < now - STALE_AFTER),
-          battery: row[:battery],
+          device:   device.to_s,
+          state:    sensor_state(row),
+          humidity: ("#{row[:humidity]}%" if row[:humidity].present?),
+          ago:      (ago_phrase(at, now) if at),
+          stale:    (at.nil? || at < now - STALE_AFTER),
+          battery:  row[:battery],
         }.compact
       }
-      (sensors + thermostats).sort_by { |row| [row[:stale] ? 1 : 0, row[:device]] }
+      rows = sensors + thermostats + garage_rows(user, now)
+      rows.sort_by { |row| [row[:stale] ? 1 : 0, row[:device]] }
+    end
+
+    def garage_rows(user, now)
+      row = raw(user, GARAGE_KEY).with_indifferent_access
+      return [] if row[:was].blank?
+
+      at = Time.zone.parse(row[:timestamp].to_s) if row[:timestamp].present?
+      [{
+        device: "Garage Door",
+        state:  row[:was].to_s.include?("close") ? "closed" : "open",
+        ago:    (ago_phrase(at, now) if at),
+        stale:  (at.nil? || at < now - STALE_AFTER),
+      }.compact]
+    rescue ArgumentError
+      []
+    end
+
+    def sensor_state(row)
+      return "#{row[:temperature]}°F" if row[:temperature].present?
+
+      row[:state].presence unless MEASURES.include?(row[:state].to_s)
     end
 
     # One row per zone: the room temperature as the state, and what it's set

@@ -95,7 +95,8 @@ module Buddy
         :add_list_item,
         did:      "add that to the list",
         verbs:    %w[added put stuck popped slotted threw],
-        about:    /\blists?\b|\bon\s+there\b|\bto\s+(?:\*\*|`)/,
+        # The feature list is where request_feature files things, not a list.
+        about:    /\b(?<!feature\s)lists?\b|\bon\s+there\b|\bto\s+(?:\*\*|`)/,
         # A bolded destination is just as often a calendar.
         also:     %i[schedule_list_items edit_list_item add_agenda_item],
         examples: {

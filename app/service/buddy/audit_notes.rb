@@ -13,6 +13,11 @@ module Buddy
       message.metadata.is_a?(Hash) && message.metadata["kind"].to_s == KIND.to_s
     end
 
+    # The "📝 Noted" chip posted under a note.
+    def receipt?(message)
+      message.metadata.is_a?(Hash) && message.metadata["tool_name"].to_s == KIND.to_s
+    end
+
     def receipt!(user, conversation)
       Buddy::ActivityChip.post!(
         conversation: conversation,

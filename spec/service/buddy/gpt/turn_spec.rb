@@ -4709,6 +4709,26 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  describe "an ask_me with nothing behind it" do
+    def asked(text)
+      run([
+        {
+          text:       text,
+          tool_calls: [{ name: :ask_me, arguments: { "question" => "What should I add?", "var" => "item" } }],
+        },
+        { text: text },
+      ])
+    end
+
+    it "posts no form when the reply already asks in words" do
+      expect { asked("What should I add?") }.not_to change(ByteAction, :count)
+    end
+
+    it "keeps the form when it is the only question" do
+      expect { asked("On it.") }.to change(ByteAction, :count).by(1)
+    end
+  end
+
   describe ".next_day_directive" do
     def directive(text, on:)
       travel_to(Time.find_zone(user.timezone).local(*on, 12)) { described_class.next_day_directive(text, user: user) }

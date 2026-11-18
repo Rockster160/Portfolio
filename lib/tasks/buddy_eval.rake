@@ -587,6 +587,42 @@ BUDDY_EDGE_PROBES = [
     args:  { add_contact: { name: /whit/i, address: /fort union/i } },
     note:  "answered that there was no tool for creating a contact or saving an address",
   },
+  # --- what's on a list is something it can read ------------------------------
+  {
+    case:  "prod 11325-11331",
+    say:   "Which items on the grocery list don't have a section yet?",
+    tool:  :get_context,
+    args:  { get_context: { list: /grocer/i } },
+    needs: :grocery_list,
+    note:  "asked for the item names three times, having nothing that listed them, until " \
+           "they gave up",
+  },
+  # --- how the house works is worth keeping ------------------------------------
+  {
+    case:  "prod 11366",
+    say:   "The doggy door closes itself, so it just reports when Whisper goes through.",
+    tool:  :remember,
+    args:  { remember: { fact: /doggy door/i } },
+    note:  "said \"got it\" and kept nothing, then twice more called the doggy door the one " \
+           "thing it couldn't vouch for",
+  },
+  # --- numbers that have a field of their own ---------------------------------
+  {
+    case:       "prod 11371",
+    say:        "Make a new chore to stretch 3 times a day",
+    tool:       :create_chore,
+    args:       { create_chore: { times_a_day: "3" } },
+    never_args: { create_chore: { notes: /3/ } },
+    note:       "\"5 a day\" had no field to go in, so it became a sentence in the chore's notes",
+  },
+  {
+    case:  "prod 11358",
+    say:   "Log my workout from earlier: 1394 calories, 2 hours 26 minutes",
+    tool:  :log_event,
+    args:  { log_event: { data: ->(got) { got.include?("1394") && got.include?("146") } } },
+    note:  "calories and duration went into notes, so the calorie tracker asked for them again, " \
+           "and the duration was later stored as seconds",
+  },
   # --- one request, several things, later -----------------------------------
   # Asked for directly: three things on one condition and a time-and-device
   # rule, all with nothing run now. The pieces existed as a `steps` JSON field
