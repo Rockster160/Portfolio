@@ -41,6 +41,11 @@ const visibleIds = (b, now) => b.items.filter(i => Q.isVisible(b, i, now)).map(i
 cases.quick_add = Q.parseQuickAdd("Wish on 20 stars");
 cases.quick_add_plain = Q.parseQuickAdd("Feed the cat");
 
+// Icon search words leave the count out of the name.
+cases.icon_query_n = Q.iconQuery("Collect {n} stars");
+cases.icon_query_typed = Q.iconQuery("Wish on 20 stars");
+cases.icon_query_plain = Q.iconQuery("Feed the cat");
+
 // Game day: 1:30am still belongs to the previous day.
 cases.game_day_before_reset = Q.dayKey(Q.gameDate(at(2026, 11, 5, 1, 30), 4));
 cases.game_day_after_reset = Q.dayKey(Q.gameDate(at(2026, 11, 5, 4, 0), 4));
