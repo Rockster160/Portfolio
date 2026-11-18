@@ -3,7 +3,7 @@
 // one disclosure that opens by itself when the quest already uses any of it.
 
 import QuestRules from "./rules";
-import { bindIconStack } from "../../icon_stack";
+import { bindIconStack, suggestIconFromName } from "../../icon_stack";
 import { createSearchPicker } from "../../prompt_search";
 
 const CONDITION_OPS = [
@@ -43,12 +43,13 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset, onSetCount
   const deleteBtn = modal.querySelector("[data-edit-delete]");
   const resetBtn = modal.querySelector("[data-edit-reset]");
   const iconStack = modal.querySelector("[data-icon-stack]");
-  bindIconStack(iconStack);
   let editing = null;
   let isNew = false;
   let shownCount = "";
 
   const field = name => form.querySelector(`[data-field="${name}"]`);
+  bindIconStack(iconStack, { searchQuery: () => QuestRules.iconQuery(field("name").value) });
+  const iconSuggest = suggestIconFromName(iconStack, field("name"), { toQuery: QuestRules.iconQuery });
 
   function itemOptions() {
     const board = getBoard();
@@ -244,6 +245,8 @@ export function setupEditModal({ getBoard, onSave, onDelete, onReset, onSetCount
     const s = item.schedule || {};
     iconStack.__setIconValue(item.icon || "", { silent: true });
     field("name").value = item.name || "";
+    iconSuggest.reset();
+    iconSuggest.suggest();
     field("target_value").value = t.mode === "fixed" ? (t.value || 1) : 1;
     field("target_when").value = t.when || "yesterday";
     field("target_scale").value = t.mode === "ref" && t.scale != null && t.scale !== 1 ? t.scale : "";

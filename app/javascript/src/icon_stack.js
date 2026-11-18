@@ -56,7 +56,9 @@ function isImageUrl(text) {
   return /^https?:\/\/\S+$/i.test(text) || text.startsWith("data:image/");
 }
 
-export function bindIconStack(stack, { onImage = null } = {}) {
+// `searchQuery` returns what the search chip opens with — a quest editor hands
+// over the name, so the grid starts on what the thing is called.
+export function bindIconStack(stack, { onImage = null, searchQuery = null } = {}) {
   if (!stack || stack.__iconStackBound) return null;
 
   stack.__iconStackBound = true;
@@ -166,7 +168,8 @@ export function bindIconStack(stack, { onImage = null } = {}) {
 
   if (pickBtn) {
     pickBtn.addEventListener("click", () => {
-      openIconPicker({ onPick: (value) => setValue(value), characters: true });
+      const query = searchQuery ? (searchQuery() || "") : "";
+      openIconPicker({ onPick: (value) => setValue(value), query, characters: true });
     });
   }
 
@@ -182,6 +185,39 @@ export function bindIconStack(stack, { onImage = null } = {}) {
   onIconPoolChanged(() => render());
 
   return { setValue, render };
+}
+
+// Fills the stack with the best match for what's typed in `nameField`, for as
+// long as the icon is empty or still the last suggestion. Once anything else
+// lands in it (typed, pasted, picked, uploaded) the name stops driving it.
+// `toQuery` turns the name into search words. Call `suggest()` after setting
+// the name and icon by hand, e.g. when a form opens.
+export function suggestIconFromName(stack, nameField, { toQuery = (name) => name } = {}) {
+  let suggested = null;
+  let inflight = 0;
+  IconPool.load();
+
+  const fillable = () => {
+    const current = stack.__iconValue();
+    return current === "" || current === suggested;
+  };
+
+  const suggest = async () => {
+    if (!fillable()) return;
+    const query = (toQuery(nameField.value || "") || "").trim();
+    const token = ++inflight;
+    const match = query.length >= 2 ? await IconPool.bestMatch(query) : null;
+    if (token !== inflight || !fillable()) return;
+    const next = match ? (match._kind === "custom" ? `hicon:${match._id}` : match.c) : "";
+    suggested = next;
+    if (stack.__iconValue() !== next) stack.__setIconValue(next);
+  };
+
+  nameField.addEventListener("input", suggest);
+  return {
+    suggest,
+    reset() { suggested = null; inflight++; },
+  };
 }
 
 // Mount every stack under `root`. Pulls the pool first so a stored `hicon:`

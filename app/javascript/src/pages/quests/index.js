@@ -15,6 +15,7 @@ import QuestRotation from "./rotation";
 import { createRotationCard } from "./rotation_card";
 import { setupRotationModal } from "./rotation_modal";
 import { renderIconValue, loadIconPool, onIconPoolChanged } from "../../icon_picker";
+import { IconPool } from "../../icon_pool";
 import { setupAppIcon } from "../../app_icon";
 
 const LONG_MS = 550;
@@ -487,7 +488,18 @@ function bootQuests(root) {
     return QuestRules.newItem({ name, target: { mode: "fixed", value: target } });
   }
 
+  // The best emoji for the name, or "" when nothing scores well enough. The
+  // board works offline, so an icon list that's slow to arrive doesn't hold
+  // the quest back.
+  async function quickIcon(name) {
+    const timeout = new Promise(resolve => setTimeout(() => resolve(null), 1500));
+    const match = await Promise.race([IconPool.bestMatch(QuestRules.iconQuery(name)), timeout]);
+    if (!match) return "";
+    return match._kind === "custom" ? `hicon:${match._id}` : match.c;
+  }
+
   root.querySelector("[data-add-quest]").addEventListener("click", () => {
+    IconPool.load();
     quickName.value = "";
     quickModal.classList.remove("hidden");
     quickName.focus();
@@ -495,11 +507,15 @@ function bootQuests(root) {
   quickForm.addEventListener("submit", e => {
     e.preventDefault();
     if (!quickName.value.trim()) { quickName.focus(); return; }
-    board().items.push(quickDraft());
-    commit();
-    flash("Added");
+    const draft = quickDraft();
     quickName.value = "";
     quickName.focus();
+    quickIcon(draft.name).then(icon => {
+      draft.icon = icon;
+      board().items.push(draft);
+      commit();
+      flash("Added");
+    });
   });
   quickModal.querySelector("[data-quick-advanced]").addEventListener("click", () => {
     const draft = quickDraft();

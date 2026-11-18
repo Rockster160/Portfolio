@@ -116,8 +116,12 @@ html.html-ctr-quests {
     background: var(--chores-accent);
   }
 
-  .chore-form .quests-num {
+  // Outranks the form's full-width `input[type="number"]`, so a count sits
+  // inline beside its words.
+  .chore-form input[type="number"].quests-num {
     width: 80px;
+    flex: 0 0 auto;
+    margin: 0;
   }
   .chore-form .quests-narrow,
   .chore-form .quests-row select,
