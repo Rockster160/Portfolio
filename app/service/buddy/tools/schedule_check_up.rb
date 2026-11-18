@@ -64,7 +64,7 @@ Buddy::Tools.register(
   args:        {
     title:     { type: :string, required: true,  description: "Short name for what's being checked, in their words" },
     questions: { type: :string, required: false, description: "Only the things they named, one per line, optionally `| scale <low>-<high>`, `| text`, `| yes/no`, `| date` or `| pick: <choice>, <choice>`" },
-    repeat:    { type: :string, required: false, description: "Recurrence spec, one per line for several times a day: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / every:<n>-<unit>:HH:MM" },
+    repeat:    { type: :string, required: false, description: "Recurrence spec, one per line for several times a day: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / every:<n>-<unit>:HH:MM. On a change, only when they changed the times" },
     at:        { type: :string, required: false, description: "A single asking (ISO datetime), instead of `repeat`" },
     starts:    { type: :string, required: false, description: "First day it can come round (YYYY-MM-DD), when not today" },
     until:     { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
@@ -85,6 +85,10 @@ Buddy::Tools.register(
       names = Buddy::CheckUp.titles(ctx.user)
       running = " (the ones running are #{names.to_sentence})" if names.any?
       raise "no check-up called #{title.inspect} to change#{running}; a new one needs a `repeat` or an `at`"
+    end
+    twin = Buddy::CheckUp.twin(ctx.user, payload[:questions]) if existing.empty?
+    if twin
+      raise "#{twin.inspect} already asks these - pass title #{twin.inspect} and only what changes"
     end
 
     title = existing.first.metadata["check_up"] if existing.any?

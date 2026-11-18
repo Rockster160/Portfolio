@@ -121,6 +121,14 @@ RSpec.describe SpendingHealth do
       expect(described_class.gpt_credit[:balance_micros]).to eq(19_000_000)
     end
 
+    it "leaves out calls to a model that isn't OpenAI's" do
+      charge(Time.utc(2026, 10, 1), 1_612, "OPENAI")
+      usage(Time.utc(2026, 10, 2), 300_000, model: "claude-haiku-5-5", kind: :eval)
+      usage(Time.utc(2026, 10, 2), 200_000)
+
+      expect(described_class.gpt_credit[:balance_micros]).to eq(19_800_000)
+    end
+
     it "leaves out a Jil call made on someone else's key" do
       charge(Time.utc(2026, 10, 1), 1_612, "OPENAI")
       usage(Time.utc(2026, 10, 2), 300_000, kind: :jil)

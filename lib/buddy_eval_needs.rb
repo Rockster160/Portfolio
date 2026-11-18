@@ -177,11 +177,31 @@ module BuddyEvalNeeds
     venmo_fn:             { label: "the Venmo function with labeled args", check: ->(u) { jil(u, /"Note" TAB String/) && jil(u, /venmo/i) } },
     skip_nap_fn:          { label: "the Whisper Skip Nap function", check: ->(u) { jil(u, /skip nap/i) } },
     yell_fn:              { label: "the board Yell function", check: ->(u) { jil(u, /\Ayell\z|"Board" TAB String/i) } },
+    # "Yell on Cobalt Dishes" only splits into a board and a message when one of
+    # the boards is called Cobalt.
+    cobalt_board:         {
+      label: "the Yell function and a board called Cobalt",
+      check: ->(u) {
+        jil(u, /\Ayell\z|"Board" TAB String/i) &&
+          ByteConversation.where("metadata->>'board' = 'true'").exists?(["name ILIKE ?", "%cobalt%"])
+      },
+    },
+    moss_board:           {
+      label: "a board Moss sits on",
+      check: ->(_u) { ByteConversation.where("metadata->>'board' = 'true'").exists?(buddy_theme: "moss") },
+    },
     scene_fn:             { label: "the HASS Scene function", check: ->(u) { jil(u, /hass scene/i) } },
     camera_fn:            { label: "the Camera Last Seen function", check: ->(u) { jil(u, /camera/i) } },
     fan_fn:               { label: "a fan function",               check: ->(u) { jil(u, /fan/i) } },
     light_fn:             { label: "an office light function",     check: ->(u) { jil(u, /office light/i) } },
     navigate_fn:          { label: "a car navigate function",      check: ->(u) { jil(u, /navigate/i) } },
+    # "Once I leave here" is answered by where they are now, and nothing else knows.
+    navigate_from_here:   {
+      label: "a car navigate function and where they are now",
+      check: ->(u) {
+        jil(u, /navigate/i) && Buddy::Features.allows_tool?(u, Buddy::Tools[:check_location])
+      },
+    },
     # Says so in its description, which is the only place the model can learn
     # that a blank destination picks the next place on the day.
     navigate_next_fn:     {

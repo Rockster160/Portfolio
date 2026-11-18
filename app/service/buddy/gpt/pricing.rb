@@ -19,13 +19,20 @@ module Buddy
       # changes, historical BuddyUsage rows keep the cost computed at the time,
       # so editing this table never rewrites the past.
       RATES = {
-        "gpt-5.4-mini"  => { input: 0.75,  cached_input: 0.075, output: 4.50 },
-        "gpt-5.4-nano"  => { input: 0.20,  cached_input: 0.02,  output: 1.25 },
-        "gpt-5.4"       => { input: 2.50,  cached_input: 0.25,  output: 15.00 },
-        "gpt-5.6-luna"  => { input: 1.00,  cached_input: 0.10,  output: 6.00 },
-        "gpt-5.6-terra" => { input: 2.50, cached_input: 0.25, output: 15.00 },
-        "gpt-5.6-sol"   => { input: 5.00, cached_input: 0.50, output: 30.00 },
+        "gpt-5.4-mini"     => { input: 0.75,  cached_input: 0.075, output: 4.50 },
+        "gpt-5.4-nano"     => { input: 0.20,  cached_input: 0.02,  output: 1.25 },
+        "gpt-5.4"          => { input: 2.50,  cached_input: 0.25,  output: 15.00 },
+        "gpt-5.6-luna"     => { input: 1.00,  cached_input: 0.10,  output: 6.00 },
+        "gpt-5.6-terra"    => { input: 2.50, cached_input: 0.25, output: 15.00 },
+        "gpt-5.6-sol"      => { input: 5.00, cached_input: 0.50, output: 30.00 },
+        # Anthropic's list price. Run on the Mini it goes on the claude.ai plan
+        # instead, so there this is what the same tokens would cost on the API.
+        "claude-haiku-5-5" => { input: 0.10, cached_input: 0.01, output: 0.50 },
       }.freeze
+
+      # Models whose calls draw on the OpenAI balance. Anything else is spent
+      # somewhere else and stays out of SpendingHealth's countdown.
+      OPENAI_PREFIX = "gpt-".freeze
 
       # Billed as ordinary input/output tokens, so an unknown model costs 0
       # rather than guessing. A zero row with a real token count is a visible

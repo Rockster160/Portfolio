@@ -96,8 +96,9 @@ module Buddy
     IMMEDIATE_NOTE = "This happens the MOMENT you call it, unless you give it `run_in_minutes` or " \
                      "`run_at` - then it waits and happens on its own at that time. A time in the " \
                      "request says WHEN to act and is never part of what to do: \"turn the TV off in " \
-                     "30\" is this call with run_in_minutes: 30, and \"at 11pm\" is run_at. Never do " \
-                     "it now as a consolation, and never say it's set up when it isn't.".freeze
+                     "30\" is this call with run_in_minutes: 30, and \"at 11pm\" is run_at. " \
+                     "Either one runs it ONCE, on that one occasion. Never do it now as a " \
+                     "consolation, and never say it's set up when it isn't.".freeze
 
     # Buddy USED to carry its spoken words on the tool call, to save the second
     # round trip. That's gone: the model now stays quiet on the call, we resolve

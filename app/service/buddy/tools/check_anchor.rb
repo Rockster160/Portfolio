@@ -53,6 +53,11 @@ Buddy::Tools.register(
 
     if key.present?
       anchor = Anchor.for(ctx.user, AnchorExpression.key_in(key) || key)
+      # "sunset" for `sun:sunset`: the event alone, when only one anchor has it.
+      if anchor.nil? && key.exclude?(":")
+        named  = ctx.user.anchors.select { |a| a.key.split(":", 2).last == key.downcase }
+        anchor = named.sole if named.one?
+      end
       raise "there's no anchor called #{key}" if anchor.nil?
 
       found = reading.call(anchor)

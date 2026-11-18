@@ -54,7 +54,7 @@ Buddy::Tools.register(
     notes:    { type: :string, required: false, description: "Notes kept on the chore" },
     one_off:  { type: :string, required: false, description: "Pass 'true' for a one-off chore" },
     priority: { type: :string, required: false, description: "Urgency: critical, high, normal, low, or none. Omit for normal" },
-    groups:   { type: :string, required: false, description: "Comma-separated groups to file it under" },
+    groups:   { type: :string, required: false, description: "Comma-separated groups to file it under. \"A household chore\" is a shared one, filed under no group" },
   },
   confirm:     ->(payload, ctx) {
     household = ctx.user.chore_household

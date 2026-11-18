@@ -69,13 +69,16 @@ require Rails.root.join("lib/buddy_eval_needs")
 # For the genuine article, use `bx rails "buddy:replay[<conversation_id>,30]"`.
 BUDDY_EVAL_SCENARIOS = [
   # --- core logging and action ---
-  { say: "hey", want: "get_context + a short briefing, WITH prose" },
+  { say: "hey", want: "a hello in kind and a light follow-up - a bare greeting is not a briefing" },
   { say: "morning!", want: "the same, and the greeting matches the actual hour" },
   { say: "just finished a 14oz cup of water", want: "checks chores_all before falling back to log_event" },
   { say: "took the recycling out twice", want: "complete_chore count 2, NEVER log_event" },
   { say: "ate a sandwich", want: "log_event, an ingestion" },
-  { say: "I alphabetized the spice rack", want: "no chore matches, so create_chore + complete_chore" },
-  { say: "did 20 pushups", want: "log_event with a count" },
+  {
+    say:  "I alphabetized the spice rack",
+    want: "a chore that really is this job, or a question - never a new chore",
+  },
+  { say: "did 20 pushups", want: "complete_chore on their exercise chore once, 20 in the note" },
   { say: "add oat milk to the groceries", want: "add_list_item" },
 
   # --- reminders, timed and conditional ---
@@ -146,6 +149,14 @@ BUDDY_EVAL_SCENARIOS = [
 #          of them is about the description.
 #   board: said in a board's own chat - the board's metadata, e.g.
 #          { "chore_tags" => ["Kitchen"] }. Board-only tools exist only there.
+
+# A day said as a word may come back as the word or as that day's date. The
+# date is counted from the day they're living in, so after midnight a date that
+# means the calendar's tomorrow is still a miss.
+BUDDY_EVAL_DAY = ->(word, offset) {
+  ->(got) { got.match?(/\A#{word}\z/i) || got == (User.me.perceived_today + offset).iso8601 }
+}
+
 BUDDY_TOOL_PROBES = {
   # --- logging, chores, lists ---
   log_event:              { say: "ate a sandwich", avoid: %i[complete_chore] },
@@ -278,7 +289,17 @@ BUDDY_TOOL_PROBES = {
     avoid: %i[schedule_reminder log_event],
   },
   remind_when:            { say: "remind me to grab my rx next time I'm at Costco", avoid: %i[schedule_reminder] },
-  move_reminder:          { say: "move the tomato reminder to 3", needs: :pending_reminder },
+  # An hour still ahead today whenever the run happens, so it can only mean today.
+  move_reminder:          (
+    lambda {
+      to = Time.now.in_time_zone("America/Denver").advance(hours: 3).beginning_of_hour
+      {
+        say:   "move the tomato reminder to #{to.strftime("%-l")}",
+        args:  { move_reminder: { at: /T#{to.strftime("%H")}:00/ } },
+        needs: :pending_reminder,
+      }
+    }
+  ).call,
   cancel_reminder:        { say: "never mind the vet reminder, drop it", needs: :vet_reminder },
   list_reminders:         "what reminders do I have?",
   describe_screen:        { say: "what's the little bell at the top for?", avoid: %i[list_reminders request_feature] },
@@ -576,6 +597,13 @@ BUDDY_EDGE_PROBES = [
     tool:  :remind_when,
     avoid: %i[save_routine run_jil_task],
     args:  { remind_when: { trigger: /arrive/, then_run_rest: true } },
+    # The three calls made after the watch are held behind it, not run.
+    or:    {
+      tool:  :remind_when,
+      with:  %i[run_jil_task add_list_item set_timer],
+      args:  { remind_when: { trigger: /arrive/, then_run_rest: true } },
+      avoid: %i[save_routine],
+    },
     needs: :grocery_list,
     note:  "one watch holding the three calls; none of them runs now",
   },
@@ -949,6 +977,8 @@ BUDDY_EDGE_PROBES = [
     avoid:      %i[set_reminder remind_when],
     args:       { schedule_reminder: { anchor: %r{\Achore:[a-z_]*shower}i } },
     never_args: { schedule_reminder: { anchor: %r{\+0?7h\z|\+0h\z} } },
+    # Asking for the hour is the other right answer, when nothing says when they shower.
+    or:         { tool: :none, allow: %i[schedule_reminder], expect_reply: /\?|\bhour\b|what time/i },
     needs:      :shower_chore,
     note:       "the offset is an hour late enough that not having done it is news, asked for or inferred - never carried over from the syntax example",
   },
@@ -1145,7 +1175,16 @@ BUDDY_EDGE_PROBES = [
     case:  "sick, logged in the past",
     say:   "I got sick yesterday morning, ugh",
     tool:  :log_event,
-    args:  { log_event: { name: /sick/i, at: /T(0[5-9]|1[01]):/ } },
+    # A morning hour however it's written, read on their clock.
+    args:  {
+      log_event: {
+        name: /sick/i,
+        at:   ->(got) {
+          hour = Time.find_zone("America/Denver").parse(got)&.hour if got.match?(/\d/)
+          (5..11).cover?(hour)
+        },
+      },
+    },
     note:  "a past start has to land at that time for sick mode to count from it",
   },
   # Said in the present, it read as conversation: four sympathetic replies and
@@ -1173,7 +1212,7 @@ BUDDY_EDGE_PROBES = [
     case:       "prod 8986",
     say:        "Add chore for tomorrow to empty car. Tag it home so we both see it.",
     tool:       :create_chore,
-    args:       { create_chore: { due: /\Atomorrow\z/i } },
+    args:       { create_chore: { due: BUDDY_EVAL_DAY.call(:tomorrow, 1) } },
     never_args: { create_chore: { assignee: /./ } },
     note:       "assigned to the asker, so the person it was meant to be shared with never saw it",
   },
@@ -1239,7 +1278,7 @@ BUDDY_EDGE_PROBES = [
     case:       "due on a day, schedule kept",
     say:        "we need to trim Fae's claws tomorrow",
     tool:       :edit_chore,
-    args:       { edit_chore: { due: /\Atomorrow\z/i } },
+    args:       { edit_chore: { due: BUDDY_EVAL_DAY.call(:tomorrow, 1) } },
     never_args: { edit_chore: { schedule: /./ } },
     avoid:      %i[create_chore add_agenda_item],
     needs:      :claws_chore,
@@ -1249,7 +1288,7 @@ BUDDY_EDGE_PROBES = [
     case:  "prod 9024",
     say:   "We need to trim Fae's nails today",
     tool:  :edit_chore,
-    args:  { edit_chore: { due: /\Atoday\z/i } },
+    args:  { edit_chore: { due: BUDDY_EVAL_DAY.call(:today, 0) } },
     avoid: %i[add_agenda_item create_chore],
     needs: :claws_chore,
     note:  "made an agenda item called Trim Fae's Nails; the chore was only marked due after " \
@@ -1268,7 +1307,7 @@ BUDDY_EDGE_PROBES = [
     case:  "prod 10059",
     say:   "Mark the recycling as due",
     tool:  :edit_chore,
-    args:  { edit_chore: { due: /\Atoday\z/i } },
+    args:  { edit_chore: { due: BUDDY_EVAL_DAY.call(:today, 0) } },
     avoid: %i[create_chore complete_chore],
     needs: :recycling_chore,
     note:  "said it had no way to mark a chore due, with edit_chore's `due` sitting on the index",
@@ -1277,7 +1316,7 @@ BUDDY_EDGE_PROBES = [
     case:  "prod 10538",
     say:   "Mark taking out cans as due",
     tool:  :edit_chore,
-    args:  { edit_chore: { due: /\Atoday\z/i } },
+    args:  { edit_chore: { due: BUDDY_EVAL_DAY.call(:today, 0) } },
     avoid: %i[complete_chore],
     needs: :trash_cans_chore,
     note:  "completed Take trash cans out; \"taking out\" pulled toward the done verb",
@@ -1305,22 +1344,34 @@ BUDDY_EDGE_PROBES = [
     tool: :schedule_reminder,
     note: "asked what time and left nothing set; he had just said good night",
   },
-  {
-    case:  "prod 8926",
-    say:   "Timer until 5:25",
-    tool:  :set_timer,
-    args:  { set_timer: { ends_at: /T17:25/ } },
-    avoid: %i[alarm],
-    note:  "worked out as 121 minutes at 3:14 - ten short",
-  },
-  {
-    case:  "prod 10090",
-    say:   "At 12:30, start a 2 hour timer.",
-    tool:  :set_timer,
-    args:  { set_timer: { starts_at: /T12:30/ } },
-    avoid: %i[request_feature alarm schedule_reminder],
-    note:  "filed as a feature request - a timer could only start now",
-  },
+  # Both clock times a couple of hours out, so they're still ahead whenever the
+  # run happens and can only mean today.
+  (
+    lambda {
+      ends = Time.now.in_time_zone("America/Denver").advance(hours: 2).change(min: 25)
+      {
+        case:  "prod 8926",
+        say:   "Timer until #{ends.strftime("%-l:%M")}",
+        tool:  :set_timer,
+        args:  { set_timer: { ends_at: /T#{ends.strftime("%H:%M")}/ } },
+        avoid: %i[alarm],
+        note:  "worked out as 121 minutes at 3:14 - ten short",
+      }
+    }
+  ).call,
+  (
+    lambda {
+      starts = Time.now.in_time_zone("America/Denver").advance(hours: 2).change(min: 30)
+      {
+        case:  "prod 10090",
+        say:   "At #{starts.strftime("%-l:%M")}, start a 2 hour timer.",
+        tool:  :set_timer,
+        args:  { set_timer: { starts_at: /T#{starts.strftime("%H:%M")}/ } },
+        avoid: %i[request_feature alarm schedule_reminder],
+        note:  "filed as a feature request - a timer could only start now",
+      }
+    }
+  ).call,
   # "MST" written in October means Mountain time, which is -06:00 then.
   {
     case:  "prod 8876",
@@ -1460,6 +1511,7 @@ BUDDY_EDGE_PROBES = [
     say:   "set a 10 minute timer for the laundry on Moss",
     tool:  :set_timer,
     args:  { set_timer: { board: /\AMoss(?:['’]s)?(?:\s+board)?\z/i } },
+    needs: :moss_board,
     note:  "a board named by the pet on it, rather than by the board's own name",
   },
   {
@@ -1843,7 +1895,7 @@ BUDDY_EDGE_PROBES = [
     case:  "redo a wrong drive home",
     say:   "the drive home from the orchard says like 18 hours, can you redo the travel on it?",
     tool:  :check_travel_time,
-    avoid: %i[edit_agenda_item search_agenda],
+    avoid: %i[edit_agenda_item],
     args:  { check_travel_time: { remeasure: true } },
     needs: :orchard_home_drive,
     note:  "a drive home measured from the typed name \"Dayne's\" came back at 1130 minutes " \
@@ -2309,13 +2361,20 @@ BUDDY_EDGE_PROBES = [
     args:  { schedule_reminder: { anchor: /\Aagenda:interview-45m\z/i } },
     note:  "filed the gap and set nothing, so there was no nudge before either interview",
   },
-  {
-    case:  "prod 7761",
-    say:   "Send me a reminder at 12:50 with the basics for the Bluestaq interview",
-    tool:  :schedule_reminder,
-    args:  { schedule_reminder: { at: /12:50/ } },
-    note:  "answered \"Mooooorning\" and then \"Done.\" with nothing scheduled",
-  },
+  # A clock time a couple of hours out, so it's still ahead whenever the run happens.
+  (
+    lambda {
+      at = Time.now.in_time_zone("America/Denver").advance(hours: 2).change(min: 50)
+      {
+        case: "prod 7761",
+        say:  "Send me a reminder at #{at.strftime("%-l:%M")} with the basics for the " \
+              "Bluestaq interview",
+        tool: :schedule_reminder,
+        args: { schedule_reminder: { at: /#{at.strftime("%H:%M")}/ } },
+        note: "answered \"Mooooorning\" and then \"Done.\" with nothing scheduled",
+      }
+    }
+  ).call,
   {
     case:  "prod 4721",
     say:   "what's going on in the backyard?",
@@ -2653,6 +2712,8 @@ BUDDY_EDGE_PROBES = [
     say:        "no, 10p means 10 pebbles as the reward",
     tool:       :remember,
     never_args: { remember: { expires_in: /\Anull\z/i } },
+    # Shorthand is what the glossary holds, and it has no expiry to get wrong.
+    or:         { tool: :define_term },
     note:       "the fact landed, carrying the STRING \"null\" as its expiry - " \
                 "which is not the same as no expiry, and is a date nothing can read",
   },
@@ -2869,18 +2930,22 @@ BUDDY_EDGE_PROBES = [
                   "one until it's tapped",
   },
   {
-    case: "prod 4868",
-    say:  "Venmo request B 94 🥓🥤🥤🥤",
-    tool: :request_feature,
-    note: "answered \"I can't send a Venmo request from here. If you want, I " \
-          "can tuck the amount and note into something for you to send later\" " \
-          "and called nothing. The \"can't\" was true - Venmo runs through a " \
-          "Jarvis action and no Buddy tool reaches it - but the offer with no " \
-          "row under it left no record anywhere that he'd asked, and he was " \
-          "still routing around it a day later. The personality section said " \
-          "\"offer the list, and stop... if they say yes, request_feature " \
-          "writes it down\" while the tool's own description said calling it " \
-          "IS the offer; the prompt-resident half won",
+    case:  "prod 4868",
+    say:   "Venmo request B 94 🥓🥤🥤🥤",
+    # Venmo is a function now. Money moves, so asking who "B" is stays right.
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /venmo/i, direction: /request/i, amount: /\A94(?:\.0+)?\z/ } },
+    or:    { tool: :none, expect_reply: /\?/ },
+    needs: :venmo_fn,
+    note:  "answered \"I can't send a Venmo request from here. If you want, I " \
+           "can tuck the amount and note into something for you to send later\" " \
+           "and called nothing. The \"can't\" was true - Venmo runs through a " \
+           "Jarvis action and no Buddy tool reaches it - but the offer with no " \
+           "row under it left no record anywhere that he'd asked, and he was " \
+           "still routing around it a day later. The personality section said " \
+           "\"offer the list, and stop... if they say yes, request_feature " \
+           "writes it down\" while the tool's own description said calling it " \
+           "IS the offer; the prompt-resident half won",
   },
   {
     case: "Whisper sleeps twice a day",
@@ -2969,7 +3034,7 @@ BUDDY_EDGE_PROBES = [
     tool:  :remind_when,
     avoid: %i[schedule_function],
     args:  { remind_when: { trigger: "depart", run: /navigate/i, run_args: /petsmart/i } },
-    needs: :navigate_fn,
+    needs: :navigate_from_here,
     note:  "scheduled Tesla Navigate at the event's booked end (5:59pm) because " \
            "remind_when's run couldn't carry a destination",
   },
@@ -3272,17 +3337,17 @@ BUDDY_EDGE_PROBES = [
   {
     case:  "prod 11121",
     say:   "Yell on Cobalt Dishes",
-    tool:  :call_jil_function,
-    args:  { call_jil_function: { name: /yell/i } },
-    needs: :yell_fn,
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /yell/i, board: /cobalt/i, message: /dishes/i } },
+    needs: :cobalt_board,
     note:  "asked what the board should yell, with the message sitting in the request",
   },
   # The answer to Buddy's own question, a word on its own.
   {
     case:  "prod 11123",
     say:   "Dishes",
-    tool:  :call_jil_function,
-    args:  { call_jil_function: { name: /yell/i } },
+    tool:  :run_jil_task,
+    args:  { run_jil_task: { name: /yell/i, message: /dishes/i } },
     needs: :yell_fn,
     note:  "answered \"Dishes. Got it.\" with no call - nothing was yelled and nothing was kept",
     seed:  ->(user, convo) {
@@ -3291,7 +3356,7 @@ BUDDY_EDGE_PROBES = [
         user:      user,
         direction: :inbound,
         state:     :sent,
-        metadata:  { "kind" => "buddy", "opened_tools" => ["call_jil_function"] },
+        metadata:  { "kind" => "buddy", "opened_tools" => ["run_jil_task"] },
         body:      "What message should the board yell?",
       )
     },
@@ -3951,7 +4016,7 @@ namespace :buddy do
 
   def evaluate(text, user: User.me, theme: "byte", probe: nil, prior: [])
     convo  = eval_conversation(user, theme)
-    client = Buddy::GPT::Client.new
+    client = eval_client
     # The same two stages production offers (Buddy::ToolIndex): every tool by
     # name and summary first, and its full schema only once the model has
     # opened it - so a
@@ -3959,6 +4024,12 @@ namespace :buddy do
     # is the whole question. Scoped to the acting user, so an eval run as
     # someone with a feature switched off scores what they'd actually get.
     loaded = Set.new
+    # A client with no second stage gets every tool opened from the start, so
+    # a call with no arguments is a call rather than a pick.
+    if client.try(:opens_everything?)
+      indexed = Buddy::ToolIndex.indexed(user: user, conversation: convo)
+      loaded.merge(indexed.map { |tool| tool[:name] })
+    end
     # The conversation's theme carries its own voice now, so a Moss run gets
     # Chelsea's regardless of which user is acting.
     instructions = Buddy::Personality.for(
@@ -3990,6 +4061,8 @@ namespace :buddy do
     input  += [{ role: :developer, content: screen }] if screen
     going   = Buddy::GPT::Turn.go_directive(text)
     input  += [{ role: :developer, content: going }] if going
+    again   = Buddy::GPT::Turn.repeat_directive(text)
+    input  += [{ role: :developer, content: again }] if again
     started = Time.current
     reply   = String.new(encoding: "UTF-8")
     calls   = []
@@ -4002,6 +4075,7 @@ namespace :buddy do
     loads  = 0
     nudged = false
     seen   = Set.new
+    hold   = nil
     loop do
       rounds += 1
       tools  = Buddy::ToolIndex.schemas(user: user, loaded: loaded, conversation: convo)
@@ -4056,6 +4130,7 @@ namespace :buddy do
       break if rounds >= Buddy::GPT::Turn::MAX_ROUNDS
 
       prior = seen.dup
+      hold ||= eval_hold(result[:tool_calls] - opening)
       result[:tool_calls].each do |call|
         input += [
           {
@@ -4070,6 +4145,11 @@ namespace :buddy do
             output:  (
               if opening.include?(call)
                 JSON.generate(Buddy::ToolIndex.open(call[:name], loaded: loaded))
+              elsif eval_held?(call, hold, readers)
+                JSON.generate(
+                  status: "held",
+                  note:   "NOT done now. It runs when #{hold[:holder][:name]} does.",
+                )
               else
                 eval_tool_output(call, readers, user, convo, prior, seen)
               end
@@ -4097,6 +4177,48 @@ namespace :buddy do
     where = e.backtrace.grep(%r{/(app|lib)/}).first(3).map { |l| l.sub(Rails.root.to_s + "/", "") }
     puts "  \e[31mCRASHED\e[0m #{e.class}: #{e.message}"
     where.each { |line| puts "    \e[90m#{line}\e[0m" }
+  end
+
+  # `BUDDY_EVAL_MODEL` puts the turn to another model. A Claude one goes to
+  # Claude Code on the Mac Mini with BuddyEvalMini, required here because
+  # every rake task loads this file in production too.
+  def eval_client
+    model = ENV["BUDDY_EVAL_MODEL"].to_s
+    return Buddy::GPT::Client.new(model: model) unless model.start_with?("claude-")
+
+    require Rails.root.join("lib/buddy_eval_mini")
+    BuddyEvalMini.new(model: model)
+  end
+
+  # Mirrors Turn#note_holder: a `then_run_rest` call holds every acting call
+  # after it, and the do-it-now calls just before it in the same round. Those
+  # are answered as held, so the reply isn't written over a claim they ran.
+  def eval_hold(calls)
+    index = calls.index { |c|
+      tool = Buddy::Tools[c[:name]]
+      tool && Buddy::Tools.holds_rest?(tool, (c[:arguments] || {}).transform_keys(&:to_sym))
+    }
+    index && { holder: calls[index], before: calls[...index].to_set { |c| c[:call_id] } }
+  end
+
+  # Turn#held?, against the hold above.
+  def eval_held?(call, hold, readers)
+    return false if hold.nil? || call[:call_id] == hold[:holder][:call_id]
+
+    name = call[:name].to_sym
+    return false if readers.key?(name) || Buddy::SideEffects.handles?(name)
+
+    before = hold[:before].include?(call[:call_id])
+    return false if before && Buddy::Tools::IMMEDIATE_ACTION_TOOLS.exclude?(name)
+
+    tool = Buddy::Tools[name]
+    return false if tool.nil? || Buddy::Tools.internal?(tool) || !Buddy::Tools.routinable?(tool)
+    return false if Buddy::Tools.answers?(tool) && !Buddy::Tools.acts?(tool)
+    if Buddy::GPT::Turn::SCHEDULING_TOOLS.include?(name)
+      return Buddy::GPT::Turn.queues_rest?(name, call[:arguments])
+    end
+
+    true
   end
 
   # The corrective round, as far as this harness can mirror it.
@@ -4225,8 +4347,11 @@ namespace :buddy do
   # was reached from a tool that was reached and then failed.
   def note_outcome(call, result)
     shape = result.is_a?(Hash) ? result : {}
-    call[:eval_ok]    = shape[:ok] != false && shape["ok"] != false
-    call[:eval_error] = shape[:error] || shape["error"]
+    call[:eval_ok]      = shape[:ok] != false && shape["ok"] != false
+    call[:eval_error]   = shape[:error] || shape["error"]
+    # Refused before anything happened. Often the honest answer ("nothing is
+    # running"), so it isn't a broken call - but its arguments reached no one.
+    call[:eval_refused] = [shape[:status], shape["status"]].map(&:to_s).include?("failed")
     result
   end
 
@@ -4405,7 +4530,7 @@ namespace :buddy do
     wrong   = Array(probe[:avoid]) & named
     wrong  += acting - Array(probe[:allow]) if quiet
     line    = "#{quiet ? "no tool" : probe[:tool]} — #{probe[:say]}"
-    shape   = out_of_order(probe, named) + repeated(probe, named) + bad_args(probe, calls) +
+    shape   = out_of_order(probe, named) + repeated(probe, calls) + bad_args(probe, calls) +
       broken_calls(probe, calls) + unmatched_reply(probe) + missed_effect(probe, user)
 
     if missed.empty? && wrong.empty? && shape.empty?
@@ -4489,9 +4614,11 @@ namespace :buddy do
 
   def clean?(probe, calls, user)
     named = calls.map { |c| c[:name].to_sym }
-    missed = [probe[:tool], *Array(probe[:with])] - named
+    quiet = probe[:tool] == :none
+    missed = quiet ? [] : [probe[:tool], *Array(probe[:with])] - named
     wrong = Array(probe[:avoid]) & named
-    shape = out_of_order(probe, named) + repeated(probe, named) + bad_args(probe, calls) +
+    wrong += (named - BUDDY_EVAL_READERS) - Array(probe[:allow]) if quiet
+    shape = out_of_order(probe, named) + repeated(probe, calls) + bad_args(probe, calls) +
       broken_calls(probe, calls) + unmatched_reply(probe) + missed_effect(probe, user)
     missed.empty? && wrong.empty? && shape.empty?
   end
@@ -4532,9 +4659,12 @@ namespace :buddy do
   # missing record rather than a word in a description.
   def broken_calls(probe, calls)
     wanted = [probe[:tool], *Array(probe[:with])].compact
-    calls.filter_map { |call|
+    calls.each_with_index.filter_map { |call, i|
       next unless wanted.include?(call[:name].to_sym)
       next if call[:eval_ok] != false
+      # A refusal read and acted on: the same tool called again, and landing.
+      landed = calls[(i + 1)..].any? { |later| later[:name] == call[:name] && later[:eval_ok] != false }
+      next if landed
 
       "#{call[:name]} came back: #{call[:eval_error].to_s.truncate(120)}"
     }
@@ -4590,10 +4720,12 @@ namespace :buddy do
   # The right tool, twice. Two calls that each look right pass every other check
   # here: "remind me to call mom at 6" came back with one for tonight's six,
   # which had already gone, and one for tomorrow's.
-  def repeated(probe, named)
+  def repeated(probe, calls)
     return [] unless probe[:once]
 
     wanted = [probe[:tool], *Array(probe[:with])].compact
+    # A refused call made nothing, so trying again after one is still once.
+    named  = calls.reject { |c| c[:eval_refused] }.map { |c| c[:name].to_sym }
     named.tally.filter_map { |tool, n|
       "called #{tool} #{n} times — they asked for one" if n > 1 && wanted.include?(tool)
     }
@@ -4610,7 +4742,14 @@ namespace :buddy do
     checks = [[probe[:args], false], [probe[:never_args], true]]
     checks.flat_map { |table, forbidden|
       (table || {}).flat_map { |tool, wanted|
-        found = calls.select { |c| c[:name].to_sym == tool.to_sym }
+        found  = calls.select { |c| c[:name].to_sym == tool.to_sym }
+        landed = found.reject { |c| c[:eval_refused] }
+        # A shape the tool refused never reached them, either way round.
+        if landed.empty? && !forbidden && found.any?
+          next ["#{tool} was refused: #{found.last[:eval_error].to_s.truncate(120)}"]
+        end
+
+        found = landed
         next [] if found.empty?
 
         misses = found.map { |call| arg_misses(tool, call, wanted, forbidden) }
@@ -4631,7 +4770,13 @@ namespace :buddy do
     args = args.transform_keys(&:to_s).merge(sent.slice(*Buddy::Tools::TIMING_ARGS.map(&:to_s)))
     wanted.filter_map { |arg, want|
       got = args[arg.to_s]
-      hit = want.is_a?(Regexp) ? want.match?(got.to_s) : got.to_s == want.to_s
+      hit = (
+        case want
+        when Regexp then want.match?(got.to_s)
+        when Proc then want.call(got.to_s)
+        else got.to_s == want.to_s
+        end
+      )
       next if hit != forbidden
 
       "#{tool}(#{arg}: #{got.inspect})#{" — should not #{want.inspect}" if forbidden}" \

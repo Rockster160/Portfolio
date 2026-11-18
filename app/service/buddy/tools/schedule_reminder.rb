@@ -1,8 +1,9 @@
 Buddy::Tools.register(
   name:        :schedule_reminder,
-  summary:     "A message at a clock time, after a delay, before an event or birthday, or when a " \
-               "chore comes DUE - and only if a device or where they are holds (\"at 11 if the " \
-               "garage is open and I'm out\"). For them or a partner. alarm rings.",
+  summary:     "Remind them, or a partner: \"at 6\", \"tomorrow morning\" (9am), \"30m before " \
+               "any interview\", \"10 days before anyone's birthday\", \"before I go\", " \
+               "\"when a chore's due\", \"9pm daily unless I've showered\", \"at 11 if the " \
+               "garage is open and I'm out\".",
   description: <<~TXT,
     Schedule a nudge to fire at a future local time. Use when the person
     says "remind me to X at Y", "at 3pm ping me about the vet appt",

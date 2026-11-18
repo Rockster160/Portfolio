@@ -153,6 +153,16 @@ RSpec.describe Buddy::CheckUp do
       expect { change!(title: "Allergies", questions: "Sneezing") }.to raise_error(/the ones running are Sick check-up/)
     end
 
+    it "refuses a second one asking what a running one already asks", :aggregate_failures do
+      schedule!
+
+      expect {
+        schedule!(title: "Headache and cough", questions: "Headache | scale 1-100\nCough | yes/no")
+      }.to raise_error(/"Sick check-up" already asks these/)
+      expect(BuddyReminder.pending.where(user: user).count).to eq(2)
+      expect { schedule!(title: "Mood", questions: "Mood\nSleep\nHeadache") }.not_to raise_error
+    end
+
     it "doesn't open a changed scale on a rating from the old one", :aggregate_failures do
       reminder = schedule!.first
       fire!(reminder)

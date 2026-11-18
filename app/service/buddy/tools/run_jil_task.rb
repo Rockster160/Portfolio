@@ -53,6 +53,8 @@ Buddy::Tools.register(
       signature: function("Temp" TAB Numeric BR "Dest" TAB String)
       call:      name=<the task's name>, args={"temp": <the number they said>, "dest": <the place they said>}
 
+    A text arg gets their words exactly as they wrote them, emoji included.
+
     A `function()` takes nothing - leave `args` empty. If a required value is
     missing or ambiguous ("start the car" with no temp), ask a short follow-up.
     Don't guess numbers.
@@ -102,7 +104,8 @@ Buddy::Tools.register(
     this call with `run_in_minutes: 30` - one call, and it happens on its own
     then. Something that REPEATS is `schedule_function` with `repeat`. On a
     condition rather than a clock ("once I leave") it is `remind_when` with
-    `run`. A raw SCOPE they hand you
+    `run`, and so is every leg of a route after the first: "the DMV, then
+    Trader Joe's" is the DMV now and Trader Joe's on leaving the DMV. A raw SCOPE they hand you
     (`some:jil:listener`) rather than a task's name is `schedule_trigger`.
 
     The lists only contain tasks the person allowed you to run, and may include

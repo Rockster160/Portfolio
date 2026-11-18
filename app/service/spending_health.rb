@@ -93,7 +93,7 @@ module SpendingHealth
       topped_up_at = gpt_topped_up_at
       return {} if topped_up_at.nil?
 
-      scope = ::BuddyUsage.billed.since(topped_up_at)
+      scope = ::BuddyUsage.billed.since(topped_up_at).where("model LIKE ?", "#{Buddy::GPT::Pricing::OPENAI_PREFIX}%")
       scope = scope.where.not(kind: :jil).or(scope.where(kind: :jil, user: ::User.me))
 
       {

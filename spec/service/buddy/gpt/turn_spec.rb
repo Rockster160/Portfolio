@@ -4708,6 +4708,32 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  describe ".repeat_directive" do
+    it "points a schedule at a call that repeats" do
+      [
+        "every night at 9 add bins out to the groceries list",
+        "added to the Before Bed list every day at 9pm",
+        "check on my period every 4 weeks",
+        "play the nap sound nightly",
+        "every other Sunday",
+      ].each { |text|
+        expect(described_class.repeat_directive(text)).to eq(described_class::REPEAT_DIRECTIVE),
+          text
+      }
+    end
+
+    it "leaves one-offs, rotations and watches alone" do
+      [
+        "add milk at 9 tonight",
+        "rotate the laundry every 75 minutes",
+        "every time my phone arrives somewhere",
+        "everyday stuff",
+      ].each { |text|
+        expect(described_class.repeat_directive(text)).to be_nil, text
+      }
+    end
+  end
+
   describe "a reply to Buddy's own question" do
     def buddy_asked(text, metadata={})
       convo.byte_messages.create!(

@@ -1,8 +1,9 @@
 Buddy::Tools.register(
   name:         :remind_when,
-  summary:      "Do something when a thing HAPPENS - arriving or leaving, a chore DONE, an item " \
-                "ADDED, a deploy, a sensor: a nudge, or RUN several things (\"when I get home, " \
-                "porch light on and tell Chelsea\"). A clock time is schedule_reminder.",
+  summary:      "When something HAPPENS - arriving, leaving, a chore done, an item added, a " \
+                "sensor, a charge - nudge or DO things then: \"when I get home, porch light " \
+                "on and tell Chelsea\", \"once I leave, navigate to X\", \"each time the car " \
+                "arrives, a banner\".",
   description:  <<~TXT,
     Set a reminder that fires when a real-world CONDITION happens, not at a
     clock time. Use for "remind me to X when / the next time I <arrive /

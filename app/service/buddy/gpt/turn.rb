@@ -1069,6 +1069,8 @@ module Buddy
         input    += [{ role: :developer, content: screen }] if screen
         going     = self.class.go_directive(@inbound.body)
         input    += [{ role: :developer, content: going }] if going
+        repeating = self.class.repeat_directive(@inbound.body)
+        input    += [{ role: :developer, content: repeating }] if repeating
         if previous
           input += draft_item(previous[:text]) + [{ role: :developer, content: retry_nudge_for(previous) }]
         end
@@ -1316,6 +1318,26 @@ module Buddy
         return BARE_GO_DIRECTIVE if text.match?(BARE_GO_RX)
 
         GO_TO_DIRECTIVE if text.match?(GO_TO_RX)
+      end
+
+      # A thing that comes round on the calendar. The do-it-later arguments on
+      # the always-loaded tools take one time, and a schedule said in the same
+      # breath kept landing there as a single run tonight with "every day"
+      # claimed in the reply. Minutes and hours are left out: those are
+      # rotations and cycles, which have their own shape.
+      REPEAT_RX = /
+        \b(?:every|each)\s+(?:other\s+)?(?:\d+\s+)?
+        (?:day|night|morning|afternoon|evening|week(?:day|end)?|month|
+          monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b
+        |\b(?:daily|nightly|weekly|monthly)\b
+      /ix
+
+      REPEAT_DIRECTIVE = <<~TXT.freeze
+        This comes round again on a schedule. Make it with a call that takes a `repeat` for it - `run_in_minutes` and `run_at` happen once.
+      TXT
+
+      def self.repeat_directive(body)
+        REPEAT_DIRECTIVE if body.to_s.match?(REPEAT_RX)
       end
 
       NEXT_DAY_RX = /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i

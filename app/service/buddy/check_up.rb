@@ -69,6 +69,19 @@ module Buddy
       scope.distinct.pluck(Arel.sql("metadata->>'check_up'"))
     end
 
+    # A running check-up already asking most of these, under another title. A
+    # change said without the title reads as a new check-up, and a second one
+    # asking the same things twice a day is the result.
+    def twin(user, questions)
+      asking = split(questions).map { |line| name_of(line) }
+      return if asking.empty?
+
+      titles(user).find { |title|
+        current = split(questions_of(scheduled(user, title).first)).map { |line| name_of(line) }
+        (current & asking).length * 2 >= asking.length
+      }
+    end
+
     def questions_of(reminder)
       call = Array(reminder.action).find { |row| row["tool"] == "ask_check_up" }
       call.to_h.dig("payload", "questions").to_s

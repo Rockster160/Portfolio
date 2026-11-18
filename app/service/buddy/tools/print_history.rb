@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :print_history,
   summary:     "What's been on the 3D printer - files, when, how long, finished or failed, time " \
-               "left.",
+               "left - and which file \"that phone thing from earlier\" was.",
   description: <<~TXT,
     Look up what's been on the 3D printer - file names, when each ran, how long
     it took, and whether it finished, failed, or is still going (with the time

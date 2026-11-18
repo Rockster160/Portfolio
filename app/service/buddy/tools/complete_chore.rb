@@ -4,15 +4,18 @@ Buddy::Tools.register(
                "track is log_event.",
   always:      true,
   description: <<~TXT,
-    Mark a chore as done. Use this whenever the user says they finished a
-    household task. It records the work as already finished: a chore they say
-    is due, or still needs doing, has not been done. `chore` is a fuzzy name and will match against the
+    Mark a chore as done. Use it when one is DONE: "took the bins out", "fed
+    Fae", "log the dishes", "just showered". It records work already
+    finished. `chore` is a fuzzy name and will match against the
     user's accessible chores. Supports `count=N` when the same chore
-    should be marked done multiple times (e.g. drank water 5x).
+    should be marked done multiple times (e.g. drank water 5x). A number that
+    is part of what they did - "20 pushups", "3 miles" - is one completion,
+    with the number in `note`.
 
     Call it when what they say they did IS one of their chores. `chore` is
     fuzzy about spelling, not about meaning: a chore that only shares a game,
-    a room or a pet with what they said is a different job.
+    a room or a pet with what they said is a different job, and so is one a
+    word away that reverses it - "load" is not "unload", "in" is not "out".
 
     Pass `at` when the user says they finished at a PAST time — accepts
     natural phrasing like "an hour ago", "this morning", "8:15am", or an

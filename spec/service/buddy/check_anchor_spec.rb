@@ -61,6 +61,14 @@ RSpec.describe "check_anchor tool" do
     expect(read(key: "moon:rise")[:status]).not_to eq(:answered)
   end
 
+  it "reads the event on its own when only one anchor has it", :aggregate_failures do
+    sunset_at(1.hour.from_now)
+    user.anchors.create!(key: "trash:pickup")
+
+    expect(read(key: "sunset")[:anchor]).to eq("sun:sunset")
+    expect(read(key: "sunrise")[:status]).not_to eq(:answered)
+  end
+
   it "fails when the anchor exists but has nothing upcoming" do
     user.anchors.create!(key: "sun:sunset")
 

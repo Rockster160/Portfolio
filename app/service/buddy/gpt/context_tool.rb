@@ -140,6 +140,8 @@ module Buddy
           purpose, not name. These cover status QUESTIONS too, not just
           commands - a sensor, door, gate, light, or the car's state is
           answerable here, so check before saying you can't see something.
+        - app_pages: every page of the app with its real link - the answer to
+          "how do I see my agenda" or "where are my lists".
         - routines: sequences they named once so a single phrase runs the whole
           thing. Check here whenever a request sounds like a thing they'd have
           set up ("prep my printer", "wind down"), and run the match with
