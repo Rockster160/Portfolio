@@ -146,11 +146,16 @@ module Buddy
 
     # nil means "couldn't read it" and is a real answer - the caller falls back
     # rather than inventing a mood off a failed call.
-    def read(conversation, unprompted: false)
+    #
+    # `mood_session` is a turn whose reading the Mini already started, the
+    # moment its model replied (see head_start). Collecting that one is the
+    # whole call; anything else is read here, Claude first.
+    def read(conversation, unprompted: false, mood_session: nil)
       transcript = transcript_for(conversation, unprompted: unprompted)
       return nil if transcript.blank?
 
-      result = ::Buddy::GPT::Client.new(model: MODEL).stream(
+      result   = (::Buddy::GPT::ClaudeClient.mood_reading(mood_session) if mood_session)
+      result ||= ::Buddy::GPT::Fallback.reader(MODEL).stream(
         instructions: PROMPT,
         input:        [{ role: :user, content: [{ type: :input_text, text: transcript }] }],
       )
@@ -178,17 +183,33 @@ module Buddy
     # thing a change is visible against.
     STICKY_MARGIN = 0.02
 
-    def later(conversation, acted: false, landed: true, unprompted: false)
+    def later(conversation, acted: false, landed: true, unprompted: false, mood_session: nil)
       return unless readable?(conversation)
 
-      ::BuddySentimentWorker.perform_async(conversation.id, acted, landed, unprompted)
+      ::BuddySentimentWorker.perform_async(conversation.id, acted, landed, unprompted, mood_session)
+    end
+
+    # What the Mini needs to read the mood itself, as soon as the turn's model
+    # replies: the transcript up to now, and what to end it on. The reply is
+    # added on the Mini as the last "Companion:" line, cut like line_for cuts.
+    # By the time the reply is delivered and this worker runs, the reading is
+    # done or nearly, and nothing waited on it.
+    def head_start(conversation, unprompted: false)
+      return nil unless readable?(conversation)
+
+      {
+        system:     PROMPT,
+        transcript: transcript_for(conversation),
+        note:       (UNPROMPTED_NOTE if unprompted),
+        max_chars:  MAX_CHARS,
+      }
     end
 
     # Runs in the worker, on every buddy turn.
-    def settle!(conversation, acted: false, landed: true, unprompted: false)
+    def settle!(conversation, acted: false, landed: true, unprompted: false, mood_session: nil)
       return unless readable?(conversation)
 
-      reading = read(conversation, unprompted: unprompted)
+      reading = read(conversation, unprompted: unprompted, mood_session: mood_session)
       # Nothing came back. The pet keeps the face it has, which is the honest
       # answer: the last reading is the most recent thing anybody knew.
       return if reading.nil?

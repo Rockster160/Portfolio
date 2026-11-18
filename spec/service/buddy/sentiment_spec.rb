@@ -245,6 +245,38 @@ RSpec.describe Buddy::Sentiment do
     end
   end
 
+  describe "a reading the Mini already started" do
+    before { say("Got the job!", direction: :outbound) }
+
+    it "is collected rather than asked for again" do
+      json = '{"warmth":0.9,"play":0.6,"weight":0.6,"strain":0.0}'
+      allow(Buddy::GPT::ClaudeClient).to receive(:mood_reading).with("s1").and_return(
+        { ok: true, text: json, usage: nil, model: "claude-haiku-5-5" },
+      )
+      refusing
+
+      expect(described_class.read(convo, mood_session: "s1")).to include(warmth: 0.9, strain: 0.0)
+    end
+
+    it "is read here when there's none to collect" do
+      allow(Buddy::GPT::ClaudeClient).to receive(:mood_reading).and_return(nil)
+      answering('{"warmth":0.2,"play":0.1,"weight":0.7,"strain":0.0}')
+
+      expect(described_class.read(convo, mood_session: "gone")).to include(warmth: 0.2)
+    end
+
+    it "hands the Mini everything but the reply" do
+      start = described_class.head_start(convo, unprompted: true)
+
+      expect(start).to include(
+        system:    described_class::PROMPT,
+        max_chars: described_class::MAX_CHARS,
+      )
+      expect(start[:transcript]).to eq("Them: Got the job!")
+      expect(start[:note]).to eq(described_class::UNPROMPTED_NOTE)
+    end
+  end
+
   describe "the face on a turn that did the thing" do
     def landed_on(reading)
       skip = described_class.send(:skipped, reading, true, true)
@@ -345,7 +377,7 @@ RSpec.describe Buddy::Sentiment do
     it "queues on a buddy thread even when a face is already on" do
       convo.update_column(:buddy_expression, "uwu")
 
-      expect(BuddySentimentWorker).to receive(:perform_async).with(convo.id, true, true, false)
+      expect(BuddySentimentWorker).to receive(:perform_async).with(convo.id, true, true, false, nil)
       described_class.later(convo, acted: true, landed: true)
     end
 

@@ -4177,17 +4177,23 @@ namespace :buddy do
     where = e.backtrace.grep(%r{/(app|lib)/}).first(3).map { |l| l.sub(Rails.root.to_s + "/", "") }
     puts "  \e[31mCRASHED\e[0m #{e.class}: #{e.message}"
     where.each { |line| puts "    \e[90m#{line}\e[0m" }
+  ensure
+    client.finish if client.respond_to?(:finish)
   end
 
   # `BUDDY_EVAL_MODEL` puts the turn to another model. A Claude one goes to
-  # Claude Code on the Mac Mini with BuddyEvalMini, required here because
-  # every rake task loads this file in production too.
+  # Claude Code on the Mac Mini, the same client production's turns use, with
+  # no fallback so a miss is Claude's. Each round's timings go to
+  # tmp/buddy_eval/mini_rounds.jsonl.
   def eval_client
     model = ENV["BUDDY_EVAL_MODEL"].to_s
     return Buddy::GPT::Client.new(model: model) unless model.start_with?("claude-")
 
-    require Rails.root.join("lib/buddy_eval_mini")
-    BuddyEvalMini.new(model: model)
+    Buddy::GPT::ClaudeClient.new(
+      model:      model,
+      url:        ENV.fetch("BUDDY_EVAL_MINI_URL", "http://wildcats-mini:8788"),
+      rounds_log: Rails.root.join("tmp/buddy_eval/mini_rounds.jsonl").to_s,
+    )
   end
 
   # Mirrors Turn#note_holder: a `then_run_rest` call holds every acting call

@@ -12,7 +12,7 @@
 #  feedback             :jsonb            not null
 #  finished_at          :datetime
 #  held                 :boolean          default(FALSE), not null
-#  kind                 :integer          default(0), not null
+#  kind                 :integer          default("feature"), not null
 #  landing_at           :datetime
 #  merge_sha            :string
 #  planned_at           :datetime

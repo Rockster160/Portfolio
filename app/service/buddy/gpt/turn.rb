@@ -709,11 +709,17 @@ module Buddy
         @inbound      = message
         @conversation = message.byte_conversation
         @user         = @conversation.user
-        @client       = client || Client.new
+        @client       = client || Fallback.client
       end
 
       def run!
         @reply = create_reply
+        # A client that can start the mood reading itself, the moment the
+        # model replies, gets what it needs to up front. See Buddy::Sentiment.
+        if @client.respond_to?(:mood=)
+          unprompted   = self_initiated?.present?
+          @client.mood = Buddy::Sentiment.head_start(@conversation, unprompted: unprompted)
+        end
         outcome = converse
         if outcome[:ok]
           finalize_success(outcome)
@@ -732,6 +738,8 @@ module Buddy
         )
         finalize_failure("#{e.class}: #{e.message}") if @reply
         false
+      ensure
+        @client.finish if @client.respond_to?(:finish)
       end
 
       private
@@ -1169,7 +1177,7 @@ module Buddy
           # it (see Buddy::ToolIndex): it opens the tool and nothing runs, so it
           # is no evidence of anything the round asked for - not a routine, not a
           # time on the clock, not a checklist row.
-          @opening = calls.select { |c| Buddy::ToolIndex.opening?(c[:name], c[:arguments], loaded: loaded_tools) }.to_set { |c| c[:call_id] }
+          @opening = calls.select { |c| Buddy::ToolIndex.opening?(c[:name], c[:arguments], loaded: open_tools) }.to_set { |c| c[:call_id] }
           acting   = calls.reject { |c| @opening.include?(c[:call_id]) }
 
           # Resolve every call ONCE, here: the output goes back to the model, and
@@ -3196,7 +3204,18 @@ module Buddy
           return @seeded_tools
         end
 
-        Buddy::ToolIndex.schemas(user: @user, loaded: loaded_tools, conversation: @conversation)
+        Buddy::ToolIndex.schemas(user: @user, loaded: open_tools, conversation: @conversation)
+      end
+
+      # What the model has in full: what this turn opened, or every tool when
+      # the client sends them all up front. Kept apart from loaded_tools, which
+      # is what gets carried into the next turn.
+      def open_tools
+        everything = @client.respond_to?(:opens_everything?) && @client.opens_everything?
+        return loaded_tools unless everything
+
+        @every_tool ||= Buddy::ToolIndex.indexed(user: @user, conversation: @conversation)
+        loaded_tools | @every_tool.to_set { |tool| tool[:name].to_sym }
       end
 
       # The indexed tools this turn has opened. Kept across a retried attempt:
@@ -5009,7 +5028,13 @@ module Buddy
       # Asynchronous, so the reply is never waiting on it.
       def settle_expression(acted: false, landed: true)
         unprompted = self_initiated?.present?
-        Buddy::Sentiment.later(@conversation, acted: acted, landed: landed, unprompted: unprompted)
+        Buddy::Sentiment.later(
+          @conversation,
+          acted:        acted,
+          landed:       landed,
+          unprompted:   unprompted,
+          mood_session: (@client.mood_session if @client.respond_to?(:mood_session)),
+        )
         Buddy::ExpressionState.settle!(@conversation)
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] settle failed: #{e.class}: #{e.message}")
