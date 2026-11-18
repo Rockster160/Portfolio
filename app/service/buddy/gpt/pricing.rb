@@ -25,6 +25,10 @@ module Buddy
         "gpt-5.6-luna"     => { input: 1.00,  cached_input: 0.10,  output: 6.00 },
         "gpt-5.6-terra"    => { input: 2.50, cached_input: 0.25, output: 15.00 },
         "gpt-5.6-sol"      => { input: 5.00, cached_input: 0.50, output: 30.00 },
+        # The image model bills per token like the rest, with the picture as
+        # OUTPUT tokens at its own rate. Its input splits into text and image
+        # rates; only text is ever sent, so text is the input rate here.
+        "gpt-image-2"      => { input: 5.00, cached_input: 1.25, output: 30.00 },
         # Anthropic's list price. Run on the Mini it goes on the claude.ai plan
         # instead, so there this is what the same tokens would cost on the API.
         "claude-haiku-5-5" => { input: 0.10, cached_input: 0.01, output: 0.50 },

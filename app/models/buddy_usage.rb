@@ -59,6 +59,9 @@ class BuddyUsage < ApplicationRecord
   # `jil` is a GPT.ask from a Jil task, made through GPTRequest on the key the
   # task names. That key is usually the account owner's, but it is whoever's
   # secret it is, so it bills to them rather than to the shared total.
+  # `image_generate` is Buddy::ImageGenerator drawing a picture someone asked
+  # for. Separable because one picture costs as much as dozens of turns, and
+  # folded in it would read as a conversation that suddenly got expensive.
   enum :kind, {
     turn:           0,
     compaction:     1,
@@ -73,6 +76,7 @@ class BuddyUsage < ApplicationRecord
     branch_name:    10,
     amazon_names:   11,
     build_title:    12,
+    image_generate: 13,
   }
 
   # Where the call was made. Prod only ever saw its own rows until local spend

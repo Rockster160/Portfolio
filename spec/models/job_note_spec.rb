@@ -837,4 +837,54 @@ RSpec.describe JobNote do
       job.notes.create!(tag: :applied, occurred_at: Time.current)
     end
   end
+
+  describe "announcing a submitted application" do
+    let(:announced) { [] }
+
+    before {
+      allow(Jil).to receive(:trigger) { |_user, scope, payload, **|
+        announced << payload if scope == :job_application
+      }
+    }
+
+    it "fires job_application:applied for today's first applied beat" do
+      job.update!(role: "Engineer")
+      job.notes.create!(tag: :applied, source: "jobhunt")
+
+      expect(announced).to contain_exactly(
+        a_hash_including(
+          action: :applied, id: job.id, company: "Acme", role: "Engineer", source: "jobhunt",
+        ),
+      )
+    end
+
+    it "fires when a note is retagged as applied" do
+      note = job.notes.create!(tag: :note, body: "Sent it")
+      expect(announced).to be_empty
+
+      note.update!(tag: :applied)
+
+      expect(announced.size).to eq(1)
+    end
+
+    it "fires once per application" do
+      job.notes.create!(tag: :applied)
+      job.notes.create!(tag: :applied)
+
+      expect(announced.size).to eq(1)
+    end
+
+    it "fires nothing for a back-filled application" do
+      job.notes.create!(tag: :applied, occurred_at: 3.days.ago)
+
+      expect(announced).to be_empty
+    end
+
+    it "fires nothing for other beats or unrelated edits" do
+      note = job.notes.create!(tag: :interview)
+      note.update!(body: "Went well")
+
+      expect(announced).to be_empty
+    end
+  end
 end

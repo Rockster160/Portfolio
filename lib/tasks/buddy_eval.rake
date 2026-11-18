@@ -455,6 +455,10 @@ BUDDY_TOOL_PROBES = {
     avoid: %i[view_image show_inventory_image search_inventory search_memories],
     needs: :described_photo,
   },
+  # `avoid: request_feature` because that is where "make me a picture" went
+  # before this tool existed, and `find_photo` because "a picture of X" is also
+  # how they ask for one they already sent.
+  generate_image:         { say: "can you make me an image of a blue rose?", avoid: %i[request_feature find_photo] },
   # Seeds the photo one turn before asking, because "this is the camping tote"
   # is only a sensible thing to say when a picture has just arrived. Without
   # one the honest answer is a question, and the probe would be scoring the
@@ -2189,6 +2193,25 @@ BUDDY_EDGE_PROBES = [
     note:  "picked `great_bottom` and moved BOTH bottom blinds, because the " \
            "six singles weren't in the enum yet - the model can only see the " \
            "task's `listener` string. They are there now and nothing re-checks it",
+  },
+
+  # --- importing one list into another --------------------------------------
+  {
+    case:       "import is a move",
+    say:        "import everything from Before Bed into the groceries",
+    tool:       :run_jil_task,
+    needs:      :import_list_fn,
+    args:       { run_jil_task: { name: /import/i, from: /before bed/i, to: /grocer/i } },
+    never_args: { run_jil_task: { keep: /true/i } },
+    note:       "importing a list moves its items; the first list keeps them only when they say so",
+  },
+  {
+    case:  "import, keeping the originals",
+    say:   "copy everything from Before Bed onto the groceries but leave them on Before Bed too",
+    tool:  :run_jil_task,
+    needs: :import_list_fn,
+    args:  { run_jil_task: { name: /import/i, keep: /true/i } },
+    note:  "Keep is the only way the first list holds on to its items",
   },
 
   # --- an end time, not a duration the model works out itself ---------------

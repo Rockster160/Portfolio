@@ -44,6 +44,7 @@ class Jil
       event
       item
       jarvis_subscribed
+      job_application
       list
       mail
       monitor
