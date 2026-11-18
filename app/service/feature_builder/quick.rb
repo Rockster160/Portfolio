@@ -6,7 +6,8 @@
 #
 # It's a FeatureBuild like any other, so the thread hears from it the same way:
 # each turn's answer arrives as a plain message, and a reply to any message
-# about it goes into the session. It never opens a PR and never asks for a
+# about it goes into the session; once it has closed, a reply starts a new
+# session that carries on from it (resume!). It never opens a PR and never asks for a
 # review, so it isn't counted as waiting on anyone. One that has gone a while
 # without a reply is closed by the daily sweep (QuickCloseWorker), and the
 # Claude page can close one at any time.
@@ -50,9 +51,51 @@ module FeatureBuilder
         attachment_signed_ids: attachment_signed_ids,
       ) { |build|
         said = typed.presence || "/q #{question}"
-        posted = FeatureBuilder.post_request!(build, conversation, said, { local_id: local_id }.compact)
+        metadata = { local_id: local_id, reply_to: replied && ::Buddy::ThreadReply.quote(replied) }
+        posted = FeatureBuilder.post_request!(build, conversation, said, metadata.compact)
       }
       posted
+    end
+
+    # A reply to a `/q` whose session has closed: a new session for it, handed
+    # the earlier one's brief and everything said in it since. The reply is
+    # moved over to the new build, so what's said from here goes there.
+    def resume!(earlier, message)
+      FeatureBuilder.launch!(
+        user:         earlier.user,
+        conversation: message.byte_conversation,
+        request:      resumed_brief(earlier, message),
+        title:        earlier.title,
+        kind:         :quick,
+      ) { |build|
+        message.update!(metadata: message.metadata.to_h.merge("feature_build_id" => build.id))
+        build.images.attach(message.files.blobs) if message.files.attached?
+      }
+    end
+
+    def resumed_brief(earlier, message)
+      since = earlier_messages(earlier, except: message)
+      said = since.any? ? "What was said in it after that, oldest first:\n\n#{lines(since)}\n" : ""
+      <<~TXT
+        Quick request: #{message.body.to_s.strip}
+
+        This carries on an earlier quick session that has closed. Its brief was:
+
+        ---
+        #{earlier.request.to_s.strip}
+        ---
+
+        #{said}
+      TXT
+    end
+
+    # The earlier session's own messages: its request, its answers and the
+    # replies to them, without its status line.
+    def earlier_messages(earlier, except:)
+      scope = except.byte_conversation.byte_messages.not_hidden
+      scope = scope.where("byte_messages.metadata->>'feature_build_id' = ?", earlier.id.to_s)
+      scope = scope.where.not(id: [except.id, earlier.byte_message_id].compact)
+      scope.includes(:user).order(:created_at).to_a
     end
 
     def brief(conversation, question, replied=nil)
