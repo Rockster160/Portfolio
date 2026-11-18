@@ -73,7 +73,6 @@ module Buddy
       print_again
       add_list_item
       remove_list_item
-      copy_list
       add_inventory_item
       remove_inventory_item
     ].freeze

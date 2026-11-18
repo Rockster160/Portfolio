@@ -374,15 +374,10 @@ class BuddyEvalWorld
     }
 
     # Somewhere for "add those to Before Bed every night at 9" to land.
-    bed = user.lists.reload.detect { |l| l.name.match?(/before bed/i) }
-    if bed.nil?
+    unless user.lists.reload.any? { |l| l.name.match?(/before bed/i) }
       bed = track(List.create!(name: "Before Bed"))
       track(UserList.create!(user: user, list: bed, is_owner: true))
     end
-
-    # Something on it, so copying Before Bed onto another list has items to
-    # carry rather than refusing an empty list.
-    reuse(bed.list_items.first) { ListItem.create!(list: bed, name: "Brush teeth") }
   end
 
   # Anchored to THEIR morning rather than "four hours ago". A run at 9pm put

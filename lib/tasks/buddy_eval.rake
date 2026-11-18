@@ -254,11 +254,6 @@ BUDDY_TOOL_PROBES = {
     avoid: %i[add_list_item schedule_reminder request_feature],
   },
   remove_list_item:       { say: "take the oat milk off the groceries", needs: :oat_milk_listed },
-  copy_list:              {
-    say:   "import everything from Before Bed onto the groceries",
-    needs: :before_bed_list,
-    avoid: %i[add_list_item schedule_list_items],
-  },
   # The failure this one is watching for is not another tool - it is the model
   # answering out of `lists` in prose, which reads fine and hands them something
   # they still have to go and act on somewhere else.
@@ -2194,6 +2189,25 @@ BUDDY_EDGE_PROBES = [
     note:  "picked `great_bottom` and moved BOTH bottom blinds, because the " \
            "six singles weren't in the enum yet - the model can only see the " \
            "task's `listener` string. They are there now and nothing re-checks it",
+  },
+
+  # --- importing one list into another --------------------------------------
+  {
+    case:       "import is a move",
+    say:        "import everything from Before Bed into the groceries",
+    tool:       :run_jil_task,
+    needs:      :import_list_fn,
+    args:       { run_jil_task: { name: /import/i, from: /before bed/i, to: /grocer/i } },
+    never_args: { run_jil_task: { keep: /true/i } },
+    note:       "importing a list moves its items; the first list keeps them only when they say so",
+  },
+  {
+    case:  "import, keeping the originals",
+    say:   "copy everything from Before Bed onto the groceries but leave them on Before Bed too",
+    tool:  :run_jil_task,
+    needs: :import_list_fn,
+    args:  { run_jil_task: { name: /import/i, keep: /true/i } },
+    note:  "Keep is the only way the first list holds on to its items",
   },
 
   # --- an end time, not a duration the model works out itself ---------------
