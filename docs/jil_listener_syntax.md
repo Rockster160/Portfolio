@@ -179,6 +179,7 @@ These fire per user, carrying that user's own data.
 | `section` | a list section changes | `action`, `name` |
 | `chore_completion` | a chore is marked done or undone | `action`, `chore_name` |
 | `chore` | a chore is created or edited | `action`, `name` |
+| `job_application` | an application is submitted: its first `applied` beat, dated today (filing one later or back-filling an old one fires nothing) | `action` (`applied`), `id`, `company`, `role`, `source`, `occurred_at` |
 | `chore_withdrawal` | pebbles are withdrawn | `action`, `amount_pebbles`, `note` |
 | `chore_transfer` | pebbles move between people | `action`, `amount_pebbles` |
 | `event` | an ActionEvent is logged, edited, or deleted | `action`, `name` |
