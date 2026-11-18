@@ -216,6 +216,7 @@ RSpec.describe "Byte thread markdown" do
 
     it "takes a Tabler class" do
       expect(ref(rendered["ticon"])).to eq("ti-broom")
+      expect(ref(rendered["ticon_underscore"])).to eq("ti-fa-clock_o")
     end
 
     it "renders each one in a run of them" do

@@ -30,7 +30,7 @@ export function escapeAttr(s) {
 // hand-typed with a space in it. Mirrors IconPool::ICON_REF_RX on the server,
 // which does the same job for surfaces that can only show words.
 const ICON_REF_RX =
-  /\[hicon:\s*(\d+)\]|\[ticon:\s*(ti-[a-z0-9-]+)\]|\[hicon[ \t]+([^\]\n]+)\]/gi;
+  /\[hicon:\s*(\d+)\]|\[ticon:\s*(ti-[a-z0-9_-]+)\]|\[hicon[ \t]+([^\]\n]+)\]/gi;
 
 // Empty on purpose — `hydrateInlineIcons` fills it once the pool is loaded.
 function iconSpan(ref) {

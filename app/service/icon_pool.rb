@@ -93,7 +93,7 @@ module IconPool
   # that renders on screen but not in a notification is worse than either.
   ICON_REF_RX = /
       \[hicon:\s*(\d+)\]
-    | \[ticon:\s*(ti-[a-z0-9-]+)\]
+    | \[ticon:\s*(ti-[a-z0-9_-]+)\]
     | \[hicon[ \t]+([^\]\n]+)\]
   /xi
 

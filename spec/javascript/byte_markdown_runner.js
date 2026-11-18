@@ -52,6 +52,7 @@ const cases = {
   hicon_by_name: "feeding [hicon Fae] now",
   hicon_name_with_spaces: "grabbing a [hicon Mtn Dew Can]",
   ticon: "sweeping [ticon:ti-broom] up",
+  ticon_underscore: "on [ticon:ti-fa-clock_o] time",
   hicon_three_in_a_row: "[hicon:21] [hicon:24] [hicon:22]",
   hicon_then_parens: "[hicon Fae](not a link)",
   hicon_in_code_untouched: "write `[hicon Fae]` for that",

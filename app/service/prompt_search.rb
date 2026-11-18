@@ -258,7 +258,7 @@ class PromptSearch
     return "" if icon.blank? || icon.start_with?("<")
     return "[hicon:#{icon.delete_prefix("hicon:")}]" if icon.start_with?("hicon:")
     return "![](#{icon})" if icon.start_with?("data:image/", "http://", "https://", "/")
-    return "[ticon:#{icon}]" if icon.match?(/\Ati-[a-z0-9-]+\z/)
+    return "[ticon:#{icon}]" if icon.match?(/\Ati-[a-z0-9_-]+\z/)
 
     icon
   end

@@ -35,7 +35,7 @@ class Markdown
       /\[\[\s*([^\]]*?)\s*\]\]\((.*?)\)/                              => color_wrapper,
       /\[\[\s*([^\]]*?)\s*\]\]/                                       => color_wrapper,
       /\[hicon:(\d+)\]/                                               => hicon_id_wrapper,
-      /\[ticon:(ti-[a-z0-9-]+)\]/                                     => ticon_wrapper,
+      /\[ticon:(ti-[a-z0-9_-]+)\]/                                     => ticon_wrapper,
       /\[hicon (.*?)\]/                                               => hicon_wrapper,
       /!\[(.*?)\]\((.*?)\)/                                           => wrap(nil, :img, src: '\2', alt: '\1'),
       /\[btn (.*?)\]\((.*?)\)/                                        => wrap('\2', :a, href: '\1', class: "btn"),

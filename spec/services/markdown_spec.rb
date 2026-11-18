@@ -72,6 +72,8 @@ RSpec.describe Markdown do
   describe "[ticon:ti-*]" do
     it "renders a Tabler icon <i> element, and only for a ti- class" do
       expect(described_class.new("[ticon:ti-broom]").to_html.to_s).to include('class="ti ti-broom"')
+      clock = described_class.new("[ticon:ti-fa-clock_o]").to_html.to_s
+      expect(clock).to include('class="ti ti-fa-clock_o"')
 
       ["[ticon:evil-class]", "[ticon:broom]"].each { |text|
         out = described_class.new(text).to_html.to_s
