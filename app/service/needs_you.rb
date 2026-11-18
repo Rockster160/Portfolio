@@ -48,6 +48,20 @@ module NeedsYou
     }
   end
 
+  # Not waiting on the owner, but shown beside it: the approved PRs in the
+  # order they'll merge, as the dashboard's Upcoming list draws them.
+  def upcoming(user)
+    MergeQueue.upcoming(user).map { |build|
+      {
+        kind:   "Merge",
+        ticket: build.pr_number,
+        title:  build.full_title,
+        url:    build.pr_url,
+        since:  build.approved_at&.iso8601,
+      }
+    }
+  end
+
   def item(kind:, title:, reason:, url:, since:)
     { kind: kind, title: title, reason: reason, url: url, since: since&.iso8601 }
   end

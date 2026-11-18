@@ -227,10 +227,12 @@ module FeatureBuilder
   # again (`builder-pr rereview`): it has commented and asked for a review on
   # the PR, and gives up its approval and its turn.
   def rereview!(build, comment)
-    pr = "[PR ##{build.pr_number}](#{build.pr_url})"
     announce!(
       build,
-      "**#{build.full_title}** needs another review: #{comment}\n\n#{pr}",
+      build.card(
+        "Needs another review: #{comment}",
+        links: [build.pr_markdown, build.link_markdown],
+      ),
       "Review again: #{build.full_title}",
     )
     MergeQueue.released!(build)
@@ -252,7 +254,10 @@ module FeatureBuilder
     repaint!(build)
     announce!(
       build,
-      with_scripts(build, "**#{build.full_title}** closed itself: #{build.closed_reason}"),
+      build.card(
+        "Closed itself#{build.scripts_note}: #{build.closed_reason}",
+        links: build.script_links,
+      ),
       "Closed: #{build.full_title}",
     )
     refresh_chip!(build.user)
@@ -303,41 +308,31 @@ module FeatureBuilder
   end
 
   def announce_pr!(build)
-    pr = "[PR ##{build.pr_number}](#{build.pr_url})"
-    text = "**#{build.full_title}** is ready for review: #{pr}. #{build.link_markdown}"
-    announce!(build, with_scripts(build, text), "PR ready: #{build.full_title}")
-  end
-
-  def with_scripts(build, text)
-    [text, build.scripts_markdown].compact_blank.join("\n\n")
+    links = [build.pr_markdown, build.link_markdown, *build.script_links]
+    text = build.card("Ready for review#{build.scripts_note}", links: links)
+    announce!(build, text, "PR ready: #{build.full_title}")
   end
 
   def announce_waiting!(build)
     return if build.status_finished? || build.status_failed?
     return announce_answer!(build) if build.kind_quick?
 
-    text = (
+    step = (
       if build.question.present?
-        "**#{build.full_title}** is asking:\n\n#{build.question}\n\n" \
-          "Reply to this to answer. #{build.link_markdown}"
+        "Asking, reply to this to answer:\n#{build.question}"
       else
-        "**#{build.full_title}** is waiting on you. #{build.link_markdown}"
+        "Waiting on you"
       end
     )
-    announce!(build, text, "Waiting on you: #{build.full_title}")
+    announce!(build, build.card(step), "Waiting on you: #{build.full_title}")
   end
 
-  # A `/q` turn's last message is its answer, so it's said as it is. A turn
-  # that ended with no text still says so, so the thread is never left waiting
-  # on an answer that isn't coming.
+  # A `/q` turn's last message is its answer, so that is the step, word for
+  # word. A turn that ended with no text still says so, so the thread is never
+  # left waiting on an answer that isn't coming.
   def announce_answer!(build)
-    return announce!(build, build.question, build.full_title) if build.question.present?
-
-    announce!(
-      build,
-      "**#{build.full_title}** finished a turn, but no answer came back from it. #{build.link_markdown}",
-      build.full_title,
-    )
+    step = build.question.presence || "Finished a turn, but no answer came back from it"
+    announce!(build, build.card(step), build.full_title)
   end
 
   # A production script a `/q` session sent: its page, where it's approved, in
@@ -347,8 +342,9 @@ module FeatureBuilder
     return if build.nil? || !build.kind_quick?
 
     url = Rails.application.routes.url_helpers.system_production_script_url(script)
-    said = updated ? "updated, and needs approving again" : "is waiting on your approval"
-    announce!(build, "[#{script.title}](#{url}) #{said}.", "Script: #{script.title}")
+    step = updated ? "A script changed and needs approving again" : "A script needs your approval"
+    text = build.card(step, links: ["[#{script.title}](#{url})"])
+    announce!(build, text, "Script: #{script.title}")
   end
 
   def announce!(build, text, push_title)
@@ -443,10 +439,10 @@ module FeatureBuilder
       # A `/q` that has closed carries on in a new session of its own.
       return FeatureBuilder::Quick.resume!(build, message).present? if build.kind_quick?
 
-      over = build.status_failed? ? "never started" : "is finished"
+      over = build.status_failed? ? "Never started" : "Finished"
       say(
         message.byte_conversation,
-        "**#{build.title}** #{over}, so there's no session left to send that to.",
+        build.card("#{over}, so there's no session left to send that to", links: []),
         feature_build_id: build.id,
       )
       return false
@@ -455,7 +451,7 @@ module FeatureBuilder
 
     say(
       message.byte_conversation,
-      "Couldn't reach the Mini, so that didn't get to **#{build.full_title}**. #{build.link_markdown}",
+      build.card("Couldn't reach the Mini, so that reply didn't get to it"),
       feature_build_id: build.id,
     )
     false
@@ -788,15 +784,25 @@ module FeatureBuilder
   end
 
   # Where a build has got to, in the words the pages show it in. `live` is the
-  # Mini's report for it, when it's listed.
+  # Mini's report for it, when it's listed. Once it has a PR, its place in the
+  # merge queue says more than the session does, except while merging.
   def stage(build, live)
     return build.status.humanize.downcase if build.status_failed? || build.status_finished?
     return (live["working"] ? "working" : "answered") if live && build.kind_quick?
-    return "working" if live&.dig("working") && build.pr_url.present?
+    return pr_stage(build, live) if build.pr_url.present?
     return (build.planned_at ? "building" : "planning") if live&.dig("working")
-    return "PR open" if build.pr_url.present?
 
     live ? "waiting on you" : build.status.humanize.downcase
+  end
+
+  def pr_stage(build, live)
+    queue = MergeQueue.state(build)
+    return "merging" if queue == :landing
+    return "working" if live&.dig("working")
+    return "held" if queue == :held
+    return "approved" if queue == :approved
+
+    "PR open"
   end
 
   # The chip counting what waits on them, and the looks their pet wears for
