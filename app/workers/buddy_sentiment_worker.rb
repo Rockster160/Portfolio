@@ -16,15 +16,21 @@ class BuddySentimentWorker
 
   # Positional, because Sidekiq serialises the argument list to JSON.
   #
-  # `unprompted` has a default and the others don't: jobs enqueued before it
-  # existed are still in the queue with three arguments, and `false` is what
-  # they mean.
+  # `unprompted` and `mood_session` have defaults and the others don't: jobs
+  # enqueued before they existed are still in the queue without them, and
+  # `false` and nil are what they mean.
   # rubocop:disable Style/OptionalBooleanParameter -- Sidekiq args are positional
-  def perform(conversation_id, acted, landed, unprompted=false)
+  def perform(conversation_id, acted, landed, unprompted=false, mood_session=nil)
     conversation = ByteConversation.find_by(id: conversation_id)
     return if conversation.nil?
 
-    Buddy::Sentiment.settle!(conversation, acted: acted, landed: landed, unprompted: unprompted)
+    Buddy::Sentiment.settle!(
+      conversation,
+      acted:        acted,
+      landed:       landed,
+      unprompted:   unprompted,
+      mood_session: mood_session,
+    )
   end
   # rubocop:enable Style/OptionalBooleanParameter
 end

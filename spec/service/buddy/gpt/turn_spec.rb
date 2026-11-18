@@ -550,9 +550,10 @@ RSpec.describe Buddy::GPT::Turn do
       it "says it didn't land when the reply reports a miss" do
         expect(Buddy::Sentiment).to receive(:later).with(
           convo,
-          acted:      true,
-          landed:     false,
-          unprompted: false,
+          acted:        true,
+          landed:       false,
+          unprompted:   false,
+          mood_session: nil,
         )
 
         acts_then_says("Hmm. I couldn't get a frame from the backyard camera, and it didn't say why.")
@@ -561,9 +562,10 @@ RSpec.describe Buddy::GPT::Turn do
       it "says it landed when the reply says it worked" do
         expect(Buddy::Sentiment).to receive(:later).with(
           convo,
-          acted:      true,
-          landed:     true,
-          unprompted: false,
+          acted:        true,
+          landed:       true,
+          unprompted:   false,
+          mood_session: nil,
         )
 
         acts_then_says("Kitchen lights are on now.")
@@ -573,9 +575,10 @@ RSpec.describe Buddy::GPT::Turn do
       it "does not read looking forward to something as a miss" do
         expect(Buddy::Sentiment).to receive(:later).with(
           convo,
-          acted:      true,
-          landed:     true,
-          unprompted: false,
+          acted:        true,
+          landed:       true,
+          unprompted:   false,
+          mood_session: nil,
         )
 
         acts_then_says("Timer's set. I can't wait to hear how it goes!")
@@ -588,9 +591,10 @@ RSpec.describe Buddy::GPT::Turn do
 
         expect(Buddy::Sentiment).to receive(:later).with(
           convo,
-          acted:      true,
-          landed:     true,
-          unprompted: false,
+          acted:        true,
+          landed:       true,
+          unprompted:   false,
+          mood_session: nil,
         )
 
         acts_then_says("Kitchen lights are on now.")
@@ -4090,6 +4094,56 @@ RSpec.describe Buddy::GPT::Turn do
   # after that is just its filename - so view_image is the only way back to a
   # picture. A function_call_output is a STRING and can't carry one, which is
   # why the tool stages a user item for Turn to splice in behind the output.
+  describe "a client that sends every tool up front" do
+    let(:everything_client) {
+      Class.new(FakeBuddyClient) {
+        attr_reader :finished
+
+        def opens_everything?
+          true
+        end
+
+        def finish
+          @finished = true
+        end
+      }
+    }
+    let(:indexed) { Buddy::ToolIndex.indexed(user: user, conversation: convo).first }
+
+    it "gives the client the mood reading to start, and the face its session" do
+      client = Class.new(everything_client) {
+        attr_accessor :mood
+
+        def mood_session
+          "s1"
+        end
+      }.new([{ text: "Hey!" }])
+      allow(Buddy::Sentiment).to receive(:later)
+
+      described_class.run!(user_says("hi"), client: client)
+
+      expect(client.mood).to include(system: Buddy::Sentiment::PROMPT)
+      expect(Buddy::Sentiment).to have_received(:later).with(
+        convo, hash_including(mood_session: "s1"),
+      )
+    end
+
+    it "offers each tool in full, runs a bare call, and ends the client's session" do
+      client = everything_client.new([
+        { tool_calls: [{ name: indexed[:name], call_id: "c1", arguments: {} }] },
+        { text: "Done." },
+      ])
+      described_class.run!(user_says("go"), client: client)
+
+      offered = client.calls.first.tools.find { |schema| schema[:name].to_s == indexed[:name].to_s }
+      full = Buddy::Tools.function_schema(indexed, user: user)
+      expect(offered[:parameters]).to eq(full[:parameters])
+      output = client.calls.second.input.find { |item| item[:type] == :function_call_output }
+      expect(output[:output]).not_to include("only opened it")
+      expect(client.finished).to be(true)
+    end
+  end
+
   describe "re-opening an image the person sent earlier" do
     before { ActiveStorage::Current.url_options = { host: "example.com", protocol: "https" } }
     after  { ActiveStorage::Current.url_options = nil }
