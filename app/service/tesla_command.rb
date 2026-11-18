@@ -6,6 +6,12 @@ module TeslaCommand
   TEMP_MIN = 59
   TEMP_MAX = 82
 
+  # Controls that take an on/off. When the switch word or "heat" comes last
+  # ("sentry off", "seat heat"), it's parsed as the command, so the command is
+  # handed back to the control named before it.
+  SWITCHED = [:sentry, :charge, :charging, :port, :steering, :wheel, :seat, :passenger].freeze
+  SWITCH_WORDS = [:on, :off, :start, :stop, :heat, :warm].freeze
+
   def quick_command(cmd, opt=nil)
     return "Currently forbidden" if DataStorage[:tesla_forbidden]
 
@@ -57,11 +63,18 @@ module TeslaCommand
     cmd = original_cmd.to_s.downcase.squish
     opt = original_opt.to_s.downcase.squish
     direction = :toggle
-    if "#{cmd} #{opt}".match?(/\b(unlock|open|lock|close|pop|vent)\b/)
+    feature = opt.split.map(&:to_sym).find { |word| SWITCHED.include?(word) }
+    cmd, opt = feature.to_s, "#{opt} #{cmd}" if feature && SWITCH_WORDS.include?(cmd.to_sym)
+    switch = :toggle
+    switch = :on if opt.match?(/\b(on|start|enable)\b/)
+    switch = :off if opt.match?(/\b(off|stop|disable)\b/)
+
+    if "#{cmd} #{opt}".match?(/\b(unlock|open|lock|close|shut|pop|vent)\b/)
       combine = "#{cmd} #{opt}"
       direction = :open if combine.match?(/\b(unlock|open|pop)\b/)
       direction = :close if combine.match?(/\b(lock|close|shut)\b/)
-      cmd, opt = combine.gsub(/\b(open|close|pop)\b/, "").squish.split(" ", 2)
+      cmd, opt = combine.gsub(/\b(open|close|shut|pop)\b/, "").squish.split(" ", 2)
+      opt = opt.to_s
     elsif cmd.to_i.to_s == cmd
       opt = cmd.to_i
       cmd = :temp
@@ -115,15 +128,36 @@ module TeslaCommand
     when :frunk
       @response = "Opening frunk"
       car.pop_frunk unless quick
+    when :port
+      dir = direction == :close ? :close : :open
+      @response = "#{dir == :close ? "Closing" : "Opening"} the charge port"
+      car.charge_port(dir) unless quick
+    when :charge, :charging
+      if opt.match?(/\bport\b/)
+        dir = direction == :close ? :close : :open
+        @response = "#{dir == :close ? "Closing" : "Opening"} the charge port"
+        car.charge_port(dir) unless quick
+      else
+        dir = { on: :start, off: :stop, toggle: :toggle }[switch]
+        @response = { start: "Starting", stop: "Stopping", toggle: "Toggling" }[dir] + " charging"
+        car.charging(dir) unless quick
+      end
+    when :sentry
+      on = switch != :off
+      @response = "Turning sentry mode #{on ? "on" : "off"}"
+      car.sentry(on) unless quick
+    when :steering, :wheel
+      on = switch != :off
+      @response = "Turning steering wheel heat #{on ? "on" : "off"}"
+      car.steering_heat(on) unless quick
     when :honk, :horn
       @response = "Honking the horn"
       car.honk unless quick
-    when :seat
-      @response = "Turning on driver seat heater"
-      car.heat_driver unless quick
-    when :passenger
-      @response = "Turning on passenger seat heater"
-      car.heat_passenger unless quick
+    when :seat, :passenger
+      seat = cmd.to_sym == :passenger || opt.match?(/\bpassenger\b/) ? :passenger : :driver
+      on = switch != :off
+      @response = "Turning #{on ? "on" : "off"} #{seat} seat heater"
+      car.seat_heat(seat, on ? 3 : 0) unless quick
     when :navigate
       # Resolution priority:
       #   1. Explicit address recognized by Jarvis::Regex (e.g. "1 Main St")
@@ -190,7 +224,9 @@ module TeslaCommand
     # out loud or automation doing its job — neither is worth a push. Matches
     # how Jil::Methods::Tesla#announce already reports every command it sends.
     Jarvis.say(@response) unless quick
-    TeslaCommandWorker.perform_async(cmd.to_s, opt&.to_s) if quick && !@cancel
+    # The worker parses the words again, so it gets them as they were said:
+    # the parsed pair has already dropped "close" from "close the trunk".
+    TeslaCommandWorker.perform_async(original_cmd.to_s, original_opt.to_s) if quick && !@cancel
     @cancel = false
     res
   rescue TeslaError => e
