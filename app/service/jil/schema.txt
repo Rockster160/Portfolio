@@ -595,6 +595,16 @@
   #ventWindows::Boolean
   #popFrunk::Boolean
   #popTrunk::Boolean
+  #trunk(["open" "close" "toggle"])::Boolean
+  #doors(["lock" "unlock" "toggle"])::Boolean
+  #windows(["vent" "close" "toggle"])::Boolean
+  #climate(["on" "off" "toggle"])::Boolean
+  #charging(["start" "stop" "toggle"])::Boolean
+  #chargePort(["open" "close"])::Boolean
+  #setDefrost(["on" "off"])::Boolean
+  #sentry(["on" "off"])::Boolean
+  #steeringHeat(["on" "off"])::Boolean
+  #seatHeat(["driver" "passenger"] ["off" "low" "medium" "high"])::Boolean
   #defrost::Boolean
   #heatDriver::Boolean
   #heatPassenger::Boolean

@@ -21,7 +21,10 @@ RSpec.describe Jil::Methods::Tesla do
     allow(::TripState).to receive(:car_navigating_to?).and_return(false)
     allow(::TripState).to receive(:car_routing?).and_return(false)
     allow(::TripState).to receive(:start_for_destination!)
-    %i[start_car off_car honk set_temp navigate add_stop doors windows pop_frunk pop_boot defrost heat_driver heat_passenger send].each do |m|
+    %i[
+      start_car off_car honk set_temp navigate add_stop doors windows pop_frunk pop_boot defrost
+      heat_driver heat_passenger flash_lights climate charging charge_port sentry steering_heat seat_heat
+    ].each do |m|
       allow(control).to receive(m).and_return(true)
     end
     @says = []
@@ -236,6 +239,80 @@ RSpec.describe Jil::Methods::Tesla do
       tesla.start([{ navigate: "Costco", silent: true }])
 
       expect(@says).to be_empty
+    end
+  end
+
+  describe "controls with a direction" do
+    it "closes the trunk, and says so" do
+      expect(tesla.trunk("close")).to be(true)
+      expect(control).to have_received(:pop_boot).with(:close)
+      expect(@says.last).to eq("Trunk closing")
+    end
+
+    it "says the trunk was already there instead of claiming it moved" do
+      allow(control).to receive(:pop_boot).and_return(:already)
+      tesla.trunk("open")
+      expect(@says.last).to eq("Trunk already open")
+    end
+
+    it "hands each dropdown choice to the car" do
+      tesla.trunk("toggle")
+      tesla.doors("unlock")
+      tesla.windows("vent")
+      tesla.climate("off")
+      tesla.charging("toggle")
+      tesla.chargePort("close")
+      tesla.setDefrost("off")
+      tesla.sentry("on")
+      tesla.steeringHeat("off")
+      tesla.seatHeat("passenger", "medium")
+
+      expect(control).to have_received(:pop_boot).with(:toggle)
+      expect(control).to have_received(:doors).with(:unlock)
+      expect(control).to have_received(:windows).with(:open)
+      expect(control).to have_received(:climate).with(:off)
+      expect(control).to have_received(:charging).with(:toggle)
+      expect(control).to have_received(:charge_port).with(:close)
+      expect(control).to have_received(:defrost).with(false)
+      expect(control).to have_received(:sentry).with(true)
+      expect(control).to have_received(:steering_heat).with(false)
+      expect(control).to have_received(:seat_heat).with(:passenger, 2)
+      expect(@says).to eq(
+        [
+          "Trunk toggled",
+          "Doors unlocked",
+          "Windows vented",
+          "Climate off",
+          "Charging toggled",
+          "Charge port closing",
+          "Defrost off",
+          "Sentry mode on",
+          "Steering wheel heat off",
+          "Passenger seat heat medium",
+        ],
+      )
+    end
+
+    it "refuses a choice outside the dropdown without touching the car" do
+      expect(tesla.trunk("sideways")).to be(false)
+      expect(tesla.seatHeat("back", "high")).to be(false)
+      expect(control).not_to have_received(:pop_boot)
+      expect(control).not_to have_received(:seat_heat)
+      expect(@says).to be_empty
+    end
+
+    it "runs from Jil code" do
+      code = <<~'JIL'
+        closed = Tesla.trunk("close")::Boolean
+        heated = Tesla.seatHeat("driver", "low")::Boolean
+      JIL
+      Jil::Validator.validate!(code)
+      allow(user).to receive(:me?).and_return(true)
+      jil = ::Jil::Executor.call(user, code, {})
+      expect(jil.ctx[:error]).to be_nil
+      expect(jil.ctx[:vars][:closed][:value]).to be(true)
+      expect(control).to have_received(:pop_boot).with(:close)
+      expect(control).to have_received(:seat_heat).with(:driver, 1)
     end
   end
 end

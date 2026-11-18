@@ -60,6 +60,10 @@ RSpec.describe "Tesla authorization" do
       ].each do |action|
         expect(methods.public_send(action)).to eq(false)
       end
+      %i[trunk doors windows climate charging chargePort setDefrost sentry steeringHeat].each do |action|
+        expect(methods.public_send(action, "toggle")).to eq(false)
+      end
+      expect(methods.seatHeat("driver", "high")).to eq(false)
       expect(methods.setTemp(70)).to eq(false)
       expect(methods.navigate("anywhere")).to eq(false)
     end

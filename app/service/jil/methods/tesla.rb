@@ -16,6 +16,8 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   # from Buddy instead (see Jil::Methods::Buddy#sayEvent), addressed to
   # whoever the event actually belongs to.
 
+  SEAT_HEAT_LEVELS = { off: 0, low: 1, medium: 2, high: 3 }.freeze
+
   def cast(value)
     @jil.cast(value, :Boolean)
   end
@@ -91,7 +93,7 @@ class Jil::Methods::Tesla < Jil::Methods::Base
 
   def flashLights
     wrap {
-      ::TeslaControl.me.send(:proxy_command, :flash_lights)
+      ::TeslaControl.me.flash_lights
       announce("Flashing lights")
     }
   end
@@ -191,6 +193,92 @@ class Jil::Methods::Tesla < Jil::Methods::Base
     }
   end
 
+  # The dropdown methods below take the direction as their argument, and
+  # `toggle` reads the car's current state to pick one. An argument outside
+  # the dropdown returns false without touching the car.
+  def trunk(direction)
+    dir = pick(direction, :open, :close, :toggle)
+    wrap(valid: dir) {
+      result = ::TeslaControl.me.pop_boot(dir)
+      next announce("Trunk already #{dir == :open ? "open" : "closed"}") if result == :already
+
+      announce({ open: "Trunk opening", close: "Trunk closing", toggle: "Trunk toggled" }[dir])
+    }
+  end
+
+  def doors(direction)
+    dir = pick(direction, :lock, :unlock, :toggle)
+    wrap(valid: dir) {
+      ::TeslaControl.me.doors(dir)
+      announce({ lock: "Doors locked", unlock: "Doors unlocked", toggle: "Doors toggled" }[dir])
+    }
+  end
+
+  def windows(direction)
+    dir = pick(direction, :vent, :close, :toggle)
+    wrap(valid: dir) {
+      ::TeslaControl.me.windows({ vent: :open, close: :close, toggle: :toggle }[dir])
+      announce({ vent: "Windows vented", close: "Windows closed", toggle: "Windows toggled" }[dir])
+    }
+  end
+
+  def climate(direction)
+    dir = pick(direction, :on, :off, :toggle)
+    wrap(valid: dir) {
+      ::TeslaControl.me.climate(dir)
+      announce({ on: "Climate on", off: "Climate off", toggle: "Climate toggled" }[dir])
+    }
+  end
+
+  def charging(direction)
+    dir = pick(direction, :start, :stop, :toggle)
+    wrap(valid: dir) {
+      ::TeslaControl.me.charging(dir)
+      announce({ start: "Charging started", stop: "Charging stopped", toggle: "Charging toggled" }[dir])
+    }
+  end
+
+  def chargePort(direction)
+    dir = pick(direction, :open, :close)
+    wrap(valid: dir) {
+      ::TeslaControl.me.charge_port(dir)
+      announce("Charge port #{dir == :open ? "opening" : "closing"}")
+    }
+  end
+
+  def setDefrost(direction)
+    dir = pick(direction, :on, :off)
+    wrap(valid: dir) {
+      ::TeslaControl.me.defrost(dir == :on)
+      announce("Defrost #{dir}")
+    }
+  end
+
+  def sentry(direction)
+    dir = pick(direction, :on, :off)
+    wrap(valid: dir) {
+      ::TeslaControl.me.sentry(dir == :on)
+      announce("Sentry mode #{dir}")
+    }
+  end
+
+  def steeringHeat(direction)
+    dir = pick(direction, :on, :off)
+    wrap(valid: dir) {
+      ::TeslaControl.me.steering_heat(dir == :on)
+      announce("Steering wheel heat #{dir}")
+    }
+  end
+
+  def seatHeat(seat, level)
+    seat = pick(seat, :driver, :passenger)
+    level = pick(level, *SEAT_HEAT_LEVELS.keys)
+    wrap(valid: seat && level) {
+      ::TeslaControl.me.seat_heat(seat, SEAT_HEAT_LEVELS[level])
+      announce("#{seat.to_s.capitalize} seat heat #{level}")
+    }
+  end
+
   def defrost
     wrap {
       ::TeslaControl.me.defrost(true)
@@ -254,7 +342,15 @@ class Jil::Methods::Tesla < Jil::Methods::Base
     ::PrettyLogger.error("[JIL TESLA] announce: #{e.class}: #{e.message}")
   end
 
-  def wrap(&block)
+  def pick(value, *allowed)
+    value = value.to_s.downcase.squish.to_sym
+    value if allowed.include?(value)
+  end
+
+  # `valid` is false when a dropdown argument didn't match, which refuses the
+  # call before anything is sent.
+  def wrap(valid: true, &block)
+    return false unless valid
     return false unless @jil.user&.me?
 
     if ::TeslaSwitch.disabled?
