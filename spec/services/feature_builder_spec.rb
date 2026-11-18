@@ -41,9 +41,8 @@ RSpec.describe FeatureBuilder do
       })
 
       expect(thread.byte_messages.count).to eq(2)
-      expect(thread.byte_messages.last.body).to include(
-        "Building **dark mode**",
-        "(https://claude.ai/code/session_abc)",
+      expect(thread.byte_messages.last.body).to eq(
+        "**dark mode**\nBuilding on the Mini\n[Open it in Claude](https://claude.ai/code/session_abc)",
       )
     end
 
@@ -122,14 +121,16 @@ RSpec.describe FeatureBuilder do
       build.update!(kind: :quick, title: "Gate sound", status: :running)
     }
 
-    it "says each answer as it is, and isn't counted as waiting on anyone" do
+    it "says each answer word for word under its name, and isn't counted as waiting on anyone" do
       described_class.update_from_mini!(build, {
         "waiting_at" => Time.current.iso8601,
         "question"   => "It fired twice because the timer restarted.\n\n1. Want a script to clear it?",
       })
 
       reply = thread.byte_messages.last
-      expect(reply.body).to eq("It fired twice because the timer restarted.\n\n1. Want a script to clear it?")
+      expect(reply.body).to start_with(
+        "**Gate sound**\nIt fired twice because the timer restarted.\n\n1. Want a script to clear it?\n[",
+      )
       expect(reply.metadata).to include("feature_build_id" => build.id)
       expect(described_class.pending_count(user)).to eq(0)
       expect(described_class.asking(user)).to be_empty
@@ -141,8 +142,8 @@ RSpec.describe FeatureBuilder do
       described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601 })
 
       expect(build.reload.question).to be_nil
-      expect(thread.byte_messages.last.body).to include("**Gate sound** finished a turn, but no answer came back")
-      expect(thread.byte_messages.where(body: "Two.").count).to eq(1)
+      expect(thread.byte_messages.last.body).to include("**Gate sound**\nFinished a turn, but no answer came back")
+      expect(thread.byte_messages.where("body LIKE ?", "%\nTwo.\n%").count).to eq(1)
     end
 
     it "posts each production script it sends, linked to where it's approved" do
@@ -156,7 +157,7 @@ RSpec.describe FeatureBuilder do
       expect(thread.byte_messages.last.body).to include(
         "[Clear the gate timer](",
         "/system/production_scripts/#{script.id}",
-        "waiting on your approval",
+        "A script needs your approval",
       )
     end
 
@@ -191,9 +192,8 @@ RSpec.describe FeatureBuilder do
       expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).twice.with(
         hash_including(push_title: "Waiting on you: dark mode"),
       )
-      expect(thread.byte_messages.last.body).to include(
-        "**dark mode** is waiting on you.",
-        "[Open it in Claude](https://claude.ai/code/session_abc)",
+      expect(thread.byte_messages.last.body).to eq(
+        "**dark mode**\nWaiting on you\n[Open it in Claude](https://claude.ai/code/session_abc)",
       )
     end
 
@@ -202,7 +202,7 @@ RSpec.describe FeatureBuilder do
       described_class.update_from_mini!(build, { "planned_at" => now, "waiting_at" => now })
 
       expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once
-      expect(thread.byte_messages.last.body).to include("is waiting on you")
+      expect(thread.byte_messages.last.body).to include("\nWaiting on you\n")
     end
 
     it "says only the PR when the turn that ended opened it" do
@@ -214,7 +214,7 @@ RSpec.describe FeatureBuilder do
       })
 
       expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once
-      expect(thread.byte_messages.last.body).to include("is ready for review")
+      expect(thread.byte_messages.last.body).to include("\nReady for review\n")
     end
 
     it "says nothing for a build that's over" do
@@ -242,9 +242,7 @@ RSpec.describe FeatureBuilder do
       })
 
       expect(thread.byte_messages.last.body).to include(
-        "**dark mode** is asking:",
-        "1. Dark by default?\n2. Follow the system setting?",
-        "Reply to this to answer.",
+        "**dark mode**\nAsking, reply to this to answer:\n1. Dark by default?\n2. Follow the system setting?\n",
       )
       expect(described_class.asking(user)).to eq([build])
     end
@@ -315,7 +313,9 @@ RSpec.describe FeatureBuilder do
         reply_to:     build.byte_message_id,
       )
 
-      expect(thread.byte_messages.last.body).to include("**dark mode** is finished", "no session left")
+      expect(thread.byte_messages.last.body).to eq(
+        "**dark mode**\nFinished, so there's no session left to send that to",
+      )
       expect(BuddyDeliverWorker).not_to have_received(:deliver_after_commit)
     end
 
@@ -384,9 +384,9 @@ RSpec.describe FeatureBuilder do
       expect(build.reload).to be_status_finished
       expect(build.question).to be_nil
       expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once.with(
-        hash_including(text: "**dark mode** closed itself: Master already has dark mode."),
+        hash_including(text: "**dark mode**\nClosed itself: Master already has dark mode."),
       )
-      expect(build.byte_message.reload.body).to eq("Closed **dark mode**: Master already has dark mode.")
+      expect(build.byte_message.reload.body).to eq("**dark mode**\nClosed: Master already has dark mode.")
       expect(described_class.pending(user).values.flatten).not_to include(build)
     end
   end
@@ -412,8 +412,9 @@ RSpec.describe FeatureBuilder do
       expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).with(
         hash_including(
           text: a_string_including(
-            "is ready for review",
-            "Production scripts to approve:\n- [Add the dark mode task](#{link}) (waiting on approval)",
+            "**dark mode**\nReady for review, with 1 production script to approve\n",
+            "[PR #42](https://github.com/x/pull/42) · ",
+            " · [Add the dark mode task](#{link}) (waiting on approval)",
           ),
         ),
       )
@@ -434,8 +435,8 @@ RSpec.describe FeatureBuilder do
 
       expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).with(
         hash_including(
-          text: "**dark mode** closed itself: Only needed a script.\n\n" \
-                "Production scripts to approve:\n- [Add the dark mode task](#{link}) (waiting on approval)",
+          text: "**dark mode**\nClosed itself, with 1 production script to approve: Only needed a script.\n" \
+                "[Add the dark mode task](#{link}) (waiting on approval)",
         ),
       )
     end
@@ -485,7 +486,7 @@ RSpec.describe FeatureBuilder do
       described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601, "question" => "Keep both?" })
 
       expect(build.reload).to have_attributes(landing_at: nil, approved_at: nil)
-      expect(thread.byte_messages.last.body).to include("is asking", "Keep both?")
+      expect(thread.byte_messages.last.body).to include("Asking, reply to this to answer:\nKeep both?")
     end
 
     it "tells the owner when landing needs another review, and moves the line on" do
@@ -495,9 +496,8 @@ RSpec.describe FeatureBuilder do
 
       expect(build.reload).to have_attributes(landing_at: nil, approved_at: nil)
       expect(thread.byte_messages.last.body).to include(
-        "needs another review",
-        "Reworked the cache key",
-        "[PR #42](https://github.com/x/pull/42)",
+        "**dark mode**\nNeeds another review: Reworked the cache key to fit master's.\n" \
+        "[PR #42](https://github.com/x/pull/42) · ",
       )
     end
 
@@ -700,6 +700,12 @@ RSpec.describe FeatureBuilder do
       build.pr_url = "https://github.com/x/pull/1"
       expect(described_class.stage(build, nil)).to eq("PR open")
       expect(described_class.stage(build, { "working" => true })).to eq("working")
+      build.approved_at = Time.current
+      expect(described_class.stage(build, nil)).to eq("approved")
+      build.held = true
+      expect(described_class.stage(build, nil)).to eq("held")
+      build.assign_attributes(held: false, landing_at: Time.current)
+      expect(described_class.stage(build, { "working" => true })).to eq("merging")
       build.status = :finished
       expect(described_class.stage(build, nil)).to eq("finished")
     end

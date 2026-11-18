@@ -55,6 +55,47 @@ RSpec.describe "GET /webhooks/byte/needs_you", type: :request do
     ])
   end
 
+  it "lists approved PRs in the order they merge, leaving out the held and the one merging" do
+    later = feature_build(
+      "Car boot",
+      pr_number:      100,
+      pr_url:         "#{pulls}/100",
+      queue_position: 3,
+      approved_at:    1.minute.ago,
+    )
+    sooner = feature_build(
+      "Bigger icons",
+      pr_number:      98,
+      pr_url:         "#{pulls}/98",
+      queue_position: 2,
+      approved_at:    2.minutes.ago,
+    )
+    feature_build(
+      "Generate images",
+      pr_number:      99,
+      pr_url:         "#{pulls}/99",
+      queue_position: 1,
+      approved_at:    3.minutes.ago,
+      landing_at:     Time.current,
+    )
+    feature_build(
+      "Set aside",
+      pr_number:      97,
+      pr_url:         "#{pulls}/97",
+      queue_position: 4,
+      approved_at:    4.minutes.ago,
+      held:           true,
+    )
+    feature_build("In review", pr_number: 96, pr_url: "#{pulls}/96", queue_position: 5)
+
+    get "/webhooks/byte/needs_you", headers: { "X-Byte-Secret" => "shh" }
+
+    expect(response.parsed_body["upcoming"]).to match([
+      include("kind" => "Merge", "ticket" => 98, "title" => sooner.title, "url" => sooner.pr_url),
+      include("kind" => "Merge", "ticket" => 100, "title" => later.title, "url" => later.pr_url),
+    ])
+  end
+
   it "turns away a request without the secret" do
     get "/webhooks/byte/needs_you", headers: { "X-Byte-Secret" => "guess" }
 

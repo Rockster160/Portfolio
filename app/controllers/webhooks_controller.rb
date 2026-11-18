@@ -705,7 +705,7 @@ class WebhooksController < ApplicationController
   def byte_needs_you
     return head :unauthorized unless byte_authorized?
 
-    render json: { needs_you: NeedsYou.call(User.me) }
+    render json: { needs_you: NeedsYou.call(User.me), upcoming: NeedsYou.upcoming(User.me) }
   end
 
   # The mirror of byte_create: a message FROM the person, injected from off-web

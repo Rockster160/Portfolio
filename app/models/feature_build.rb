@@ -99,19 +99,24 @@ class FeatureBuild < ApplicationRecord
     number.present? ? find_by(pr_number: number) : nil
   end
 
-  # What the thread's system message says at each point. Every one carries a
-  # link: the session once there is one, and the builds page until then.
+  # What the thread's system message says at each point. Every open one
+  # carries a link: the session once there is one, and the builds page until
+  # then.
   def status_line
-    return "Closed **#{full_title}**: #{closed_reason}" if closed_reason.present?
+    return card("Closed: #{closed_reason}", links: [pr_markdown]) if closed_reason.present?
 
     what, doing = KIND_WORDS.fetch(kind.to_sym)
     case status.to_sym
-    when :starting
-      "Starting #{what} on the Mini for **#{full_title}**#{images_note}… #{link_markdown}"
-    when :failed
-      "Couldn't start #{what} for **#{full_title}**: #{error} #{link_markdown}"
-    else "#{doing} **#{full_title}** on the Mini. #{link_markdown}"
+    when :starting then card("Starting #{what} on the Mini#{images_note}…")
+    when :failed then card("Couldn't start #{what}: #{error}")
+    else card("#{doing} on the Mini")
     end
+  end
+
+  # Every message about a build has the same shape, so a thread of them scans
+  # down the left edge: its name, what's happening now, then where to go.
+  def card(step, links: [link_markdown])
+    ["**#{full_title}**", step, links.compact_blank.join(" · ")].compact_blank.join("\n")
   end
 
   def images_note
@@ -133,17 +138,25 @@ class FeatureBuild < ApplicationRecord
     "[See it on the Mini page](#{Rails.application.routes.url_helpers.system_claude_url})"
   end
 
-  # The production scripts it sent, each linked to the page it's approved on,
-  # for the messages that say the build is done. Blank when it sent none.
-  def scripts_markdown
-    scripts = production_scripts.where.not(status: :skipped).order(:created_at).to_a
-    return "" if scripts.empty?
+  def pr_markdown
+    "[PR ##{pr_number}](#{pr_url})" if pr_url.present?
+  end
 
+  # The production scripts it sent, each linked to the page it's approved on,
+  # for the messages that say the build is done. Empty when it sent none.
+  def script_links
     helpers = Rails.application.routes.url_helpers
-    lines = scripts.map { |script|
-      "- [#{script.title}](#{helpers.system_production_script_url(script)}) (#{script.status_label})"
+    production_scripts.where.not(status: :skipped).order(:created_at).map { |script|
+      "[#{script.title}](#{helpers.system_production_script_url(script)}) (#{script.status_label})"
     }
-    "Production scripts to approve:\n#{lines.join("\n")}"
+  end
+
+  # "" or ", with 2 production scripts to approve", for the step it's added to.
+  def scripts_note
+    count = script_links.length
+    return "" if count.zero?
+
+    ", with #{count} production #{count == 1 ? "script" : "scripts"} to approve"
   end
 
   # The phrase a person typed, cut to something that reads as a name in the

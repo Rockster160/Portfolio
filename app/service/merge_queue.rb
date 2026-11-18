@@ -37,6 +37,12 @@ module MergeQueue
     :review
   end
 
+  # Approved and waiting their turn to merge, the next one first: not held,
+  # and not the one merging now.
+  def upcoming(user)
+    builds(user).select { |build| state(build) == :approved }
+  end
+
   def landing?(build)
     build.landing_at.present? && build.landing_at > LANDING_TIMEOUT.ago
   end
