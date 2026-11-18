@@ -293,7 +293,14 @@ import { dash_colors, beep, scaleVal, clamp, shiftTempToColor } from "../vars";
     // `cooling` as though the AC were running right now.
     let stale = Time.now() - (data?.at || 0) * 1000 > Time.hours(2);
     let temp = data?.temp == null ? null : Math.round(data.temp);
-    let setpoint = data?.setpoint == null ? "--" : Math.round(data.setpoint);
+    // `heat_cool` holds the room inside a band rather than at one target, so
+    // that mode draws both ends. A 0 is a null that went through a cast.
+    let setpoint = "--";
+    if (data?.low != null && data?.high != null) {
+      setpoint = `${Math.round(data.low)}-${Math.round(data.high)}`;
+    } else if (data?.setpoint) {
+      setpoint = Math.round(data.setpoint);
+    }
 
     if (temp == null) {
       return Text.grey(`${label} --°[${setpoint}]`);

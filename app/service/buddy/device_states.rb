@@ -94,12 +94,20 @@ module Buddy
           state:    ("#{row[:temp]}°F" if row[:temp].present?),
           humidity: row[:humidity].presence,
           mode:     row[:mode].presence,
-          setpoint: row[:setpoint].presence,
+          setpoint: setpoint_for(row),
           running:  row[:action].presence,
           ago:      (ago_phrase(at, now) if at),
           stale:    (at.nil? || at < now - STALE_AFTER),
         }.compact
       }
+    end
+
+    # `heat_cool` has no single target, only a band it holds the room inside,
+    # so that mode reads as "66-70". A 0 is a null that went through a cast.
+    def setpoint_for(row)
+      return "#{row[:low]}-#{row[:high]}" if row[:low].present? && row[:high].present?
+
+      row[:setpoint].presence unless row[:setpoint].to_i.zero?
     end
 
     # The reading for one device, by name or by anything the household glossary

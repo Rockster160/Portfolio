@@ -76,6 +76,25 @@ RSpec.describe Buddy::DeviceStates do
       )
     end
 
+    it "reads a heat_cool zone as the band it holds, never as a 0 target", :aggregate_failures do
+      owner.caches.set(described_class::THERMOSTAT_KEY, {
+        main:     {
+          temp:     66,
+          mode:     "heat_cool",
+          setpoint: nil,
+          low:      66,
+          high:     70,
+          at:       (now - 60).to_i,
+        },
+        upstairs: { temp: 66, mode: "heat_cool", setpoint: 0, at: (now - 60).to_i },
+      })
+
+      rows = described_class.for_user(owner, now: now).index_by { |r| r[:device] }
+
+      expect(rows["Main Thermostat"]).to include(setpoint: "66-70")
+      expect(rows["Upstairs Thermostat"]).not_to have_key(:setpoint)
+    end
+
     it "is empty rather than raising when nothing has ever been cached" do
       owner.caches.set(described_class::KEY, {})
 
