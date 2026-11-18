@@ -101,6 +101,82 @@ RSpec.describe FeatureBuilder do
 
       expect(chip.call.name).to eq("Building…")
     end
+
+    it "says an audit is auditing, before its ticket and after" do
+      build.update!(kind: :audit)
+      described_class.report_sessions!(machine: :mini, sessions: [
+        { "build_id" => build.id, "kind" => "builder", "working" => true },
+      ])
+      chip = -> { BackgroundProcess.live_find(user, described_class::CHIP_KEY) }
+      expect(chip.call.name).to eq("Auditing…")
+
+      described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 })
+
+      expect(chip.call.name).to eq("Auditing…")
+    end
+  end
+
+  describe "a quick session" do
+    before {
+      allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original
+      build.update!(kind: :quick, title: "Gate sound", status: :running)
+    }
+
+    it "says each answer as it is, and isn't counted as waiting on anyone" do
+      described_class.update_from_mini!(build, {
+        "waiting_at" => Time.current.iso8601,
+        "question"   => "It fired twice because the timer restarted.\n\n1. Want a script to clear it?",
+      })
+
+      reply = thread.byte_messages.last
+      expect(reply.body).to eq("It fired twice because the timer restarted.\n\n1. Want a script to clear it?")
+      expect(reply.metadata).to include("feature_build_id" => build.id)
+      expect(described_class.pending_count(user)).to eq(0)
+      expect(described_class.asking(user)).to be_empty
+      expect(described_class.replied_to(user, reply)).to eq(build)
+    end
+
+    it "says so when a turn ends with no answer, instead of saying the last one again" do
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601, "question" => "Two." })
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601 })
+
+      expect(build.reload.question).to be_nil
+      expect(thread.byte_messages.last.body).to include("**Gate sound** finished a turn, but no answer came back")
+      expect(thread.byte_messages.where(body: "Two.").count).to eq(1)
+    end
+
+    it "posts each production script it sends, linked to where it's approved" do
+      script = ProductionScripts.create!(
+        user: user, feature_build: build, title: "Clear the gate timer", code: "puts 1",
+        commit_sha: "abc1234", edited_by: :mini
+      )
+
+      described_class.script_sent!(script)
+
+      expect(thread.byte_messages.last.body).to include(
+        "[Clear the gate timer](",
+        "/system/production_scripts/#{script.id}",
+        "waiting on your approval",
+      )
+    end
+
+    it "leaves a build's scripts to its PR" do
+      build.update!(kind: :feature)
+      script = ProductionScripts.create!(
+        user: user, feature_build: build, title: "Backfill", code: "puts 1",
+        commit_sha: "abc1234", edited_by: :mini
+      )
+
+      expect { described_class.script_sent!(script) }.not_to change(ByteMessage, :count)
+    end
+
+    it "is closed with the reason it's given" do
+      allow(ByteLocal).to receive(:builder).and_return(true)
+
+      described_class.cancel!(build, reason: "no reply in 6 hours.")
+
+      expect(build.reload).to have_attributes(status: "finished", closed_reason: "no reply in 6 hours.")
+    end
   end
 
   describe "a turn that ends waiting on the owner" do
@@ -459,17 +535,14 @@ RSpec.describe FeatureBuilder do
   end
 
   describe "a PR's title" do
-    it "names the build once the PR opens, and again when it's edited" do
-      build.update!(title: "Clicking ANY link in Byte should ALWAYS open in a new tab…")
+    it "leaves the build's own name alone" do
+      build.update!(title: "Open links in a new tab")
 
       opened = pull_request.merge("title" => "Open every Byte link outside the app")
       said = described_class.github!(:pull_request, { "action" => "opened", "pull_request" => opened })
-      expect(said).to eq(:retitled)
-      expect(build.reload.title).to eq("Open every Byte link outside the app")
 
-      edited = pull_request.merge("title" => "Open Byte links in a new tab")
-      described_class.github!(:pull_request, { "action" => "edited", "pull_request" => edited })
-      expect(build.reload.title).to eq("Open Byte links in a new tab")
+      expect(said).to eq(:ignored)
+      expect(build.reload.title).to eq("Open links in a new tab")
     end
   end
 
@@ -513,7 +586,7 @@ RSpec.describe FeatureBuilder do
       expect(build.byte_conversation).to eq(primary)
       expect(primary.byte_messages.last.body).to include("Starting a Feature Builder", "Repeating timers")
       expect(feature_request.reload).to be_status_planned
-      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id, nil)
     end
 
     it "leaves the notes out when there aren't any" do

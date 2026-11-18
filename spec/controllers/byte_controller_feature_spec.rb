@@ -29,7 +29,7 @@ RSpec.describe ByteController, type: :controller do
       expect(status).to eq(build.byte_message)
       expect(status.body).to include("Starting a Feature Builder", "build buttons on the requests page")
       expect(response.parsed_body["id"]).to eq(request.id)
-      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id)
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id, build.request)
     end
 
     it "starts the build with the images sent alongside the command, and shows them on the request" do
@@ -66,6 +66,83 @@ RSpec.describe ByteController, type: :controller do
       sign_in chelsea
 
       post :create_message, params: { conversation_id: thread.id, body: "/feature add something" }
+
+      expect(FeatureBuild.count).to eq(0)
+    end
+  end
+
+  describe "/q" do
+    it "starts a quick session with the message it was typed under" do
+      sign_in rocco
+      answer = convo.byte_messages.create!(
+        user: rocco, direction: :inbound, state: :delivered, body: "The gate sounded at 9:02.",
+      )
+
+      post :create_message, params: {
+        conversation_id: convo.id,
+        body:            "/q why twice?",
+        metadata:        { reply_to: { id: answer.id, excerpt: "The gate" } },
+      }
+
+      build = FeatureBuild.last
+      expect(build).to be_kind_quick
+      expect(build.request).to include("Quick request: why twice?", "typed as a reply to this", "[#{answer.id}]")
+      expect(convo.byte_messages.find_by(direction: :outbound).body).to eq("/q why twice?")
+    end
+
+    it "is the owner's alone" do
+      chelsea = create(:user, id: 58_128)
+      thread = chelsea.byte_conversations.create!(name: :Buddy, mode: :buddy)
+      sign_in chelsea
+
+      post :create_message, params: { conversation_id: thread.id, body: "/q anything" }
+
+      expect(FeatureBuild.count).to eq(0)
+    end
+
+    it "is a command after a dot too, like `/audit`, rather than words for Jarvis" do
+      expect(ByteMessageIntake.slash_command?(".q why twice?")).to be(true)
+      expect(ByteMessageIntake.slash_command?(".audit")).to be(true)
+    end
+  end
+
+  describe "/audit" do
+    it "starts an audit build with the note as its focus, under their message" do
+      sign_in rocco
+
+      post :create_message, params: {
+        conversation_id: convo.id,
+        body:            "/audit reminders keep firing twice",
+        local_id:        "local-2",
+      }
+
+      build = FeatureBuild.last
+      request, status = convo.byte_messages.order(:id).to_a
+      expect(build).to be_kind_audit
+      expect(build.request).to include("**reminders keep firing twice**", "WHERE THE DAY IS")
+      expect(request.body).to eq("/audit reminders keep firing twice")
+      expect(request.metadata).to include("feature_build_id" => build.id, "local_id" => "local-2")
+      expect(status.body).to include("Starting an audit on the Mini")
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id, "reminders keep firing twice")
+    end
+
+    it "runs without a note" do
+      sign_in rocco
+
+      post :create_message, params: { conversation_id: convo.id, body: "/audit" }
+
+      build = FeatureBuild.last
+      expect(build.title).to eq("Audit of the last 24 hours")
+      expect(build.request).to include("judge for yourself")
+      expect(FeatureBuildStartWorker).to have_received(:perform_async).with(build.id, nil)
+    end
+
+    it "is the owner's alone" do
+      chelsea = create(:user, id: 58_128)
+      thread = chelsea.byte_conversations.create!(name: :Buddy, mode: :buddy)
+      sign_in chelsea
+
+      post :create_message, params: { conversation_id: thread.id, body: "/audit" }
 
       expect(FeatureBuild.count).to eq(0)
     end

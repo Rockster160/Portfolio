@@ -53,6 +53,7 @@ class BuddyUsage < ApplicationRecord
   # `announce` is Buddy::Announce writing a message the app asked to pass on.
   # `branch_name` is FeatureBuilder::BranchName naming a build's branch, once,
   # when the build starts.
+  # `build_title` is FeatureBuilder::Title naming a build, once, when it starts.
   # `amazon_names` is AmazonFriendlyName naming the products on a delivery, once
   # per product.
   # `jil` is a GPT.ask from a Jil task, made through GPTRequest on the key the
@@ -71,6 +72,7 @@ class BuddyUsage < ApplicationRecord
     jil:            9,
     branch_name:    10,
     amazon_names:   11,
+    build_title:    12,
   }
 
   # Where the call was made. Prod only ever saw its own rows until local spend

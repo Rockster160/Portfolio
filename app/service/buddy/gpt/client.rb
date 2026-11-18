@@ -12,7 +12,7 @@ module Buddy
     #   { type: :tool_call, name: :complete_chore, call_id: "...", arguments: {} }
     #
     # Returns:
-    #   { ok:, text:, tool_calls: [], response_id:, error:, model:, usage: }
+    #   { ok:, text:, tool_calls: [], response_id:, error:, error_kind:, model:, usage: }
     class Client
       # Responses-API function tools are FLAT (type/name/description/parameters
       # at the top level). Chat Completions nests them under `function`; that
@@ -115,6 +115,7 @@ module Buddy
         # instance must not carry an error or a token count from a previous turn
         # into this one.
         stream_error = nil
+        stream_kind  = nil
 
         handler = proc { |event|
           case event["type"]
@@ -142,8 +143,10 @@ module Buddy
             # bills, so capture usage here too rather than only on success.
             usage        = extract_usage(event)
             stream_error = stream_error_message(event)
+            stream_kind  = quota_kind(event.dig("response", "error"))
           when ERROR
             stream_error = event["message"].presence || "stream error"
+            stream_kind  = quota_kind(event["error"].is_a?(Hash) ? event["error"] : event)
           end
 
           # Checked AFTER handling, so the event that trips the budget is still
@@ -161,6 +164,7 @@ module Buddy
           tool_calls:  tool_calls,
           response_id: response_id,
           error:       stream_error,
+          error_kind:  stream_kind,
           usage:       usage,
         )
       rescue DeadlineExceeded
@@ -183,6 +187,7 @@ module Buddy
           tool_calls:  tool_calls,
           response_id: response_id,
           error:       ((stream_error.presence || "timed out") if text.empty? && tool_calls.empty?),
+          error_kind:  (stream_kind if text.empty? && tool_calls.empty?),
           model:       model,
           usage:       usage,
         }
@@ -222,7 +227,7 @@ module Buddy
         }.join("\n\n")
       end
 
-      def result(text:, tool_calls:, response_id:, error:, usage:)
+      def result(text:, tool_calls:, response_id:, error:, usage:, error_kind: nil)
         # A turn that produced neither prose nor a tool call is a failure even
         # with a 200 — there is nothing to show the person and nothing to run.
         empty = text.strip.empty? && tool_calls.empty?
@@ -232,6 +237,7 @@ module Buddy
           tool_calls:  tool_calls,
           response_id: response_id,
           error:       error || (empty ? EMPTY_TURN : nil),
+          error_kind:  (error_kind if error),
           model:       model,
           usage:       usage,
         }
@@ -318,24 +324,33 @@ module Buddy
       #
       #   401/403  the key is rejected
       #   402      payment required
-      #   429      ONLY when it is quota rather than rate — a rate limit is the
-      #            account working and being asked too fast, and sleeping every
-      #            companion over one burst would be worse than the burst
+      #   other 4xx  ONLY when it is quota — a 429 that is rate rather than
+      #            quota is the account working and being asked too fast, and
+      #            sleeping every companion over one burst would be worse than
+      #            the burst
       #
       # `insufficient_quota` is what OpenAI returns behind "You have no credits
       # remaining. Add credits to continue using the API at ...", which is the
       # message that goes into the thread as Buddy's reply if nothing catches
-      # it.
+      # it. It is read off the error whatever the status, since that is what
+      # says the balance is spent.
       def kind_of(exception)
         response = exception.respond_to?(:response) ? exception.response : nil
         return nil unless response.is_a?(Hash)
 
         status = response[:status].to_i
         return :outage if ACCOUNT_STATUSES.include?(status)
-        return nil unless status == 429
+        return nil unless (400..499).cover?(status)
 
-        error = response.dig(:body, "error")
-        error = {} unless error.is_a?(Hash)
+        quota_kind(response.dig(:body, "error"))
+      end
+
+      # A spent balance can also come back inside a stream that opened fine, as
+      # an `error` event or a `response.failed` carrying the same error object,
+      # so the stream's error is read the same way a rejected request's is.
+      def quota_kind(error)
+        return nil unless error.is_a?(Hash)
+
         haystack = [error["type"], error["code"], error["message"]].compact.join(" ")
         (:outage if haystack.match?(QUOTA_RX))
       end

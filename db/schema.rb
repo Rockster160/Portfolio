@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_11_13_161725) do
+ActiveRecord::Schema[8.0].define(version: 2026_11_17_204430) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
@@ -1214,6 +1214,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_13_161725) do
     t.boolean "held", default: false, null: false
     t.string "merge_sha"
     t.datetime "deployed_at"
+    t.integer "kind", default: 0, null: false
     t.index ["byte_conversation_id"], name: "index_feature_builds_on_byte_conversation_id"
     t.index ["byte_message_id"], name: "index_feature_builds_on_byte_message_id"
     t.index ["feature_request_id"], name: "index_feature_builds_on_feature_request_id"

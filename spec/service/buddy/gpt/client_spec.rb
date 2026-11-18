@@ -204,6 +204,42 @@ RSpec.describe Buddy::GPT::Client do
     end
   end
 
+  # A spent balance is the account being unusable, which is what puts the house
+  # to sleep (Buddy::Outage), however it comes back.
+  describe "a spent balance" do
+    let(:quota) {
+      {
+        message: "You have no credits remaining. Add credits to continue using the API.",
+        type:    "insufficient_quota",
+        code:    "insufficient_quota",
+      }
+    }
+
+    it "is an outage when the request is rejected" do
+      stub_sse(JSON.generate({ error: quota }), status: 429)
+
+      expect(run).to include(ok: false, error: quota[:message], error_kind: :outage)
+    end
+
+    it "is an outage when the stream fails with it" do
+      stub_sse(sse({ type: "response.failed", response: { id: "resp_q", error: quota } }))
+
+      expect(run).to include(ok: false, error: quota[:message], error_kind: :outage)
+    end
+
+    it "is an outage when the stream sends it as an error event" do
+      stub_sse(sse({ type: "error", code: quota[:code], message: quota[:message] }))
+
+      expect(run).to include(ok: false, error: quota[:message], error_kind: :outage)
+    end
+
+    it "is not an outage when the stream fails for any other reason" do
+      stub_sse(sse({ type: "response.failed", response: { id: "resp_x", error: { message: "too long" } } }))
+
+      expect(run[:error_kind]).to be_nil
+    end
+  end
+
   describe "the wall-clock deadline" do
     # Faraday's request_timeout is per-READ, so a stream that keeps trickling
     # never trips it. One prod turn ran 3m45s that way and blocked every message

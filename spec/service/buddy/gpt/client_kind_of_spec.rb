@@ -22,6 +22,7 @@ RSpec.describe Buddy::GPT::Client, ".kind_of" do
     expect(kind(raised(403))).to eq(:outage)
     expect(kind(raised(402))).to eq(:outage)
     expect(kind(raised(429, quota))).to eq(:outage)
+    expect(kind(raised(400, quota))).to eq(:outage)
   end
 
   # The account working and being asked too fast, a server error, a bad

@@ -30,7 +30,15 @@ module FeatureBuilder
         "feature request so like just some there right now"
     ).split.freeze
 
+    # An audit's request is a long brief that names nothing; its branch is
+    # named for what it is.
+    AUDIT = "audit".freeze
+
     def for(build)
+      return AUDIT if build.kind_audit?
+      # A `/q` has no branch: it runs in the checkout itself.
+      return nil if build.kind_quick?
+
       from_model(build) || from_words(build.request)
     end
 
