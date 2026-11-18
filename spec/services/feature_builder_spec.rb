@@ -136,6 +136,15 @@ RSpec.describe FeatureBuilder do
       expect(described_class.replied_to(user, reply)).to eq(build)
     end
 
+    it "says so when a turn ends with no answer, instead of saying the last one again" do
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601, "question" => "Two." })
+      described_class.update_from_mini!(build, { "waiting_at" => Time.current.iso8601 })
+
+      expect(build.reload.question).to be_nil
+      expect(thread.byte_messages.last.body).to include("**Gate sound** finished a turn, but no answer came back")
+      expect(thread.byte_messages.where(body: "Two.").count).to eq(1)
+    end
+
     it "posts each production script it sends, linked to where it's approved" do
       script = ProductionScripts.create!(
         user: user, feature_build: build, title: "Clear the gate timer", code: "puts 1",

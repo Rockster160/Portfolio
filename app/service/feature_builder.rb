@@ -201,6 +201,9 @@ module FeatureBuilder
     question = attributes.delete("question")
     if question
       attributes.merge!("question" => question.first(QUESTION_LIMIT), "asked_at" => Time.current)
+    elsif waiting && build.kind_quick?
+      # A quick turn's answer is only ever this turn's, never one already said.
+      attributes.merge!("question" => nil, "asked_at" => nil)
     end
     # A ticket posted again after a change keeps the time it was first posted.
     attributes.delete("planned_at") if build.planned_at.present?
@@ -324,11 +327,17 @@ module FeatureBuilder
     announce!(build, text, "Waiting on you: #{build.full_title}")
   end
 
-  # A `/q` turn's last message is its answer, so it's said as it is.
+  # A `/q` turn's last message is its answer, so it's said as it is. A turn
+  # that ended with no text still says so, so the thread is never left waiting
+  # on an answer that isn't coming.
   def announce_answer!(build)
-    return if build.question.blank?
+    return announce!(build, build.question, build.full_title) if build.question.present?
 
-    announce!(build, build.question, build.full_title)
+    announce!(
+      build,
+      "**#{build.full_title}** finished a turn, but no answer came back from it. #{build.link_markdown}",
+      build.full_title,
+    )
   end
 
   # A production script a `/q` session sent: its page, where it's approved, in
@@ -431,6 +440,9 @@ module FeatureBuilder
   # since nothing else would show it.
   def answer_from_thread!(build, message)
     if build.status_finished? || build.status_failed?
+      # A `/q` that has closed carries on in a new session of its own.
+      return FeatureBuilder::Quick.resume!(build, message).present? if build.kind_quick?
+
       over = build.status_failed? ? "never started" : "is finished"
       say(
         message.byte_conversation,
