@@ -2270,6 +2270,15 @@ BUDDY_EDGE_PROBES = [
            "never said car, and there was no probe anywhere using the word",
   },
   {
+    case:  "prod 11383-11384, 18 Nov",
+    say:   "Close the boot",
+    tool:  :run_jil_task,
+    needs: :car_fn,
+    args:  { run_jil_task: { action: "close_trunk" } },
+    note:  "answered that the car commands could only pop the trunk and filed a feature " \
+           "request: Tesla Control had pop_trunk and nothing that closed it",
+  },
+  {
     case:       "prod 11000-11002, 14 Nov",
     say:        "Venmo mom 40 🥓 🍳",
     tool:       :run_jil_task,

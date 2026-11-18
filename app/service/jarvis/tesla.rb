@@ -39,6 +39,8 @@ class Jarvis::Tesla < Jarvis::Action
       :vent,
       :defrost,
       :climate,
+      :sentry,
+      :port,
     ]
   end
 
@@ -59,6 +61,10 @@ class Jarvis::Tesla < Jarvis::Action
       :warm,
       :find,
       :where,
+      :charge,
+      :charging,
+      :steering,
+      :wheel,
     ]
   end
 

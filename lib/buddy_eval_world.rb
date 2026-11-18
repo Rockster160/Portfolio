@@ -695,15 +695,28 @@ class BuddyEvalWorld
       # able to lock the car and "Lock the car, please" still got "I don't have
       # a Car Lock function wired up" (prod 5272-5273), because the index the
       # model searches said Tesla and never said car. A stand-in carrying the
-      # generic "for the eval world" line would pass or fail on nothing.
+      # generic "for the eval world" line would pass or fail on nothing. The
+      # listener and description are prod's own, word for word.
       [
         /tesla control/i,
         "Tesla Control",
-        %(function("Action" TAB ["start" "stop" "unlock_doors" "lock_doors" "honk"]("start"))),
-        "Runs a basic command on the car (Tesla): start, stop, lock or unlock the doors, honk, " \
-        "flash lights, vent or close the windows, frunk/trunk, defrost, seat heaters. Car, " \
-        "vehicle and Tesla all mean this one.",
-],
+        "function(\"Action\" TAB [#{
+          %w[
+            start stop toggle_climate unlock_doors lock_doors toggle_doors open_trunk close_trunk
+            toggle_trunk pop_frunk vent_windows close_windows toggle_windows honk flash_lights defrost
+            defrost_off heat_driver heat_passenger driver_seat_off passenger_seat_off steering_heat_on
+            steering_heat_off sentry_on sentry_off open_charge_port close_charge_port start_charging
+            stop_charging toggle_charging
+          ].map { |action| "\"#{action}\"" }.join(" ")
+        }](\"start\"))::Boolean",
+        "Runs a basic command on the car (Tesla). `start` turns the cabin climate on to warm or " \
+        "cool it - what \"start the car\" and \"warm up the car\" mean - and `stop` turns it off. " \
+        "Opens, closes or toggles the trunk (boot); locks, unlocks or toggles the doors; vents, " \
+        "closes or toggles the windows; pops the frunk; honks; flashes the lights; turns defrost, " \
+        "the seat heaters, the steering wheel heater and sentry mode on or off; opens or closes " \
+        "the charge port; and starts, stops or toggles charging. Car, vehicle and Tesla all mean " \
+        "this one. A cabin temperature is Tesla Set Temp; a destination is Tesla Navigate.",
+      ],
       # Prod's own description, word for word: whether "skip the next nap"
       # finds this is the whole question, and a nap is also a chore.
       [
