@@ -11,6 +11,12 @@ RSpec.describe "the quest board rules (JS-side)" do
     expect(cases[:quick_add_plain]).to eq(name: "Feed the cat", target: 1)
   end
 
+  it "searches for an icon by the name's words, without its count" do
+    expect(cases[:icon_query_n]).to eq("Collect stars")
+    expect(cases[:icon_query_typed]).to eq("Wish on stars")
+    expect(cases[:icon_query_plain]).to eq("Feed the cat")
+  end
+
   it "counts the hours before the reset hour toward the previous day" do
     expect(cases[:game_day_before_reset]).to eq("2026-11-04")
     expect(cases[:game_day_after_reset]).to eq("2026-11-05")

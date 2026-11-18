@@ -111,10 +111,23 @@
             <button type="button" class="pill" data-value="none">No limit</button>
             <button type="button" class="pill" data-value="auto">When others are</button>
           </div>
+          <%# What it's at now, then what it counts to — read left to right as
+             "Now 3 of 10 times". Only the now is there when there's no fixed
+             target, and neither when it fills itself in. %>
+          <div data-count-now>
+            <div class="repeat-detail">
+              <span class="field-hint">Now</span>
+              <input type="number" min="0" data-field="count_now" class="quests-num" inputmode="numeric"
+                     placeholder="0" aria-label="Count now">
+              <span class="field-hint" data-show-for="target_mode:fixed">of</span>
+              <input type="number" min="1" data-field="target_value" class="quests-num" inputmode="numeric"
+                     aria-label="Times" data-show-for="target_mode:fixed">
+              <span class="field-hint" data-show-for="target_mode:fixed">times</span>
+            </div>
+            <span class="field-hint">Type a number to put it straight there. Hold the circle to undo.</span>
+          </div>
           <div data-show-for="target_mode:fixed">
             <div class="repeat-detail">
-              <input type="number" min="1" data-field="target_value" class="quests-num">
-              <span class="field-hint">times</span>
               <div class="pill-group" data-pills="direction">
                 <button type="button" class="pill" data-value="up">Count up</button>
                 <button type="button" class="pill" data-value="down">Count down</button>
@@ -149,12 +162,6 @@
               Once it's done, its effects and hooks fire for the day; undo one under it and they're taken back.
             </span>
           </div>
-        </div>
-
-        <div class="form-section" data-count-now>
-          <label class="field-label">Count now</label>
-          <input type="number" min="0" data-field="count_now" class="quests-num" inputmode="numeric">
-          <span class="field-hint">Type a number to put it straight there. Hold the circle to undo.</span>
         </div>
 
         <div class="form-section">

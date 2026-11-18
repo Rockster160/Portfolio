@@ -511,6 +511,12 @@ function parseQuickAdd(text) {
   return { name, target };
 }
 
+// A quest's name as icon search words: the count it carries ({n} or a typed
+// number) says nothing about what the quest is.
+function iconQuery(name) {
+  return String(name || "").replace(/\{n\}/gi, " ").replace(/\d+/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function newItem(attrs = {}) {
   return {
     id:         newId("q"),
@@ -534,7 +540,7 @@ const QuestRules = {
   dropMissingVisitors, scheduleMatches, conditionPasses, isVisible, isAuto, isLocked,
   autoState,
   countsDown, shownCount, displayName, tap, resetItem, setCount, settleAuto, undo, prune,
-  sectionNames, syncSections, setSections, parseQuickAdd, newItem, newId,
+  sectionNames, syncSections, setSections, parseQuickAdd, iconQuery, newItem, newId,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = QuestRules;
