@@ -1749,6 +1749,7 @@ html.html-ctr-byte.html-act-board_index body {
   // difference: the accent border on Claude vs. subtle bg on system.
   &.byte-msg-kind-claude,
   &.byte-msg-kind-system,
+  &.byte-msg-kind-production_script,
   &.byte-msg-kind-buddy,
   &.byte-msg-kind-buddy_reply,
   &.byte-msg-kind-buddy_receipt {
@@ -8013,6 +8014,53 @@ $board-cell-max: 200px;
   @media (min-width: 720px) {
     max-width: 720px;
   }
+}
+
+// A production script's card (production_script_card.js) gets the form's
+// full column: code is read across, and a narrow box is all scrollbar.
+.byte-msg.byte-msg-has-script {
+  max-width: 100%;
+  @media (min-width: 720px) {
+    max-width: 720px;
+  }
+}
+
+.ctr-byte .byte-app .byte-msg-kind-production_script {
+  .byte-script-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+  .byte-script-title { font-weight: bold; }
+  .byte-script-meta { display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.85em; opacity: 0.8; }
+  .byte-script-status {
+    padding: 0 8px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .byte-script-status-pending,
+  .byte-script-status-failed { background: rgba(245, 176, 65, 0.25); }
+  .byte-script-status-approved,
+  .byte-script-status-succeeded { background: rgba(88, 214, 141, 0.25); }
+  .byte-script-links { font-size: 0.85em; }
+
+  // Twenty lines tall at most, and never wrapped: a long line scrolls
+  // sideways and a long script scrolls down, inside the box, so the page
+  // itself never does. 1.5 is the line height .ps-code sets.
+  .byte-script-code {
+    max-height: calc(20 * 1.5em + 24px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    font-size: 12px;
+    -webkit-user-select: text;
+    user-select: text;
+
+    > pre, > .ps-heredoc { width: max-content; min-width: calc(100% - 16px); }
+    > pre { min-width: 100%; box-sizing: border-box; }
+  }
+
+  .byte-script-actions { margin-top: 10px; }
+  .byte-script-approve { --byte-btn-color: #2EA043; }
+  .byte-script-superseded,
+  .byte-script-error { font-size: 0.85em; opacity: 0.8; }
+  .byte-script-error { color: #EC7063; opacity: 1; margin-top: 6px; }
 }
 
 .ctr-byte .byte-app .byte-msg-form {

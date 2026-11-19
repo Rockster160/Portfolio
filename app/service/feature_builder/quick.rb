@@ -57,35 +57,55 @@ module FeatureBuilder
       posted
     end
 
-    # A reply to a `/q` whose session has closed: a new session for it, handed
-    # the earlier one's brief and everything said in it since. The reply is
-    # moved over to the new build, so what's said from here goes there.
-    def resume!(earlier, message)
+    # A reply to a session that has closed: a new quick session for it, handed
+    # the earlier one's brief and everything said in it since, and the script
+    # when the reply was to one's card. The reply is moved over to the new
+    # build, so what's said from here goes there, and it carries on on the
+    # earlier one's card.
+    def resume!(earlier, message, script: nil)
       FeatureBuilder.launch!(
         user:         earlier.user,
         conversation: message.byte_conversation,
-        request:      resumed_brief(earlier, message),
+        request:      resumed_brief(earlier, message, script: script),
         title:        earlier.title,
         kind:         :quick,
+        parent:       earlier,
       ) { |build|
         message.update!(metadata: message.metadata.to_h.merge("feature_build_id" => build.id))
         build.images.attach(message.files.blobs) if message.files.attached?
       }
     end
 
-    def resumed_brief(earlier, message)
+    def resumed_brief(earlier, message, script: nil)
       since = earlier_messages(earlier, except: message)
       said = since.any? ? "What was said in it after that, oldest first:\n\n#{lines(since)}\n" : ""
       <<~TXT
         Quick request: #{message.body.to_s.strip}
 
-        This carries on an earlier quick session that has closed. Its brief was:
+        This carries on an earlier session that has closed. Its brief was:
 
         ---
         #{earlier.request.to_s.strip}
         ---
 
-        #{said}
+        #{said}#{script_section(script)}
+      TXT
+    end
+
+    # The script the request is about, as it stands, and how a new version
+    # takes its place.
+    def script_section(script)
+      return "" if script.nil?
+
+      <<~TXT
+
+        The request is a reply to production script ##{script.id}, "#{script.title}" (#{script.status_label}), which that session sent. Its code now:
+
+        ```ruby
+        #{script.code.to_s.rstrip}
+        ```
+
+        To change it, write the new version to a file and send it with `builder-pr script FILE --title "#{script.title}"`. Sent under that same title, it replaces ##{script.id} instead of adding another, and needs approving again.
       TXT
     end
 

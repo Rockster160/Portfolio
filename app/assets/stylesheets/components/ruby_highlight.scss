@@ -1,0 +1,42 @@
+// Ruby and Jil drawn by RubyHighlight / ProductionScripts::Card: the script
+// page and a script's card in Byte share every rule here.
+.ps-code {
+  background-color: #112435; color: #0098F4; border-radius: 8px; padding: 12px 0;
+  font: 13px/1.5 Menlo, Monaco, "Courier New", monospace; overflow-x: auto;
+}
+.ps-code pre { margin: 0; padding: 0 16px; background: none; border: 0; color: inherit; font: inherit; white-space: pre; }
+.ps-heredoc {
+  position: relative; margin: 2px 8px; padding: 6px 0;
+  background-color: rgba(255, 255, 255, 0.035); border-left: 3px solid rgba(10, 255, 119, 0.35); border-radius: 4px;
+}
+.ps-heredoc.ps-jil { border-left-color: rgba(229, 192, 123, 0.55); }
+.ps-heredoc pre { padding: 0 13px; }
+.ps-check { position: absolute; top: 4px; right: 8px; font: 12px/1.4 -apple-system, sans-serif; }
+.ps-check summary { list-style: none; cursor: pointer; font-weight: bold; text-align: right; }
+.ps-check summary::-webkit-details-marker { display: none; }
+.ps-check.ps-valid summary { color: #0AFF77; cursor: default; }
+.ps-check.ps-invalid summary { color: #E05252; }
+.ps-check-error {
+  margin-top: 4px; max-width: 420px; padding: 8px 10px; border-radius: 6px; white-space: pre-wrap;
+  background-color: #2A1215; border: 1px solid rgba(224, 82, 82, 0.5); color: #F2B8B5;
+}
+
+.rh-kw      { color: #C678DD; }
+.rh-def     { color: #0098F4; }
+.rh-call    { color: #0098F4; }
+.rh-special { color: #E05252; }
+.rh-const   { color: #E5C07B; }
+.rh-cast    { color: #E5C07B; }
+.rh-string  { color: #0AFF77; }
+.rh-interp  { color: #C4C6B1; }
+.rh-regexp  { color: #D16969; }
+.rh-symbol  { color: #56B6C2; }
+.rh-num     { color: #EDDD3D; }
+.rh-bool    { color: #867BE8; }
+.rh-nil     { color: #6586AE; }
+.rh-self    { color: #F7DEB1; }
+.rh-ivar    { color: #9CDCFE; }
+.rh-variable { color: #9CDCFE; }
+.rh-comment { color: #466186; }
+.rh-brace   { color: #0160FF; font-weight: bold; }
+.rh-op      { color: #D4D4D4; }

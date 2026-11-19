@@ -191,7 +191,7 @@ class ByteMessageIntake
       if (build = ::FeatureBuilder.replied_to(@user, target))
         @metadata = @metadata.to_h.merge(feature_build_id: build.id)
         message = post!(state: :sent)
-        ::FeatureBuilder.answer_from_thread!(build, message)
+        ::FeatureBuilder.answer_from_thread!(build, message, target: target)
         return message
       end
     end

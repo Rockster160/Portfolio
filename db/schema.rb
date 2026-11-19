@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_11_17_204430) do
+ActiveRecord::Schema[8.0].define(version: 2026_11_19_000007) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
@@ -1215,9 +1215,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_17_204430) do
     t.string "merge_sha"
     t.datetime "deployed_at"
     t.integer "kind", default: 0, null: false
+    t.bigint "parent_id"
+    t.boolean "closed_itself", default: false, null: false
     t.index ["byte_conversation_id"], name: "index_feature_builds_on_byte_conversation_id"
     t.index ["byte_message_id"], name: "index_feature_builds_on_byte_message_id"
     t.index ["feature_request_id"], name: "index_feature_builds_on_feature_request_id"
+    t.index ["parent_id"], name: "index_feature_builds_on_parent_id"
     t.index ["pr_number"], name: "index_feature_builds_on_pr_number"
     t.index ["user_id"], name: "index_feature_builds_on_user_id"
   end
@@ -2326,6 +2329,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_17_204430) do
   add_foreign_key "emails", "users"
   add_foreign_key "feature_builds", "byte_conversations", on_delete: :nullify
   add_foreign_key "feature_builds", "byte_messages", on_delete: :nullify
+  add_foreign_key "feature_builds", "feature_builds", column: "parent_id", on_delete: :nullify
   add_foreign_key "feature_builds", "feature_requests", on_delete: :nullify
   add_foreign_key "feature_builds", "users"
   add_foreign_key "feature_requests", "byte_conversations"
