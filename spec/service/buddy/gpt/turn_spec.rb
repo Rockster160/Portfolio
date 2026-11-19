@@ -800,6 +800,41 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
+    # Prod 11713-11718. "Where was I Oct 27?" was looked up and answered with
+    # the day's record, and the record's own words ("logged") read as a claim
+    # about the turn: nudged, started over, then wiped for "nothing ran".
+    describe "a question answered out of the record" do
+      let(:rundown) {
+        "Oct 27 was a Tuesday, and the day's record looks like this:\n\n" \
+          "- **6:14pm:** You left Home and arrived in Herriman.\n" \
+          "- **6:30pm:** Heat, a two-hour game.\n" \
+          "- **7:08pm:** You logged a Coke Zero No Caffeine."
+      }
+      let(:looked) { { tool_calls: [{ name: :get_context, arguments: { "sections" => ["recent_events"] } }] } }
+
+      it "goes out as written, in one pass" do
+        client = run([looked, { text: rundown }], text: "Where was I Oct 27?")
+
+        expect(reply.body).to eq(rundown)
+        expect(reply.metadata["retracted_claim"]).to be_nil
+        expect(client.calls.length).to eq(2)
+      end
+
+      it "is still retracted when nothing was looked up" do
+        run([{ text: rundown }, { text: rundown }], text: "Where was I Oct 27?")
+
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      # An order that only looked things up still owes the thing it ordered.
+      it "is still retracted when they gave an order" do
+        said = "Logged your Coke Zero."
+        run([looked, { text: said }, looked, { text: said }], text: "log a coke zero")
+
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+    end
+
     # Prod 3739-3742. "Show me the doorbell" got this back with no call of any
     # kind — the wording lifted from an earlier turn that HAD run. A picture is
     # the one claim nobody can check by looking, because a missing image reads
