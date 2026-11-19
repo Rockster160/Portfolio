@@ -2,6 +2,10 @@
 // go for it, the code itself in a box twenty lines tall that scrolls both ways
 // rather than wrapping, and Approve / Skip under it.
 //
+// A card with nothing left to decide folds down to its header: one a newer
+// version replaced points down to it, and one whose script has run or been
+// skipped keeps its code behind a disclosure.
+//
 // Everything on it comes from `message.script`, which the server reads from the
 // script each time the message is sent - so a press here does nothing to the
 // card itself. The server repaints every card for the script once it changes.
@@ -54,8 +58,8 @@ export function renderProductionScriptCard(bodyEl, message) {
     <div class="byte-script-head">
       <div class="byte-script-title">${escapeHtml(script.title)}</div>
       <div class="byte-script-meta">
-        <span class="byte-script-status byte-script-status-${escapeAttr(script.status)}">${escapeHtml(script.label)}</span>
-        ${script.step && script.approvable ? `<span>${escapeHtml(script.step)}</span>` : ""}
+        ${script.superseded ? "" : `<span class="byte-script-status byte-script-status-${escapeAttr(script.status)}">${escapeHtml(script.label)}</span>`}
+        ${script.step && script.approvable && !script.superseded ? `<span>${escapeHtml(script.step)}</span>` : ""}
       </div>
       <div class="byte-script-links">${links}</div>
     </div>
@@ -63,6 +67,17 @@ export function renderProductionScriptCard(bodyEl, message) {
 
   if (script.superseded) {
     bodyEl.innerHTML = `${head}<div class="byte-script-superseded">A newer version is further down.</div>`;
+    return;
+  }
+
+  if (script.settled) {
+    bodyEl.innerHTML = `
+      ${head}
+      <details class="byte-script-folded">
+        <summary>The script</summary>
+        <div class="byte-script-code ps-code">${script.html || ""}</div>
+      </details>
+    `;
     return;
   }
 
