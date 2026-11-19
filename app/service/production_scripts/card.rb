@@ -73,22 +73,27 @@ module ProductionScripts
 
     # The cards already posted for it, once a newer version has its own: they
     # keep their header and point down to it instead of showing the code twice.
+    # Each is repainted as it's marked, since the edit's own repaint went out
+    # while it still looked current, Approve and all.
     def supersede!(script)
-      messages(script).find_each { |message|
+      messages(script).includes(:user).find_each { |message|
         next if message.metadata.to_h["superseded"]
 
         message.update!(metadata: message.metadata.to_h.merge("superseded" => true))
+        broadcast!(message)
       }
     end
 
     def repaint!(script)
-      messages(script).includes(:user).find_each { |message|
-        MonitorChannel.broadcast_to(message.user, {
-          id:      :byte,
-          channel: :byte,
-          data:    { kind: :message, message: message.as_wire, update: true },
-        })
-      }
+      messages(script).includes(:user).find_each { |message| broadcast!(message) }
+    end
+
+    def broadcast!(message)
+      MonitorChannel.broadcast_to(message.user, {
+        id:      :byte,
+        channel: :byte,
+        data:    { kind: :message, message: message.as_wire, update: true },
+      })
     end
 
     # What the client draws the card from.
@@ -112,6 +117,7 @@ module ProductionScripts
         pr_number:   build&.pr_number,
         session_url: build&.rc_url.presence,
         superseded:  message.metadata.to_h["superseded"] == true,
+        settled:     script.status_succeeded? || script.status_skipped?,
         step:        message.metadata.to_h["step"],
         html:        code_html(script.code),
       }

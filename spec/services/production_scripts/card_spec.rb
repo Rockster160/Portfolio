@@ -69,6 +69,29 @@ RSpec.describe ProductionScripts::Card do
     expect(second.as_wire[:script]).to include(superseded: false, step: "Changed, so it needs approving again")
   end
 
+  it "repaints the older card in open threads as it's superseded" do
+    first = described_class.post!(script)
+    painted = []
+    allow(MonitorChannel).to receive(:broadcast_to) { |_user, payload| painted << payload }
+
+    ProductionScripts.edit!(script, code: "puts 1", edited_by: :mini)
+    described_class.post!(script, updated: true)
+
+    last = painted.reverse.find { |payload| payload.dig(:data, :message, :id) == first.id }
+    expect(last.dig(:data, :message, :script)).to include(superseded: true)
+  end
+
+  it "settles once the script has run or been skipped" do
+    card = described_class.post!(script)
+    expect(card.as_wire[:script]).to include(settled: false)
+
+    script.update!(status: :failed)
+    expect(card.reload.as_wire[:script]).to include(settled: false, approvable: true)
+
+    script.update!(status: :succeeded)
+    expect(card.reload.as_wire[:script]).to include(settled: true)
+  end
+
   it "says only what it was when the script is gone" do
     card = described_class.post!(script)
     script.destroy!

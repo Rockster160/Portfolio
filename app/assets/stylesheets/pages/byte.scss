@@ -8057,6 +8057,25 @@ $board-cell-max: 200px;
   }
 
   .byte-script-actions { margin-top: 10px; }
+  .byte-script-folded {
+    > summary {
+      cursor: pointer;
+      list-style: none;
+      font-size: 0.85em;
+      opacity: 0.8;
+      user-select: none;
+      &::-webkit-details-marker { display: none; }
+      &::before {
+        content: "▶";
+        display: inline-block;
+        margin-right: 6px;
+        font-size: 9px;
+        transition: transform 0.15s;
+      }
+    }
+    &[open] > summary::before { transform: rotate(90deg); }
+    &[open] > summary { margin-bottom: 6px; }
+  }
   .byte-script-approve { --byte-btn-color: #2EA043; }
   .byte-script-superseded,
   .byte-script-error { font-size: 0.85em; opacity: 0.8; }
