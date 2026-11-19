@@ -152,4 +152,42 @@ RSpec.describe Contact, type: :model do
       expect(results.map(&:name)).to eq(["Nikki"])
     end
   end
+
+  describe "deleting" do
+    let(:house) { [40.4912477, -112.027592] }
+
+    def add_address(contact, loc)
+      Address.create!(user: user, contact: contact, primary: true, street: "5729 Emmeline Dr", loc: loc)
+    end
+
+    it "leaves no address behind to name the house after nobody" do
+      allow_any_instance_of(AddressBook).to receive(:reverse_geocode).and_return("Herriman")
+      old = user.contacts.create!(name: "Old Lopez")
+      add_address(old, [40.4912332, -112.0275863])
+      add_address(user.contacts.create!(name: "Lopez"), house)
+
+      old.destroy!
+
+      arrived = [40.49128816, -112.02729747]
+      expect(user.address_book.place_name(arrived, establishments: true)).to eq("Lopez")
+    end
+
+    it "makes another address primary when the primary one is deleted" do
+      contact = user.contacts.create!(name: "Movers")
+      first = add_address(contact, house)
+      second = Address.create!(user: user, contact: contact, primary: false, street: "1 Other St")
+
+      first.destroy!
+
+      expect(second.reload).to be_primary
+    end
+
+    it "can delete a tagged contact" do
+      contact = user.contacts.create!(name: "Tagged")
+      contact.tag_strings = "family"
+
+      expect { contact.destroy! }.not_to raise_error
+      expect(ContactTag.where(contact_id: contact.id)).to be_empty
+    end
+  end
 end

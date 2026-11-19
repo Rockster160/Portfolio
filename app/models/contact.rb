@@ -30,8 +30,8 @@ class Contact < ApplicationRecord
 
   belongs_to :user
   belongs_to :friend, optional: true, class_name: "User"
-  has_many :addresses
-  has_many :contact_tags
+  has_many :addresses, dependent: :destroy
+  has_many :contact_tags, dependent: :destroy
   has_many :tags, through: :contact_tags
 
   search_terms :id, :name, :nickname, :phone, :email

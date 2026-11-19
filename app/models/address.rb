@@ -19,7 +19,10 @@ class Address < ApplicationRecord
   belongs_to :contact
 
   before_save :set_primary
-  after_destroy { contact.addresses.last&.update(primary: true) if primary? }
+  # A contact going away takes every address with it, so none needs promoting.
+  after_destroy(unless: :destroyed_by_association) {
+    contact.addresses.where.not(id: id).last&.update(primary: true) if primary?
+  }
 
   scope :ordered, -> { order(primary: :desc, created_at: :asc) }
 
