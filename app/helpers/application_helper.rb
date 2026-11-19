@@ -154,4 +154,13 @@ module ApplicationHelper
     digest = Digest::MD5.file(Rails.public_path.join(path.delete_prefix("/"))).hexdigest.first(10)
     "#{path}?v=#{digest}"
   end
+
+  # The layout's fallback icon. A bare "favicon" is looked up along the
+  # controller's own view folders first, so a section with its own `_favicon`
+  # beside its views (dashboard, list_builders, ...) wears it. Jil's controllers
+  # each have their own folder under jil/, so the namespace points at the one
+  # they share.
+  def favicon_partial
+    controller_path.start_with?("jil/") ? "jil/favicon" : "favicon"
+  end
 end
