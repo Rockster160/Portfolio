@@ -386,6 +386,39 @@ RSpec.describe Jil::Methods::Chore do
     end
   end
 
+  describe "#ask_who_did_it" do
+    def ask(name, at)
+      Jil::Executor.call(user,
+        <<~JIL,
+          *input = Global.input_data()::Hash
+          at = input.get("at")::Date
+          asked = Chore.ask_who_did_it("#{name}", at)::Prompt
+        JIL
+        { "at" => at },
+      )
+    end
+
+    it "marks the chore done by a stand-in and asks who did it at that time" do
+      at = 20.minutes.ago.change(usec: 0)
+      expect { ask("Wordle", at) }.to change { user.prompts.count }.by(1)
+
+      prompt = user.prompts.order(:id).last
+      stand_in = ChoreCompletion.find(prompt.params["completion_id"])
+      expect(prompt.params["source"]).to eq(ChoreWhoDidIt::SOURCE)
+      expect(prompt.params["chore_id"]).to eq(chore.id)
+      expect(stand_in).to have_attributes(chore_id: chore.id, anonymous: true, skipped_reason: ChoreWhoDidIt::WAITING)
+      expect(stand_in.completed_at).to be_within(1.second).of(at)
+    end
+
+    it "asks about now without a time, and nothing without a chore" do
+      ask("Wordle", nil)
+      stand_in = ChoreCompletion.where(chore: chore).order(:id).last
+      expect(stand_in.completed_at).to be_within(5.seconds).of(Time.current)
+
+      expect { ask("Nonexistent", nil) }.not_to change { user.prompts.count }
+    end
+  end
+
   describe "#complete" do
     it "name-only and empty-block forms complete with no note" do
       ['c = Chore.complete("Wordle")::Any', 'c = Chore.complete("Wordle", {})::Any'].each { |code|
