@@ -37,6 +37,13 @@ RSpec.describe "Section favicons", type: :request do
     end
   end
 
+  it "gives the random page the dice icon" do
+    get "/random"
+    expect(response).to have_http_status(:ok)
+    expect(icon_dir).to eq("/random_favicon")
+    expect(response.body).to include("/random_favicon/apple-touch-icon.png")
+  end
+
   it "keeps the default icon elsewhere" do
     get "/quests"
     expect(response).to have_http_status(:ok)
