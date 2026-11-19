@@ -42,4 +42,30 @@ RSpec.describe AmazonOrder do
       expect(order.url).to be_nil
     end
   end
+
+  describe ".open_order_ids" do
+    include ActiveSupport::Testing::TimeHelpers
+
+    around { |ex| travel_to(Time.find_zone("America/Denver").local(2026, 11, 18, 22)) { ex.run } }
+
+    before do
+      described_class.clear
+      allow(MeCache).to receive(:get).and_call_original
+      allow(MeCache).to receive(:get).with(:amazon_deliveries).and_return([
+        { order_id: "114-0000000-0000001", item_id: "B000000001" },
+        { order_id: "114-0000000-0000002", item_id: "B000000002", delivered: true, delivery_date: "2026-11-18" },
+        { order_id: "114-0000000-0000003", item_id: "B000000003", delivered: true, delivery_date: "2026-11-17" },
+        { order_id: "114-0000000-0000004", item_id: "B000000004", delivered: true, delivery_date: "2026-11-16" },
+        { order_id: "114-0000000-0000005", item_id: "B000000005", status: :cancelled },
+      ])
+    end
+
+    it "asks about orders on the way and ones delivered since yesterday" do
+      expect(described_class.open_order_ids).to contain_exactly(
+        "114-0000000-0000001",
+        "114-0000000-0000002",
+        "114-0000000-0000003",
+      )
+    end
+  end
 end

@@ -133,15 +133,18 @@ module AmazonOrderRead
       AmazonProductName.tidy(item[:title])
     )
     row.email_ids = (Array(row.email_ids) + Array(stand_in&.email_ids)).uniq
+    repackaged = row.tracking_number.present? && row.tracking_number != shipment[:tracking_id]
     row.tracking_number = shipment[:tracking_id] if shipment[:tracking_id].present?
     row.errors = []
-    apply_state(row, shipment, item)
+    apply_state(row, shipment, item, repackaged: repackaged)
   end
 
-  # Cancelled stays cancelled, and delivered stays delivered: Amazon undoes
-  # neither, and a "it came" said by hand is taken over a page that hasn't
-  # caught up.
-  def apply_state(row, shipment, item)
+  # Cancelled stays cancelled: Amazon never undoes it. Delivered stays
+  # delivered while the item is still on the package it was delivered with, so
+  # an "it came" said by hand is taken over a page that hasn't caught up. An
+  # item Amazon has since put on a different package that hasn't arrived was
+  # never in the box, and is on its way again.
+  def apply_state(row, shipment, item, repackaged: false)
     status = shipment[:status].to_s
     return row.status = :cancelled if status.match?(CANCELLED) || item[:text].to_s.match?(CANCELLED)
     return if row.status == :cancelled
@@ -151,6 +154,10 @@ module AmazonOrderRead
       row.delivered = true
       row.delivery_date = delivered_on(status) || row.delivery_date || Time.zone.today
       return
+    end
+    if row.delivered && repackaged
+      row.delivered = false
+      row.tracking_number = shipment[:tracking_id]
     end
     return if row.delivered
 

@@ -169,6 +169,38 @@ RSpec.describe AmazonOrderRead do
     expect(row("B0861WJ3CY")).to have_attributes(delivered: true, delivery_date: "2026-11-16")
   end
 
+  it "puts an item back on the way when Amazon moves it off the package that came" do
+    read({
+      order_id:  order_id,
+      shipments: [shipment("Delivered today", [gloves], tracking_id: "TBA336599531226")],
+    })
+    expect(row("B0861WJ3CY")).to have_attributes(delivered: true, delivery_date: "2026-11-12")
+
+    read({ order_id: order_id, shipments: [shipment("Arriving tomorrow", [gloves])] })
+
+    expect(row("B0861WJ3CY")).to have_attributes(
+      delivered:       false,
+      delivery_date:   "2026-11-13",
+      tracking_number: nil,
+    )
+  end
+
+  it "keeps an item delivered while its package's page hasn't caught up" do
+    read({
+      order_id:  order_id,
+      shipments: [shipment("Arriving today", [gloves], tracking_id: "TBA336599531226")],
+    })
+    row("B0861WJ3CY").delivered = true
+    AmazonOrder.save
+
+    read({
+      order_id:  order_id,
+      shipments: [shipment("Arriving today", [gloves], tracking_id: "TBA336599531226")],
+    })
+
+    expect(row("B0861WJ3CY").delivered).to be(true)
+  end
+
   it "leaves an order it couldn't read as it was" do
     read({ order_id: order_id, shipments: [shipment("Arriving Monday", [gloves])] })
 

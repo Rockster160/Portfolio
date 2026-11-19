@@ -128,10 +128,14 @@ class AmazonOrder
     "#{order_id}/#{item_id}"
   end
 
-  # Amazon orders still worth asking about: on the way, not cancelled.
+  # Amazon orders still worth asking about: on the way, not cancelled. One
+  # delivered today or yesterday is asked about too, because Amazon sometimes
+  # takes a "Delivered" back and puts the item on a new package.
   def self.open_order_ids
+    settled_before = Time.find_zone(User.timezone).yesterday.iso8601
     all.filter_map { |order|
-      next if order.delivered || order.status == :cancelled
+      next if order.status == :cancelled
+      next if order.delivered && order.delivery_date.to_s < settled_before
       next unless order.order_id.to_s.match?(ORDER_ID_REGEX)
 
       order.order_id
