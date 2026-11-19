@@ -63,7 +63,7 @@ gem "webdrivers"
 gem "web-push", "3.0.0"
 gem "with_advisory_lock"
 
-gem "doorkeeper", "5.8.1"
+gem "doorkeeper", "5.9.1"
 gem "rubocop", "1.81"
 gem "rubocop-factory_bot", require: false
 gem "rubocop-rails", require: false
