@@ -30,7 +30,8 @@ module ProductionScripts
           "source"               => "feature_builder",
           "feature_build_id"     => script.feature_build_id,
           "production_script_id" => script.id,
-          "step"                 => step,
+          # The badge already says it's waiting; only a change needs saying.
+          "step"                 => (step if updated),
         }.compact,
         push_title:   "Script: #{script.title}",
       )
