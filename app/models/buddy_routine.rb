@@ -100,6 +100,9 @@ class BuddyRoutine < ApplicationRecord
     Array(steps).map { |raw| self.class.step_phrase(raw) }
   end
 
+  # The arguments a step's phrase names it by, first one present wins.
+  PHRASE_ARGS = %w[name chore item command message title].freeze
+
   def self.step_phrase(raw)
     tool = raw["tool_name"].to_s
     args = raw["payload"] || {}
@@ -108,7 +111,7 @@ class BuddyRoutine < ApplicationRecord
     # between reading a routine and decoding it.
     return wait_phrase(args) if tool == "set_timer"
 
-    detail = args["name"] || args["chore"] || args["item"] || args["command"] || args["message"] || args["title"]
+    detail = args.values_at(*PHRASE_ARGS).find(&:present?)
     phrase = detail.present? ? "#{tool.tr("_", " ")}: #{detail}" : tool.tr("_", " ")
     times  = args[Buddy::Tools::COUNT_ARG.to_s].to_i
     # How MANY times is half of what a step does, and leaving it off made a

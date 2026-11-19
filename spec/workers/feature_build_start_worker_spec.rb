@@ -1,8 +1,12 @@
 require "rails_helper"
 
 RSpec.describe FeatureBuildStartWorker do
-  before { ActiveStorage::Current.url_options = { host: "example.com", protocol: "https" } }
-  after  { ActiveStorage::Current.url_options = nil }
+  before {
+    ActiveStorage::Current.url_options = { host: "example.com", protocol: "https" }
+    allow(FeatureBuilder::Repos).to receive(:for).and_return(FeatureBuilder::Repos::PORTFOLIO)
+  }
+
+  after { ActiveStorage::Current.url_options = nil }
 
   let(:user)   { User.me }
   let(:thread) { user.byte_conversations.create!(mode: :buddy) }
@@ -94,6 +98,45 @@ RSpec.describe FeatureBuildStartWorker do
       described_class.new.perform(build.id)
 
       expect(FeatureBuilder::Title).not_to have_received(:for)
+    end
+  end
+
+  describe "the repo it builds in" do
+    let(:hass) { "Rockster160/hass-config" }
+
+    before { allow(FeatureBuilder::BranchName).to receive(:for).and_return("porch-light") }
+
+    it "tells the Mini the repo the request is for" do
+      allow(FeatureBuilder::Repos).to receive(:for).with("dark mode", user: user).and_return(hass)
+      start = stub_request(:post, %r{/byte/builder\z}).with(
+        body: hash_including("action" => "start", "repo" => hass),
+      ).to_return(status: 200, body: "{}")
+
+      described_class.new.perform(build.id)
+
+      expect(start).to have_been_requested
+      expect(build.reload.repo).to eq(hass)
+    end
+
+    it "works where the build it carries on from did, without asking the model" do
+      parent = FeatureBuild.create!(user: user, title: "Porch", request: "porch", repo: hass)
+      build.update!(parent: parent)
+      stub_request(:post, %r{/byte/builder\z}).to_return(status: 200, body: "{}")
+
+      described_class.new.perform(build.id)
+
+      expect(build.reload.repo).to eq(hass)
+      expect(FeatureBuilder::Repos).not_to have_received(:for)
+    end
+
+    it "keeps an audit in Portfolio" do
+      build.update!(kind: :audit)
+      stub_request(:post, %r{/byte/builder\z}).to_return(status: 200, body: "{}")
+
+      described_class.new.perform(build.id)
+
+      expect(build.reload.repo).to eq(FeatureBuilder::Repos::PORTFOLIO)
+      expect(FeatureBuilder::Repos).not_to have_received(:for)
     end
   end
 end

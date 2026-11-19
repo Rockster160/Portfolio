@@ -26,10 +26,10 @@
   }
   # Each build is listed once, in the first section that has it: the merge
   # queue, waiting on you, then running, then the rest of the history.
-  shown = @queue.map(&:id)
+  shown = @queue.map(&:id) + @to_pull.map(&:id)
   waiting = [
     *@pending[:questions].map { |build| [build, "waiting on you"] },
-    *@pending[:prs].map { |build| [build, "PR open"] },
+    *@pending[:prs].map { |build| [build, build_state.call(build)] },
   ].reject { |build, _| shown.include?(build.id) }
   shown += waiting.map { |build, _| build.id }
   # A session belongs to one of the two by whether it's working right now, so
@@ -59,6 +59,26 @@
           data: { disable_with: "Opening Claude…" } %>
     <span class="cs-ask-note">One Claude session on the Mini for questions. It opens the running one, or starts it.</span>
   </div>
+
+  <% if @to_pull.any? %>
+    <h3 class="cs-heading" id="to-pull">To pull</h3>
+    <p class="cs-empty">Merged in another repo. Each goes once the laptop's checkout has it, after a pull there.</p>
+    <% @to_pull.each do |build| %>
+      <div class="cs-row cs-to-pull">
+        <div class="cs-head">
+          <div class="cs-title"><%= build.full_title %></div>
+          <div class="cs-meta">
+            <span class="cs-badge"><%= build.repo_name %></span>merged <%= stamp.call(build.finished_at) %>
+          </div>
+        </div>
+        <div class="cs-branch"><code>git -C ~/code/<%= build.repo_name %> pull</code></div>
+        <div class="cs-links">
+          <%= link_to "PR ##{build.pr_number}", build.pr_url, class: "cs-link", target: :_blank, rel: :noopener %>
+          <%= button_to "Pulled", system_claude_pulled_path(id: build.id), class: "cs-link", form_class: "cs-stop-form basic" %>
+        </div>
+      </div>
+    <% end %>
+  <% end %>
 
   <% if @queue.any? || @deploying.any? %>
     <h3 class="cs-heading" id="merge-queue">Merge queue</h3>
@@ -120,7 +140,10 @@
       <div class="cs-row cs-waiting">
         <div class="cs-head">
           <div class="cs-title"><%= build.full_title %></div>
-          <div class="cs-meta"><span class="cs-badge"><%= reason %></span></div>
+          <div class="cs-meta">
+            <% unless build.portfolio? %><span class="cs-badge"><%= build.repo_name %></span><% end %>
+            <span class="cs-badge"><%= reason %></span>
+          </div>
         </div>
         <div class="cs-links">
           <% if build.rc_url.present? %>
@@ -160,6 +183,7 @@
       <div class="cs-head">
         <div class="cs-title"><%= build.full_title %></div>
         <div class="cs-meta">
+          <% unless build.portfolio? %><span class="cs-badge"><%= build.repo_name %></span><% end %>
           <span class="cs-badge"><%= state %></span>
           <%= stamp.call(build.created_at) %>
         </div>
@@ -228,7 +252,7 @@
     .cs-row.cs-queue-approved { border-color: rgba(88, 214, 141, 0.45); }
     .cs-row.cs-queue-answer, .cs-row.cs-queue-review { border-color: rgba(245, 176, 65, 0.45); }
     .cs-row.cs-queue-held { opacity: 0.6; }
-    .cs-row.cs-queue-deploying { border-color: rgba(93, 173, 226, 0.6); }
+    .cs-row.cs-queue-deploying, .cs-row.cs-to-pull { border-color: rgba(93, 173, 226, 0.6); }
     .cs-queue-number { display: inline-block; min-width: 22px; color: #8B949E; }
     .cs-queue-moves { display: inline-flex; gap: 4px; }
     .cs-queue-move { padding: 4px 8px; }

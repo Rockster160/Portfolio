@@ -252,4 +252,27 @@ RSpec.describe "Claude on the Mini page", type: :request do
       expect(response.body).to include("Merge queue", "merged, waiting on its deploy since")
     end
   end
+
+  describe "a merge in another repo" do
+    before {
+      build.update!(
+        repo:        "Rockster160/hass-config",
+        status:      :finished,
+        finished_at: Time.current,
+        merge_sha:   "abc1234",
+      )
+    }
+
+    it "is listed to pull until it's marked pulled" do
+      get system_claude_path
+
+      expect(response.body).to include("To pull", "git -C ~/code/hass-config pull")
+
+      post system_claude_pulled_path(id: build.id)
+
+      expect(build.reload.pulled_at).to be_present
+      follow_redirect!
+      expect(response.body).not_to include("To pull")
+    end
+  end
 end

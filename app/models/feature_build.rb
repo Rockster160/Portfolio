@@ -19,9 +19,11 @@
 #  planned_at           :datetime
 #  pr_number            :integer
 #  pr_url               :string
+#  pulled_at            :datetime
 #  question             :text
 #  queue_position       :integer
 #  rc_url               :string
+#  repo                 :string           default("Rockster160/Portfolio"), not null
 #  request              :text             not null
 #  status               :integer          default("starting"), not null
 #  title                :string           not null
@@ -43,6 +45,11 @@
 # `byte_message` is the one system message in the thread it was asked from. It
 # is rewritten as the build moves - starting, then the link to the session -
 # rather than followed by more of them.
+#
+# `repo` is the GitHub repo it builds in (FeatureBuilder::Repos), Portfolio
+# unless the request was for another. Only Portfolio's PRs go through the
+# merge queue: another repo's is merged by its owner, and from then until the
+# laptop's checkout has the merge (`pulled_at`), it's waiting to be pulled.
 #
 # `parent` is the build it carries on from: a build a `/q` handed its work to,
 # or a session started to carry on one that had closed. It speaks on its
@@ -92,20 +99,33 @@ class FeatureBuild < ApplicationRecord
 
   scope :newest,     -> { order(created_at: :desc) }
   scope :unfinished, -> { where(status: [:starting, :running, :stopped]) }
+  scope :portfolio,  -> { where(repo: FeatureBuilder::Repos::PORTFOLIO) }
+  scope :to_pull, -> {
+    where.not(repo: FeatureBuilder::Repos::PORTFOLIO).where.not(merge_sha: nil).where(pulled_at: nil)
+  }
 
   # A builder's branch names its build: `byte/<id>-<slug>`, or
   # `feature-builder/<id>-<slug>` for the builds that started before it.
   BRANCH = %r{\A(?:byte|feature-builder)/(\d+)-}
 
-  # The build a PR belongs to, by its branch, or by its number for the events
-  # that don't carry the branch (a comment on the PR's conversation).
-  def self.for_pull_request(pull_request)
+  # The build a PR in `repo` belongs to, by its branch, or by its number for
+  # the events that don't carry the branch (a comment on the PR's
+  # conversation). Numbers repeat from one repo to the next.
+  def self.for_pull_request(pull_request, repo: FeatureBuilder::Repos::PORTFOLIO)
     id = pull_request.to_h.dig("head", "ref").to_s[BRANCH, 1]
-    (id && find_by(id: id)) || for_pr_number(pull_request.to_h["number"])
+    (id && find_by(id: id, repo: repo)) || for_pr_number(pull_request.to_h["number"], repo: repo)
   end
 
-  def self.for_pr_number(number)
-    number.present? ? find_by(pr_number: number) : nil
+  def self.for_pr_number(number, repo: FeatureBuilder::Repos::PORTFOLIO)
+    number.present? ? find_by(pr_number: number, repo: repo) : nil
+  end
+
+  def portfolio?
+    FeatureBuilder::Repos.portfolio?(repo)
+  end
+
+  def repo_name
+    FeatureBuilder::Repos.short_name(repo)
   end
 
   # What the thread's system message says at each point. Every open one
@@ -126,7 +146,7 @@ class FeatureBuild < ApplicationRecord
     case status.to_sym
     when :starting then card("Starting #{what} on the Mini#{images_note}…")
     when :failed then card("Couldn't start #{what}: #{error}")
-    else card("#{doing} on the Mini")
+    else card("#{doing}#{" in #{repo_name}" unless portfolio?} on the Mini")
     end
   end
 
@@ -171,7 +191,7 @@ class FeatureBuild < ApplicationRecord
   end
 
   def pr_markdown
-    "[PR ##{pr_number}](#{pr_url})" if pr_url.present?
+    "[#{"#{repo_name} " unless portfolio?}PR ##{pr_number}](#{pr_url})" if pr_url.present?
   end
 
   # The production scripts it sent, each linked to the page it's approved on,

@@ -312,6 +312,7 @@ module FeatureBuilder
     told = ByteLocal.builder(
       :cancel,
       build_id:  build.id,
+      repo:      build.repo,
       pr_number: build.pr_number,
       branch:    build.branch,
     )
@@ -533,38 +534,42 @@ module FeatureBuilder
     ActiveSupport::SecurityUtils.secure_compare(expected, signature.to_s)
   end
 
-  # Returns what it did, for the webhook's response and the log.
+  # Returns what it did, for the webhook's response and the log. Every repo a
+  # build can be for sends here (Repos), and says which it is.
   def github!(event, payload)
+    repo = payload.dig("repository", "full_name").presence || Repos::PORTFOLIO
     case event.to_s
-    when "pull_request"                then pull_request!(payload)
-    when "pull_request_review"         then review!(payload)
-    when "pull_request_review_comment" then line_comment!(payload)
-    when "issue_comment"               then pr_comment!(payload)
-    when "push"                        then push!(payload)
+    when "pull_request"                then pull_request!(payload, repo)
+    when "pull_request_review"         then review!(payload, repo)
+    when "pull_request_review_comment" then line_comment!(payload, repo)
+    when "issue_comment"               then pr_comment!(payload, repo)
+    when "push"                        then push!(payload, repo)
     else :ignored
     end
   end
 
   # Master moved: the Mini checks every open PR against it and brings the
-  # ones that no longer merge back in line (FeatureBuildSyncWorker).
-  def push!(payload)
-    return :ignored unless payload["ref"] == "refs/heads/master"
-    return :ignored unless FeatureBuild.unfinished.where.not(pr_url: nil).exists?
+  # ones that no longer merge back in line (FeatureBuildSyncWorker). Only
+  # Portfolio's: a PR in another repo is its owner's to merge.
+  def push!(payload, repo=Repos::PORTFOLIO)
+    return :ignored unless Repos.portfolio?(repo) && payload["ref"] == "refs/heads/master"
+    return :ignored unless FeatureBuild.portfolio.unfinished.where.not(pr_url: nil).exists?
 
     FeatureBuildSyncWorker.perform_async
     :syncing
   end
 
-  def pull_request!(payload)
+  def pull_request!(payload, repo=Repos::PORTFOLIO)
     return :ignored unless payload["action"] == "closed"
 
-    build = FeatureBuild.for_pull_request(payload["pull_request"])
+    build = FeatureBuild.for_pull_request(payload["pull_request"], repo: repo)
     return :unknown if build.nil?
     return :ignored if build.status_finished?
 
     merged = payload.dig("pull_request", "merged") == true
     # Saved before anything else so the merge queue holds for its deploy, even
-    # while the Mini is still to be told.
+    # while the Mini is still to be told. In another repo, it's what the
+    # laptop's checkout has to have for the build to be pulled.
     build.update!(merge_sha: payload.dig("pull_request", "merge_commit_sha")) if merged
     unless ByteLocal.builder(:finish, build_id: build.id, merged: merged)
       FeatureBuildFinishWorker.perform_in(FeatureBuildFinishWorker::RETRY_IN, build.id, merged)
@@ -583,14 +588,14 @@ module FeatureBuilder
     MergeQueue.released!(build)
   end
 
-  def review!(payload)
+  def review!(payload, repo=Repos::PORTFOLIO)
     review = payload["review"].to_h
     return :ignored unless payload["action"] == "submitted" && owner?(review["user"])
 
     # An approval puts it in line to merge, and changes asked for take it out.
     # Line comments arrive as their own events. The review itself only adds
     # something when it has words of its own or asks for changes.
-    build = FeatureBuild.for_pull_request(payload["pull_request"])
+    build = FeatureBuild.for_pull_request(payload["pull_request"], repo: repo)
     approved = review["state"] == "approved"
     MergeQueue.approve!(build) if approved && build && !build.status_finished?
     MergeQueue.unapprove!(build) if review["state"] == "changes_requested" && build
@@ -601,22 +606,22 @@ module FeatureBuilder
     feedback!(build, "#{heading}: #{body.presence || "see the comments"}")
   end
 
-  def line_comment!(payload)
+  def line_comment!(payload, repo=Repos::PORTFOLIO)
     comment = payload["comment"].to_h
     return :ignored unless payload["action"] == "created" && owner?(comment["user"])
 
     where = [comment["path"], comment["line"] || comment["original_line"]].compact.join(":")
     text  = "On `#{where}` (comment #{comment["id"]}): #{comment["body"].to_s.strip}"
-    feedback!(FeatureBuild.for_pull_request(payload["pull_request"]), text)
+    feedback!(FeatureBuild.for_pull_request(payload["pull_request"], repo: repo), text)
   end
 
-  def pr_comment!(payload)
+  def pr_comment!(payload, repo=Repos::PORTFOLIO)
     comment = payload["comment"].to_h
     return :ignored unless payload["action"] == "created" && owner?(comment["user"])
     # An issue comment is on a PR when the issue carries a `pull_request` key.
     return :ignored unless payload["issue"].to_h.key?("pull_request")
 
-    build = FeatureBuild.for_pr_number(payload.dig("issue", "number"))
+    build = FeatureBuild.for_pr_number(payload.dig("issue", "number"), repo: repo)
     feedback!(build, "Comment: #{comment["body"].to_s.strip}")
   end
 
@@ -844,14 +849,26 @@ module FeatureBuilder
     }
   end
 
+  # The builds waiting on them, and the merges in other repos still to pull on
+  # the laptop.
   def pending_count(user)
-    pending(user).values.sum(&:length)
+    pending(user).values.sum(&:length) + FeatureBuild.to_pull.where(user: user).count
+  end
+
+  # The laptop's checkout of `repo` has these merge commits now
+  # (POST /webhooks/byte/pulls), so there's nothing left to pull for them.
+  def pulled!(repo, shas)
+    builds = FeatureBuild.to_pull.where(repo: repo, merge_sha: Array(shas)).to_a
+    builds.each { |build| build.update!(pulled_at: Time.current) }
+    builds.map(&:user).uniq.each { |user| refresh_needs_you!(user) }
+    builds
   end
 
   # Where a build has got to, in the words the pages show it in. `live` is the
   # Mini's report for it, when it's listed. Once it has a PR, its place in the
   # merge queue says more than the session does, except while merging.
   def stage(build, live)
+    return "merged, to pull" if build.merge_sha && !build.portfolio? && build.pulled_at.nil?
     return build.status.humanize.downcase if build.status_failed? || build.status_finished?
     return (live["working"] ? "working" : "answered") if live && build.kind_quick?
     return pr_stage(build, live) if build.pr_url.present?

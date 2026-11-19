@@ -9,15 +9,16 @@ module NeedsYou
     pulls(user) + questions(user) + scripts(user)
   end
 
-  # In the merge queue and neither approved, held, landing nor asking
+  # An open PR, in any repo, neither approved, held, landing nor asking
   # (MergeQueue.state).
   def pulls(user)
-    waiting = MergeQueue.builds(user).select { |build| MergeQueue.state(build) == :review }
+    open = FeatureBuild.where(user: user).unfinished.where.not(pr_url: nil)
+    waiting = open.select { |build| MergeQueue.state(build) == :review }
     waiting.sort_by(&:updated_at).map { |build|
       item(
         kind:   :pull,
         title:  build.full_title,
-        reason: "Pull request ##{build.pr_number}",
+        reason: "#{"#{build.repo_name} " unless build.portfolio?}Pull request ##{build.pr_number}",
         url:    build.pr_url,
         since:  build.updated_at,
       )

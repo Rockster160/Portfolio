@@ -80,6 +80,30 @@ RSpec.describe Buddy::Commands do
       expect(described_class.items(user, "Hall Button")).to be_empty
     end
 
+    it "adds to what's there when asked to, leaving the saved arguments as they were" do
+      tree = { tool_name: :call_jil_function, payload: { name: "Chill Mode", Target: "christmas_tree" } }
+      allow(Buddy::Routines).to receive(:sanitize) { |rows, _ctx| rows }
+      set!("Hall Button", [tree])
+
+      payload = { key: "Hall Button", items: JSON.generate([ask_item]), add: true }
+      tool[:execute].call(payload.merge(tool[:confirm].call(payload, ctx)[:resolved]), ctx)
+
+      expect(described_class.items(user, "Hall Button")).to eq([
+        { "tool_name" => "call_jil_function", "payload" => { "name" => "Chill Mode", "Target" => "christmas_tree" } },
+        { "tool_name" => "ask_buddy", "payload" => { "text" => "close whichever garage door is open" } },
+      ])
+    end
+
+    it "shows every argument a saved item carries, so a replace can keep it whole" do
+      described_class.save!(user, "Hall Button", [
+        { "tool_name" => "call_jil_function", "payload" => { "name" => "HASS Switch", "Action" => "toggle", "Target" => "christmas_tree" } },
+      ])
+
+      expect(described_class.roster(user)).to eq([
+        "Hall Button (call jil function: HASS Switch (Action: toggle, Target: christmas_tree))",
+      ])
+    end
+
     it "refuses a key no task calls, naming the ones that exist" do
       expect {
         tool[:confirm].call({ key: "Porch Button", items: "[]" }, ctx)
@@ -96,6 +120,78 @@ RSpec.describe Buddy::Commands do
       empty = JSON.generate([{ tool_name: :ask_buddy, payload: {} }])
 
       expect { tool[:confirm].call({ key: "Hall Button", items: empty }, ctx) }.to raise_error(/needs its `text`/)
+    end
+  end
+
+  describe "programming a button or phrase that has no key yet" do
+    before {
+      user.caches.dig_set(:hass, "Btn#9", { state: "single", at: 1 })
+      user.caches.dig_set(:hass, "Remote", { state: "hold-3", at: 1 })
+      user.caches.dig_set(:hass, "Porch Light", { state: "on", at: 1 })
+    }
+
+    def program!(key, items, **trigger)
+      payload = { key: key, items: JSON.generate(items), **trigger }
+      tool[:execute].call(payload.merge(tool[:confirm].call(payload, ctx)[:resolved]), ctx)
+    end
+
+    it "knows the buttons by the presses they've reported, and lists the ones with nothing on them" do
+      expect(described_class.buttons(user)).to eq(["Btn#9", "Remote"])
+      expect(described_class.button(user, "button 9")).to eq("Btn#9")
+      expect(described_class.roster(user)).to include("button Btn#9 (nothing on it yet)")
+    end
+
+    it "makes a Jil task that runs the key on that button's press, and fills it", :aggregate_failures do
+      program!("Button 9", [chill_item], button: "button 9")
+
+      task = user.tasks.find_by!(name: "Button 9")
+      expect(task.listener).to eq(%(hass-button:device_name::"Btn#9"))
+      expect { Jil::Validator.validate!(task.code) }.not_to raise_error
+      expect(described_class.items(user, "Button 9").pluck("tool_name")).to eq(["run_jil_task"])
+      expect(described_class.roster(user)).to include("Button 9 (pressing Btn#9: run jil task: Chill Mode)")
+      expect(described_class.roster(user)).not_to include("button Btn#9 (nothing on it yet)")
+
+      fires = ->(data) { Jil::ListenerMatch.call(task.listener, :"hass-button", data) }
+      expect(fires.call({ device_name: "Btn#9", type: "single" })).to be(true)
+      expect(fires.call({ device_name: "Btn#4", type: "single" })).to be(false)
+    end
+
+    it "fills the same key when the button is programmed again, whatever it's called" do
+      program!("Button 9", [chill_item], button: "Btn#9")
+      program!("Christmas tree button", [ask_item], button: "button 9")
+
+      expect(user.tasks.where("code LIKE ?", "%Buddy.command(%").count).to eq(2)
+      expect(described_class.items(user, "Button 9").pluck("tool_name")).to eq(["ask_buddy"])
+    end
+
+    it "listens for one kind of press when it's given" do
+      program!("Remote hold", [chill_item], button: "remote", press: "hold")
+
+      task = user.tasks.find_by!(name: "Remote hold")
+      expect(Jil::ListenerMatch.call(task.listener, :"hass-button", { device_name: "Remote", type: "hold" })).to be(true)
+      expect(Jil::ListenerMatch.call(task.listener, :"hass-button", { device_name: "Remote", type: "single" })).to be(false)
+    end
+
+    it "listens for a phrase said to Jarvis" do
+      program!("Movie time", [chill_item], phrase: "Movie time!")
+
+      task = user.tasks.find_by!(name: "Movie time")
+      expect(Jil::ListenerMatch.call(task.listener, :tell, { words: "movie time", full: "movie time" })).to be(true)
+      expect(Jil::ListenerMatch.call(task.listener, :tell, { words: "no movie time", full: "no movie time" })).to be(false)
+      expect(described_class.roster(user)).to include(%(Movie time (saying "movie time": run jil task: Chill Mode)))
+    end
+
+    it "refuses a button that has never been pressed, naming the ones that have" do
+      expect {
+        tool[:confirm].call({ key: "Button 12", items: "[]", button: "button 12" }, ctx)
+      }.to raise_error(/no button called "button 12".*Btn#9 and Remote/)
+      expect(user.tasks.where(name: "Button 12")).to be_empty
+    end
+
+    it "refuses a new key named the same as one that runs from something else" do
+      expect {
+        tool[:confirm].call({ key: "hall button", items: "[]", button: "button 9" }, ctx)
+      }.to raise_error(/already runs from something else/)
     end
   end
 

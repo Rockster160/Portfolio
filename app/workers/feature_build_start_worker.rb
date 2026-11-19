@@ -14,9 +14,11 @@ class FeatureBuildStartWorker
     return unless build&.status_starting?
 
     name!(build, title_from) if title_from.present?
+    pick_repo!(build)
     fields = {
       build_id:        build.id,
       title:           build.title,
+      repo:            build.repo,
       branch_name:     FeatureBuilder::BranchName.for(build),
       request:         "#{build.request}\n\n#{FeatureBuilder::TEXTING}",
       kind:            build.kind,
@@ -44,5 +46,21 @@ class FeatureBuildStartWorker
     name = "#{FeatureBuilder::Audit::PREFIX}#{name}" if build.kind_audit?
     build.update!(title: name)
     FeatureBuilder.repaint!(build)
+  end
+
+  # Only a feature build can be for another repo: an audit and a `/q` read
+  # Portfolio. One carrying on from another build works where that one did.
+  def pick_repo!(build)
+    return unless build.kind_feature?
+
+    parent = build.parent
+    repo = (
+      if parent && !parent.kind_quick?
+        parent.repo
+      else
+        FeatureBuilder::Repos.for(build.request, user: build.user)
+      end
+    )
+    build.update!(repo: repo) unless repo == build.repo
   end
 end

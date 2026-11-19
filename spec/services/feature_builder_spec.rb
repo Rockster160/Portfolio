@@ -537,6 +537,89 @@ RSpec.describe FeatureBuilder do
     end
   end
 
+  describe "a build in another repo" do
+    let(:hass) { "Rockster160/hass-config" }
+    let(:repository) { { "full_name" => hass } }
+    let(:portfolio_build) {
+      FeatureBuild.create!(
+        user:      user,
+        title:     "Same number",
+        request:   "same number",
+        status:    :running,
+        pr_number: 42,
+        pr_url:    "https://github.com/Rockster160/Portfolio/pull/42",
+      )
+    }
+
+    before {
+      allow(ByteLocal).to receive(:builder).and_return(true)
+      build.update!(status: :running, repo: hass)
+      described_class.update_from_mini!(build, { "pr_number" => 42, "pr_url" => "https://github.com/#{hass}/pull/42" })
+      MergeQueue.enqueue!(portfolio_build)
+    }
+
+    it "stays out of the merge queue, and shows the repo on its card and its PR" do
+      expect(build.reload.queue_position).to be_nil
+      expect(MergeQueue.builds(user)).to eq([portfolio_build])
+      expect(build.status_line).to include("Building in hass-config on the Mini")
+      expect(build.pr_markdown).to eq("[hass-config PR #42](https://github.com/#{hass}/pull/42)")
+    end
+
+    it "finds its PR by repo, though Portfolio has one with the same number" do
+      said = described_class.github!(:issue_comment, {
+        "action"     => "created",
+        "repository" => repository,
+        "issue"      => { "number" => 42, "pull_request" => {} },
+        "comment"    => { "user" => { "login" => "Rockster160" }, "body" => "Warmer light" },
+      })
+
+      expect(said).to eq(:queued)
+      expect(build.reload.feedback.pluck("text")).to eq(["Comment: Warmer light"])
+      expect(portfolio_build.reload.feedback).to be_empty
+    end
+
+    it "is approved on GitHub without being handed the merge" do
+      described_class.github!(:pull_request_review, {
+        "action"       => "submitted",
+        "repository"   => repository,
+        "pull_request" => pull_request,
+        "review"       => { "user" => { "login" => "Rockster160" }, "state" => "approved", "body" => "" },
+      })
+
+      expect(build.reload).to have_attributes(landing_at: nil, approved_at: be_present)
+      expect(described_class.stage(build, nil)).to eq("approved")
+    end
+
+    it "waits to be pulled once merged, without holding up Portfolio's deploys" do
+      described_class.github!(:pull_request, {
+        "action"       => "closed",
+        "repository"   => repository,
+        "pull_request" => pull_request(merged: true).merge("merge_commit_sha" => "abc1234"),
+      })
+
+      expect(build.reload).to have_attributes(status: "finished", merge_sha: "abc1234")
+      expect(FeatureBuild.to_pull).to eq([build])
+      expect(MergeQueue.deploying(user)).to be_empty
+      expect(described_class.stage(build, nil)).to eq("merged, to pull")
+
+      expect { described_class.pulled!(hass, ["abc1234"]) }.to change {
+        described_class.pending_count(user)
+      }.by(-1)
+
+      expect(FeatureBuild.to_pull).to be_empty
+      expect(described_class.stage(build.reload, nil)).to eq("finished")
+    end
+
+    it "leaves Portfolio's open PRs alone when its master moves" do
+      allow(FeatureBuildSyncWorker).to receive(:perform_async)
+
+      said = described_class.github!(:push, { "ref" => "refs/heads/master", "repository" => repository })
+
+      expect(said).to eq(:ignored)
+      expect(FeatureBuildSyncWorker).not_to have_received(:perform_async)
+    end
+  end
+
   describe "a PR's title" do
     it "leaves the build's own name alone" do
       build.update!(title: "Open links in a new tab")
@@ -970,6 +1053,7 @@ RSpec.describe FeatureBuilder do
       build
       allow(ByteLocal).to receive(:builder).and_return(false)
       allow(FeatureBuilder::BranchName).to receive(:for).and_return("byte/1-dark-mode")
+      allow(FeatureBuilder::Repos).to receive(:for).and_return(FeatureBuilder::Repos::PORTFOLIO)
       FeatureBuildStartWorker.new.perform(build.id)
 
       expect(look(:building)).to be_nil

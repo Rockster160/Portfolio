@@ -77,6 +77,7 @@ class BuddyUsage < ApplicationRecord
     amazon_names:   11,
     build_title:    12,
     image_generate: 13,
+    build_repo:     14,
   }
 
   # Where the call was made. Prod only ever saw its own rows until local spend

@@ -435,6 +435,14 @@ class SystemController < ApplicationController
     @pending = FeatureBuilder.pending(current_user)
     @queue = MergeQueue.builds(current_user).to_a
     @deploying = MergeQueue.deploying(current_user).order(:finished_at).to_a
+    @to_pull = FeatureBuild.to_pull.where(user: current_user).order(:finished_at).to_a
+  end
+
+  # Pulled by hand, or somewhere the laptop's git hook doesn't run.
+  def pulled_claude
+    build = FeatureBuild.to_pull.where(user: current_user).find(params[:id])
+    FeatureBuilder.pulled!(build.repo, [build.merge_sha])
+    redirect_to system_claude_path(anchor: "to-pull")
   end
 
   # Approving, holding and reordering the merge queue.

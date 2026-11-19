@@ -443,6 +443,8 @@ Rails.application.routes.draw do
   patch "webhooks/byte/production_scripts/:id" => "webhooks#byte_update_production_script"
   get   "webhooks/byte/agenda"           => "webhooks#byte_agenda"
   get   "webhooks/byte/needs_you"        => "webhooks#byte_needs_you"
+  get   "webhooks/byte/pulls"            => "webhooks#byte_pulls"
+  post  "webhooks/byte/pulls"            => "webhooks#byte_pulled"
   get   "webhooks/byte/weather"          => "webhooks#byte_weather"
 
   get "webhooks/uptime" => "webhooks#uptime"
@@ -812,6 +814,7 @@ Rails.application.routes.draw do
     post "/system/claude/:id/cancel" => "system#cancel_claude", as: :system_claude_cancel
     post "/system/claude/questions" => "system#claude_questions", as: :system_claude_questions
     post "/system/claude/:id/queue/:act" => "system#update_queue", as: :system_claude_queue
+    post "/system/claude/:id/pulled" => "system#pulled_claude", as: :system_claude_pulled
     get "/system/production_scripts" => "system#production_scripts", as: :system_production_scripts
     get "/system/production_scripts/new" => "system#new_production_script", as: :system_new_production_script
     post "/system/production_scripts" => "system#create_production_script"

@@ -6,6 +6,9 @@
 # for another review. A merge holds the line until production is running it
 # and answering, so each deploy ships and is checked before the next merge.
 #
+# Only Portfolio's builds are in it. A PR in another repo has no deploy to
+# wait on, and its owner merges it (FeatureBuilder::Repos).
+#
 # Nothing polls. The line moves whenever something that could free it
 # happens: an approval, a reorder, a build finishing or asking again, a deploy
 # booting, and any report from the Mini, which also retries a hand-off the
@@ -19,7 +22,7 @@ module MergeQueue
 
   # Every build with an open PR, in the order they merge.
   def builds(user)
-    scope = FeatureBuild.where(user: user).unfinished.where.not(pr_url: nil)
+    scope = FeatureBuild.portfolio.where(user: user).unfinished.where.not(pr_url: nil)
     scope.order(Arel.sql("queue_position ASC NULLS LAST"), :id)
   end
 
@@ -49,7 +52,7 @@ module MergeQueue
 
   # A PR just opened goes to the back of the line.
   def enqueue!(build)
-    return if build.queue_position
+    return if build.queue_position || !build.portfolio?
 
     last = FeatureBuild.where(user: build.user).maximum(:queue_position).to_i
     build.update!(queue_position: last + 1)
@@ -96,14 +99,14 @@ module MergeQueue
   # Merged builds whose deploy hasn't been seen live yet. A deploy that fails
   # never boots, so the line stays held until someone looks.
   def deploying(user)
-    FeatureBuild.where(user: user).where.not(merge_sha: nil).where(deployed_at: nil)
+    FeatureBuild.portfolio.where(user: user).where.not(merge_sha: nil).where(deployed_at: nil)
   end
 
   # Called after each deploy boots, from the new code: anything it brought in
   # is live once the site answers, and the line moves on. Returns whether
   # anything was left waiting.
   def deployed!
-    waiting = FeatureBuild.where.not(merge_sha: nil).where(deployed_at: nil).to_a
+    waiting = FeatureBuild.portfolio.where.not(merge_sha: nil).where(deployed_at: nil).to_a
     live = waiting.select { |build| ProductionScripts.deployed?(build.merge_sha) }
     return waiting.any? if live.empty? || !site_up?
 

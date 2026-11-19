@@ -720,6 +720,23 @@ class WebhooksController < ApplicationController
     render json: { needs_you: NeedsYou.call(User.me), upcoming: NeedsYou.upcoming(User.me) }
   end
 
+  # For the laptop's git hook after a pull: the merge commits of `repo`
+  # (owner/name) it's still waiting to have.
+  def byte_pulls
+    return head :unauthorized unless byte_authorized?
+
+    shas = FeatureBuild.to_pull.where(repo: params[:repo].to_s).pluck(:merge_sha)
+    render json: { shas: shas }
+  end
+
+  # The hook again, with the ones its checkout has now.
+  def byte_pulled
+    return head :unauthorized unless byte_authorized?
+
+    builds = FeatureBuilder.pulled!(params[:repo].to_s, params[:shas])
+    render json: { pulled: builds.map(&:id) }
+  end
+
   # The mirror of byte_create: a message FROM the person, injected from off-web
   # (the Mac `tell` CLI, a cron job, a Jil bash step). byte_create posts as
   # Byte; this posts as them and gets a real Buddy turn back, exactly as if

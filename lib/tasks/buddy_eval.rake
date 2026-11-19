@@ -624,6 +624,47 @@ BUDDY_EDGE_PROBES = [
     note:  "asked for the item names three times, having nothing that listed them, until " \
            "they gave up",
   },
+  # --- a button with nothing on it yet -----------------------------------------
+  {
+    case:  "program a new button",
+    say:   "Program button 9 to toggle the christmas tree",
+    tool:  :set_command,
+    avoid: %i[save_routine call_jil_function],
+    args:  { set_command: { button: /9/, items: /christmas/i } },
+    note:  "a button could only be set once a hand-written Jil task left a key for it",
+    seed:  ->(user, _convo) {
+      user.caches.dig_set(:hass, "Btn#9", { state: "single", at: Time.current.to_i })
+      user.tasks.find_by(name: "Christmas Tree") || user.tasks.create!(
+        name:          "Christmas Tree",
+        listener:      "christmas-tree",
+        enabled:       true,
+        buddy_enabled: true,
+        description:   "Toggles the Christmas tree's switch",
+        code:          "",
+      )
+    },
+  },
+  {
+    case:  "add to a programmed button",
+    say:   "Make the hall button also ask me if the garage is closed",
+    tool:  :set_command,
+    avoid: :save_routine,
+    args:  { set_command: { add: true } },
+    note:  "a save replaces the whole key, so \"also\" had to resend what was there from a " \
+           "phrase that names one argument at most, and dropped the rest",
+    seed:  ->(user, _convo) {
+      Task.create!(
+        user:     user,
+        name:     "Hall Button",
+        listener: "hall-button",
+        enabled:  true,
+        code:     %(cmd = Buddy.command("Hall Button")::Boolean),
+      )
+      Buddy::Commands.save!(user, "Hall Button", [
+        { "tool_name" => "ask_buddy", "payload" => { "text" => "turn on the porch light" } },
+      ])
+    },
+  },
   # --- how the house works is worth keeping ------------------------------------
   {
     case:  "prod 11366",
