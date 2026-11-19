@@ -36,12 +36,16 @@ document.addEventListener("ajax:success", (e) => {
   const wrapper = btn ? btn.closest(".execute-btn-wrapper") : null;
   reenable(btn);
   flash(wrapper);
+  wrapper?.dispatchEvent(new CustomEvent("execute:triggered", { bubbles: true }));
 });
 
 document.addEventListener("ajax:error", (e) => {
   const btn = e.target.closest(".execute-btn");
   console.log("Error executing trigger:", e);
   reenable(btn);
+  btn
+    ?.closest(".execute-btn-wrapper")
+    ?.dispatchEvent(new CustomEvent("execute:failed", { bubbles: true }));
 });
 
 import { setButtonText } from "../button_text";

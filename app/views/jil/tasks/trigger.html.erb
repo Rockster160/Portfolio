@@ -12,65 +12,21 @@
   <div class="task-trigger-btns">
     <%= render partial: "jil/tasks/trigger", locals: { task: @task, title: "Trigger Now" } %>
   </div>
+
+  <div class="trigger-pressed-at" aria-live="polite"></div>
 </div>
 
 <script>
-  document.addEventListener("DOMContentLoaded", function() {
-    const executeWrapper = document.querySelector(".execute-btn-wrapper");
-    const executeBtn = executeWrapper.querySelector(".execute-btn");
-    if (executeBtn) {
-      executeBtn.addEventListener("click", function() {
-        executeBtn.style.pointerEvents = "none";
-        executeBtn.classList.add("disabled");
-      });
-    } else {
-      return
-    }
+  (function() {
+    const stamp = function(word, failed) {
+      const el = document.querySelector(".trigger-pressed-at");
+      if (!el) return;
+      const time = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+      el.textContent = word + " at " + time;
+      el.classList.toggle("failed", failed);
+    };
 
-    if (executeWrapper.dataset.type === "monitor") {
-      const monitorKey = executeWrapper.dataset.monitor
-      let monitor = undefined
-      let synced = false
-      let syncInterval = undefined
-      monitor = Monitor.subscribe(monitorKey, {
-        connected: function() {
-          monitor?.resync()
-          syncInterval = setInterval(() => {
-            if (!synced) {
-              console.log("resyncing monitor...");
-              monitor?.resync()
-            }
-          }, 1000);
-        },
-        received: function(json) {
-          synced = true
-          clearInterval(syncInterval)
-          if (json?.data?.text) {
-            executeBtn.querySelector(".execute-btn-title").textContent = json.data.text
-          }
-          if (json?.data?.color) {
-            executeWrapper.style.setProperty("--btn-color", json.data.color)
-          }
-        },
-      })
-    }
-  });
-
-  document.addEventListener("ajax:success", function(event) {
-    const wrapper = event.target.closest(".execute-btn-wrapper");
-    const executeBtn = wrapper ? wrapper.querySelector(".execute-btn") : null;
-
-    if (executeBtn) {
-      executeBtn.style.pointerEvents = "";
-      executeBtn.classList.remove("disabled");
-    }
-
-    if (wrapper) {
-      const msg = document.createElement("div");
-      msg.textContent = "Triggered!";
-      msg.className = "execute-success-msg";
-      wrapper.appendChild(msg);
-      setTimeout(() => msg.remove(), 1500);
-    }
-  }, true);
+    document.addEventListener("execute:triggered", function() { stamp("Triggered", false) });
+    document.addEventListener("execute:failed", function() { stamp("Failed", true) });
+  })();
 </script>
