@@ -6,6 +6,7 @@
     manifest_path: manifest_meal_builder_path(@meal_builder, t: @meal_builder.install_token, v: @meal_builder.updated_at.to_i),
     touch_icon:    @meal_builder.favicon("apple-touch-icon.png"),
     tab_icon:      @meal_builder.favicon("favicon-32x32.png"),
+    shortcut_icon: @meal_builder.favicon("favicon.ico"),
     status_bar:    "default" %>
 <% end %>
 <% content_for :head do %>

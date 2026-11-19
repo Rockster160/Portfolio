@@ -6,6 +6,7 @@
     manifest_path: manifest_list_path(list, pwa_params.merge(key: list.install_token, v: list.updated_at.to_i)),
     touch_icon:    asset_path("list_favicon/apple-touch-icon.png"),
     tab_icon:      asset_path("list_favicon/favicon-32x32.png"),
+    shortcut_icon: asset_path("list_favicon/favicon.ico"),
     status_bar:    "default" %>
 <% else %>
   <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'list_favicon/apple-touch-icon.png' %>">

@@ -9,6 +9,7 @@
     manifest_path: timer_page_manifest_path(slug: @active_page.slug, t: @active_page.install_token, v: @active_page.updated_at.to_i),
     touch_icon:    "/timers_favicon/apple-touch-icon.png",
     tab_icon:      "/timers_favicon/favicon-32x32.png",
+    shortcut_icon: "/timers_favicon/favicon.ico",
     default_color: TimersController::DEFAULT_PAGE_COLOR %>
 <% else %>
   <link rel="apple-touch-icon" sizes="180x180" href="/timers_favicon/apple-touch-icon.png">

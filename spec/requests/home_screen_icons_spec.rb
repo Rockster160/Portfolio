@@ -35,6 +35,8 @@ RSpec.describe "Home screen icons", type: :request do
       icon_url = response.body[%r{rel="apple-touch-icon" sizes="180x180" href="([^"]+)"}, 1]
       icon_url = CGI.unescapeHTML(icon_url)
       expect(icon_url).to start_with("#{base}/icon.png?#{token_param}=")
+      shortcut_url = response.body[%r{rel="shortcut icon" href="([^"]+)"}, 1]
+      expect(CGI.unescapeHTML(shortcut_url)).to eq(icon_url)
       expect(response.body).to include("#{base}/manifest?", "#{token_param}=", "content=\"#224466\"")
 
       get "/logout"
@@ -103,9 +105,10 @@ RSpec.describe "Home screen icons", type: :request do
       expect(response.body).to include(
         "href=\"#{favicon_dir}/apple-touch-icon.png\"",
         "href=\"#{favicon_dir}/favicon-32x32.png\"",
+        "rel=\"shortcut icon\" href=\"#{favicon_dir}/favicon.ico\"",
         "content=\"#0059FD\"",
       )
-      %w[apple-touch-icon.png favicon-32x32.png android-chrome-192x192.png android-chrome-512x512.png].each { |file|
+      %w[apple-touch-icon.png favicon-32x32.png favicon.ico android-chrome-192x192.png android-chrome-512x512.png].each { |file|
         expect(Rails.public_path.join(favicon_dir.delete_prefix("/"), file)).to exist
       }
     end

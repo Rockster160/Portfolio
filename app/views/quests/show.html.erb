@@ -5,7 +5,8 @@
     icon_path:     home_screen_icon_url(@board),
     manifest_path: quest_board_manifest_path(@board, t: @board.install_token, v: @board.updated_at.to_i),
     touch_icon:    asset_path("favicon/apple-touch-icon.png"),
-    tab_icon:      asset_path("favicon/favicon-32x32.png") %>
+    tab_icon:      asset_path("favicon/favicon-32x32.png"),
+    shortcut_icon: asset_path("favicon/favicon.ico") %>
 <% end %>
 <% content_for :head do %>
   <script src="/chores_sortable.js" defer></script>
