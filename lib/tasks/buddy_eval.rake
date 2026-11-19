@@ -3601,6 +3601,27 @@ BUDDY_EDGE_PROBES = [
       )
     },
   },
+  {
+    case:  "prod 11666",
+    say:   "Yell Broker on Cobalt next time a Broker section item is added to the Claude list",
+    tool:  :remind_when,
+    avoid: %i[alarm],
+    args:  { remind_when: { trigger: "custom", run: /yell/i, run_args: /broker/i } },
+    needs: :cobalt_board,
+    note:  "set a phone alarm labelled \"Broker on Cobalt\" instead of running Yell on the " \
+           "board when the item lands",
+  },
+  # Aimed by the pet's name, which the board itself is not called.
+  {
+    case:  "prod 11689",
+    say:   "Yell Fae Nails on Bloom. We can clear it by tapping her.",
+    tool:  :run_jil_task,
+    avoid: %i[alarm],
+    args:  { run_jil_task: { name: /yell/i, board: /bloom/i, message: /nails/i } },
+    needs: :bloom_board,
+    note:  "set a phone alarm and filed \"Yell on the Bloom board\" as a feature request, saying " \
+           "it couldn't yell on Bloom, while Yell takes a pet's name",
+  },
   # The same sentence again, over the thread where it was refused three times.
   {
     case:  "prod 8737",

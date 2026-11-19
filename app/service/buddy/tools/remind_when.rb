@@ -2,8 +2,8 @@ Buddy::Tools.register(
   name:         :remind_when,
   summary:      "When something HAPPENS - arriving, leaving, a chore done, an item added, a " \
                 "sensor, a charge - nudge or DO things then: \"when I get home, porch light " \
-                "on and tell Chelsea\", \"once I leave, navigate to X\", \"each time the car " \
-                "arrives, a banner\".",
+                "on\", \"once I leave, navigate to X\", \"<their function> next time an " \
+                "item's added\".",
   description:  <<~TXT,
     Set a reminder that fires when a real-world CONDITION happens, not at a
     clock time. Use for "remind me to X when / the next time I <arrive /
@@ -216,6 +216,14 @@ Buddy::Tools.register(
     the shape whenever the thing should happen when they GET somewhere or LEAVE
     somewhere, not at a time: `schedule_function` guesses a clock time off the
     calendar, and the event never ends on the minute it was booked to.
+
+    **A sentence that opens with one of their function names is that
+    function.** "<function> <words> on <where> the next time <thing happens>"
+    is `run:` that function, its words and its target in `run_args`, hung off
+    the condition. The name they used is the thing they want done, so it runs
+    as written even when the word sounds like ringing or a message - a
+    function that shouts on a board shouts on that board, and nothing else
+    makes it shout there.
 
     `delay` (seconds, up to 900) waits that long after the condition before
     running it - "ten seconds after the doggy door" is `delay: 10`. It only
