@@ -795,7 +795,7 @@ module Buddy
       def start_over?(outcome, attempt)
         return false if attempt > 1
         return false if Time.current > @deadline
-        return false if @acted || @asked_choice || @read_actions
+        return false if @acted || @asked_choice || @read_actions || answered_from_record?
         return false if outcome[:proposals].any?
 
         # A seed that ORDERED a call and got none back.
@@ -1110,6 +1110,9 @@ module Buddy
         # Whether this turn READ `recent_actions` rather than answering about
         # its own doings from memory. See disputed_action?.
         @read_actions = false
+        # Whether this turn went and LOOKED something up - a read tool, or an
+        # answering tool that changes nothing. See answered_from_record?.
+        @looked_up = false
         # Whether any round reached for `run_routine`. See forced_routine.
         @asked_routine = false
         # Whether anything got put on the clock this turn. See tool_output.
@@ -1503,6 +1506,7 @@ module Buddy
         @called = true
         @read_context ||= name == ContextTool::NAME
         @read_actions ||= name == ContextTool::NAME && ContextTool.serves?(call[:arguments], :recent_actions)
+        @looked_up ||= lookup?(name)
         reader = read_tools[name]
         return reader.call(call[:arguments]) if reader
         # Silent tools already ran as their call arrived (see run_round).
@@ -3068,7 +3072,8 @@ module Buddy
         # the day's details back, with ten real items sitting in the seed. The
         # arms below this block read the briefing's own prose and still apply.
         unless today_briefing?
-          return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
+          # Not on an answer read out of the record - see answered_from_record?.
+          return RETRY_NUDGE if unbacked_claim(spoken.to_s).present? && !answered_from_record?
           # The broad arm, on the same footing as the narrow one above it and
           # for the same purpose: get the call MADE, rather than only stopping
           # the sentence about it. `proposals` is already empty by the guard at
@@ -4715,6 +4720,29 @@ module Buddy
         said.match?(QUESTION_RX) && !said.match?(COMMAND_REQUEST_RX)
       end
 
+      # They asked how things stand, and the turn went and looked. The reply is
+      # then a report of what the record says, written in the record's own
+      # words: "Where was I Oct 27?" comes back as a day of events, and a day
+      # of events is full of "logged" and "recorded" about things that
+      # happened weeks ago. Read as claims about this turn, the whole answer is
+      # nudged, started over and finally replaced by "nothing ran", which is
+      # true and answers nothing.
+      #
+      # Both halves are load-bearing. A question answered from memory can still
+      # be a made-up "yep, logged it", and an order that only looked things up
+      # still owes the thing it ordered.
+      def answered_from_record?
+        @looked_up && asked_about_state?
+      end
+
+      # A call that reads and changes nothing.
+      def lookup?(name)
+        return true if read_tools.key?(name)
+
+        tool = Buddy::Tools[name]
+        Buddy::Tools.answers?(tool) && !Buddy::Tools.acts?(tool)
+      end
+
       # Did they order something done, and did the reply act like it happened?
       #
       # Two ways in. Either the REQUEST was an imperative, or the reply carries
@@ -4825,7 +4853,10 @@ module Buddy
         # `:empty_wait` joins `:call` in not getting it, and for the same reason:
         # the wait is THIS turn's, so the action log has nothing to say about it.
         # `:named` has already made this call for itself, in unbacked_claims.
-        return if @read_actions && [:call, :empty_wait, :named].exclude?(kind)
+        # A question answered out of the record stands on the same footing as
+        # the action log: see answered_from_record?.
+        from_record = @read_actions || answered_from_record?
+        return if from_record && [:call, :empty_wait, :named].exclude?(kind)
 
         Rails.logger.warn(
           "[Buddy::GPT::Turn] retracted unbacked #{kind}#{" over a pending row" if pending} " \

@@ -308,6 +308,29 @@ RSpec.describe Buddy::Alerts do
       expect(sent).to be_empty
     end
 
+    # Two runs of one task, 90ms apart, both found nothing open and the second
+    # create hit the one-open-per-key index (error row 321).
+    it "holds the row a run racing it just opened instead of failing" do
+      raced = nil
+      racing = false
+      allow(BuddyAlert).to(
+        receive(:open_for).and_wrap_original { |original, *args|
+          next original.call(*args) if racing
+
+          racing = true
+          raced = described_class.hold!(
+            user: user, key: "gate-board", body: "The gate is open", groups: ["Whisper"],
+          )
+          nil
+        },
+      )
+
+      held = hold!
+
+      expect(held.id).to eq(raced.id)
+      expect(BuddyAlert.where(user: user, key: "gate-board").count).to eq(1)
+    end
+
     it "is cleared by resolve, and opens fresh after" do
       first = hold!
       described_class.resolve!(user: user, key: "gate-board")

@@ -186,6 +186,12 @@ module BuddyEvalNeeds
         jil(u, /\Ayell\z|"Board" TAB String/i) && Buddy::BoardYell.boards_for(u, "Cobalt").any?
       },
     },
+    # Bloom is a pet, not a board's name: the board it sits on is called
+    # something else, so this is the yell aimed by pet.
+    bloom_board:          {
+      label: "the Yell function and a board Bloom sits on",
+      check: ->(u) { jil(u, /\Ayell\z|"Board" TAB String/i) && Buddy::BoardYell.boards_for(u, "Bloom").any? },
+    },
     moss_board:           {
       label: "a board Moss sits on",
       check: ->(_u) { ByteConversation.where("metadata->>'board' = 'true'").exists?(buddy_theme: "moss") },
