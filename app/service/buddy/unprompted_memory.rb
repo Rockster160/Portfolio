@@ -49,7 +49,11 @@ module Buddy
     # grammar from counting as agreement" - so it is reused rather than copied.
     # It can only ever REMOVE a veto, so no sentence starts being cut because
     # of it.
-    GRAMMAR = Buddy::Restatement::FILLER
+    #
+    # The prepositions on top are the same kind of word. At the one-word bar, a
+    # carried memory with "about" or "before" in it would cut every sentence
+    # saying how long something has waited or what to finish first.
+    GRAMMAR = (Buddy::Restatement::FILLER | %w[about after before since until while]).freeze
 
     BACK_REFERENCE = /\A(?:that one|that|it)\b/i
 
@@ -140,8 +144,22 @@ module Buddy
     # memory can convict it. The one word that tips a sentence is often its
     # lead-in rather than its subject - "After that, 8pm is Game Night!" went
     # for "after" - and cutting it takes an appointment out of the briefing.
+    #
+    # A stashed thought the seed handed over is the same: ON THEIR MIND asks
+    # for it by name, so the sentence floating it is doing what it was told,
+    # whatever a preference note shares with the words around it.
     def seed_item?(part, facts)
-      facts.is_a?(::Hash) && Buddy::SeedItem.any_named_in?(part, facts)
+      return false unless facts.is_a?(::Hash)
+
+      Buddy::SeedItem.any_named_in?(part, facts) || seed_stash_named?(part, facts)
+    end
+
+    def seed_stash_named?(part, facts)
+      text = part.downcase
+      Array(facts[:stash]).any? { |idea|
+        title = (idea[:idea] if idea.is_a?(::Hash)).to_s.strip.downcase
+        title.length >= 2 && text.include?(title)
+      }
     end
 
     # One distinctive word is enough for a carried memory, and that is

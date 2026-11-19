@@ -178,4 +178,32 @@ RSpec.describe Buddy::UnpromptedMemory do
       expect(described_class.trim(body, [fridge], floated)).to eq(body)
     end
   end
+
+  describe "a stashed thought the seed handed over" do
+    let(:preference) { Struct.new(:content) { def kind_preference? = true } }
+    let(:pile_note) { preference.new("My ideas pile is where thoughts go sitting until I want them") }
+    let(:floated) { facts.merge(stash: [{ id: 196, idea: "Freezer breakfast prep", waiting: "9 weeks" }]) }
+
+    it "keeps the sentence naming it, and the question after it" do
+      body = "Morning, Eve! Snow day today.\n\n**Freezer breakfast prep** has been on your mind for " \
+             "about 9 weeks now, and it's still sitting in your ideas pile. Want me to pull it up, " \
+             "or leave it be for now?"
+
+      expect(described_class.trim(body, [pile_note], floated)).to eq(body)
+    end
+
+    it "still drops a sentence using the note's words that names no seeded thought" do
+      body = "Morning, Eve! Your ideas pile is still sitting there."
+
+      expect(described_class.trim(body, [pile_note], floated)).to eq("Morning, Eve!")
+    end
+  end
+
+  it "is not a veto on a sentence for sharing a preposition with a carried memory", :aggregate_failures do
+    held_back = [held.new("Worried about what happens before the review")]
+    [
+      "Bring the trash cans in today. It's snowing, so get that done before it gets slushy.",
+      "An older thought is waiting. It's been about 12 weeks, so it might be worth picking back up.",
+    ].each { |body| expect(described_class.trim(body, held_back, facts)).to eq(body), body }
+  end
 end

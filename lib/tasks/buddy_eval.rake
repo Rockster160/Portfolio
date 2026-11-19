@@ -3601,6 +3601,16 @@ BUDDY_EDGE_PROBES = [
       )
     },
   },
+  {
+    case:  "prod 11666",
+    say:   "Yell Broker on Cobalt next time a Broker section item is added to the Claude list",
+    tool:  :remind_when,
+    avoid: %i[alarm],
+    args:  { remind_when: { trigger: "custom", run: /yell/i, run_args: /broker/i } },
+    needs: :cobalt_board,
+    note:  "set a phone alarm labelled \"Broker on Cobalt\" instead of running Yell on the " \
+           "board when the item lands",
+  },
   # The same sentence again, over the thread where it was refused three times.
   {
     case:  "prod 8737",

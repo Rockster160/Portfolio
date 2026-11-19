@@ -178,13 +178,12 @@ module BuddyEvalNeeds
     venmo_fn:             { label: "the Venmo function with labeled args", check: ->(u) { jil(u, /"Note" TAB String/) && jil(u, /venmo/i) } },
     skip_nap_fn:          { label: "the Whisper Skip Nap function", check: ->(u) { jil(u, /skip nap/i) } },
     yell_fn:              { label: "the board Yell function", check: ->(u) { jil(u, /\Ayell\z|"Board" TAB String/i) } },
-    # "Yell on Cobalt Dishes" only splits into a board and a message when one of
-    # the boards is called Cobalt.
+    # "Yell on Cobalt Dishes" only splits into a board and a message when Cobalt
+    # names a board, by its own name or by the pet on it.
     cobalt_board:         {
-      label: "the Yell function and a board called Cobalt",
+      label: "the Yell function and a board Cobalt names",
       check: ->(u) {
-        jil(u, /\Ayell\z|"Board" TAB String/i) &&
-          ByteConversation.where("metadata->>'board' = 'true'").exists?(["name ILIKE ?", "%cobalt%"])
+        jil(u, /\Ayell\z|"Board" TAB String/i) && Buddy::BoardYell.boards_for(u, "Cobalt").any?
       },
     },
     moss_board:           {
