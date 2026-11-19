@@ -63,8 +63,10 @@ async function openModalFor(wrapper) {
 
   if (res && res.ok) {
     flashTriggered(wrapper)
-  } else if (res) {
-    console.error("Run failed:", res.status, res.statusText)
+    wrapper.dispatchEvent(new CustomEvent("execute:triggered", { bubbles: true }))
+  } else {
+    if (res) { console.error("Run failed:", res.status, res.statusText) }
+    wrapper.dispatchEvent(new CustomEvent("execute:failed", { bubbles: true }))
   }
 }
 

@@ -146,3 +146,15 @@
   }
 }
 
+.trigger-pressed-at {
+  margin-top: 50px;
+  text-align: center;
+  font-size: 1.1em;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+
+  &.failed {
+    color: $danger;
+    opacity: 1;
+  }
+}
