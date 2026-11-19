@@ -146,7 +146,7 @@ RSpec.describe FeatureBuilder do
       expect(thread.byte_messages.where("body LIKE ?", "%\nTwo.\n%").count).to eq(1)
     end
 
-    it "posts each production script it sends, linked to where it's approved" do
+    it "posts each production script it sends as a card, tied to the session" do
       script = ProductionScripts.create!(
         user: user, feature_build: build, title: "Clear the gate timer", code: "puts 1",
         commit_sha: "abc1234", edited_by: :mini
@@ -154,21 +154,24 @@ RSpec.describe FeatureBuilder do
 
       described_class.script_sent!(script)
 
-      expect(thread.byte_messages.last.body).to include(
-        "[Clear the gate timer](",
-        "/system/production_scripts/#{script.id}",
-        "A script needs your approval",
+      card = thread.byte_messages.last
+      expect(card.metadata).to include(
+        "kind"                 => "production_script",
+        "production_script_id" => script.id,
+        "feature_build_id"     => build.id,
       )
+      expect(card.body).to include("Clear the gate timer", "/system/production_scripts/#{script.id}")
+      expect(described_class.replied_to(user, card)).to eq(build)
     end
 
-    it "leaves a build's scripts to its PR" do
+    it "posts a build's scripts too" do
       build.update!(kind: :feature)
       script = ProductionScripts.create!(
         user: user, feature_build: build, title: "Backfill", code: "puts 1",
         commit_sha: "abc1234", edited_by: :mini
       )
 
-      expect { described_class.script_sent!(script) }.not_to change(ByteMessage, :count)
+      expect { described_class.script_sent!(script) }.to change(ByteMessage, :count).by(1)
     end
 
     it "is closed with the reason it's given" do
@@ -386,7 +389,7 @@ RSpec.describe FeatureBuilder do
       expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).once.with(
         hash_including(text: "**dark mode**\nClosed itself: Master already has dark mode."),
       )
-      expect(build.byte_message.reload.body).to eq("**dark mode**\nClosed: Master already has dark mode.")
+      expect(build.byte_message.reload.body).to eq("**dark mode**\nClosed itself")
       expect(described_class.pending(user).values.flatten).not_to include(build)
     end
   end
@@ -1064,6 +1067,124 @@ RSpec.describe FeatureBuilder do
 
       described_class.finished!(build, merged: true)
       expect(look(:reviewed)).to be_nil
+    end
+  end
+  describe "a build carrying on from a /q" do
+    let(:quick) {
+      allow(FeatureBuildStartWorker).to receive(:perform_async)
+      FeatureBuilder::Quick.start!(user: user, conversation: thread, text: "start a workout at Lowes")
+      FeatureBuild.last.tap { |built| built.update!(status: :running, title: "Automatic workout start reminder") }
+    }
+
+    before { allow(Buddy::CompanionDelivery).to receive(:notify) }
+
+    def hand_over
+      described_class.launch!(
+        user: user, conversation: thread, request: "Change task 49", title: "Workout auto-start", parent: quick,
+      )
+    end
+
+    it "takes over the /q's card rather than posting one of its own, under the /q's name" do
+      quick
+      child = nil
+      expect { child = hand_over }.not_to change(ByteMessage, :count)
+
+      card = quick.byte_message.reload
+      expect(child.byte_message).to eq(card)
+      expect(card.body).to start_with("**Automatic workout start reminder**\nStarting a Feature Builder")
+      expect(card.metadata["feature_build_id"]).to eq(child.id)
+      expect(described_class.replied_to(user, card)).to eq(child)
+    end
+
+    it "says why it closed once, on the /q's card" do
+      quick
+      child = hand_over
+
+      described_class.update_from_mini!(child, { "closed_reason" => "No code needed: sent script #10." })
+
+      bodies = thread.byte_messages.reload.map(&:body)
+      expect(bodies.count { |body| body.include?("No code needed") }).to eq(1)
+      expect(quick.byte_message.reload.body).to eq("**Automatic workout start reminder**\nClosed itself")
+      expect(bodies.last).to start_with("**Automatic workout start reminder**\nClosed itself: No code needed")
+    end
+
+    it "keeps the card on the newest session when the /q itself is repainted" do
+      quick
+      child = hand_over
+      described_class.repaint!(quick)
+
+      expect(quick.byte_message.reload.body).to eq(child.status_line)
+    end
+  end
+
+  describe "a brief quoting another session's link" do
+    it "is given to the new session without it, so the Mini can't take it for the new one's own" do
+      allow(FeatureBuildStartWorker).to receive(:perform_async)
+      brief = "- [11450] Ready for review [Open it in Claude](https://claude.ai/code/session_01Gqbdx2aP8r)"
+
+      built = described_class.launch!(user: user, conversation: thread, request: brief, title: "Lowes")
+
+      expect(built.request).not_to include("claude.ai/code/session_")
+      expect(built.request).to include("[Open it in Claude]((session link))")
+    end
+  end
+
+  describe "a reply to a production script's card" do
+    let(:script) {
+      ProductionScripts.create!(
+        user: user, feature_build: build, title: "Lowes key", code: "puts 1", commit_sha: "abc1234", edited_by: :mini,
+      )
+    }
+
+    before { allow(Buddy::CompanionDelivery).to receive(:notify) }
+
+    def reply_to(card, words)
+      ByteMessageIntake.call(
+        user: user, conversation: thread, body: words, metadata: {}, reply_to: card.id,
+      )
+    end
+
+    it "reaches the open session that wrote it, told which script it's about" do
+      build.update!(status: :running)
+      card = ProductionScripts::Card.post!(script)
+      sent = stub_request(:post, %r{/byte/builder\z}).with { |request|
+        body = JSON.parse(request.body)
+        body["build_id"] == build.id && body["text"].start_with?("About production script ##{script.id}, \"Lowes key\"") &&
+          body["text"].include?("print WROTE instead")
+      }.to_return(status: 200, body: "{}")
+
+      reply_to(card, "print WROTE instead")
+
+      expect(sent).to have_been_requested
+    end
+
+    it "opens a new session on the same card when the one that wrote it has closed, handed the script" do
+      build.update!(status: :finished, closed_reason: "No code needed.", closed_itself: true)
+      card = ProductionScripts::Card.post!(script)
+
+      reply = reply_to(card, "print WROTE instead")
+
+      resumed = FeatureBuild.last
+      expect(resumed).to have_attributes(kind: "quick", parent: build)
+      expect(resumed.request).to include("print WROTE instead", "production script ##{script.id}", "puts 1")
+      expect(reply.reload.metadata["feature_build_id"]).to eq(resumed.id)
+      expect(build.byte_message.reload.body).to start_with("**dark mode**\nStarting a quick session")
+    end
+
+    it "replaces the script with what the new session sends under the same title" do
+      build.update!(status: :finished)
+      first_card = ProductionScripts::Card.post!(script)
+      resumed = described_class.launch!(
+        user: user, conversation: thread, request: "fix it", title: "dark mode", kind: :quick, parent: build,
+      )
+
+      expect(described_class.replaced_script(resumed, "Lowes key")).to eq(script)
+      expect(described_class.replaced_script(resumed, "Something else")).to be_nil
+      expect(described_class.replaced_script(build, "Lowes key")).to be_nil
+
+      ProductionScripts.edit!(script, code: "puts 2", edited_by: :mini)
+      described_class.script_sent!(script, updated: true)
+      expect(first_card.reload.metadata["superseded"]).to be(true)
     end
   end
 end

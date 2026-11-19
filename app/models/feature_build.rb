@@ -6,6 +6,7 @@
 #  approved_at          :datetime
 #  asked_at             :datetime
 #  branch               :string
+#  closed_itself        :boolean          default(FALSE), not null
 #  closed_reason        :text
 #  deployed_at          :datetime
 #  error                :text
@@ -29,6 +30,7 @@
 #  byte_conversation_id :bigint
 #  byte_message_id      :bigint
 #  feature_request_id   :bigint
+#  parent_id            :bigint
 #  session_id           :string
 #  user_id              :bigint           not null
 #
@@ -41,12 +43,19 @@
 # `byte_message` is the one system message in the thread it was asked from. It
 # is rewritten as the build moves - starting, then the link to the session -
 # rather than followed by more of them.
+#
+# `parent` is the build it carries on from: a build a `/q` handed its work to,
+# or a session started to carry on one that had closed. It speaks on its
+# parent's card, under its parent's name, so the thread reads as one piece of
+# work rather than one card per session.
 class FeatureBuild < ApplicationRecord
   belongs_to :user
   belongs_to :byte_conversation, optional: true
   belongs_to :byte_message, optional: true
   # Set when it was started from a row on /system/feature_requests.
   belongs_to :feature_request, optional: true
+  belongs_to :parent, class_name: "FeatureBuild", optional: true
+  has_many :children, class_name: "FeatureBuild", foreign_key: :parent_id, inverse_of: :parent, dependent: :nullify
   has_many :production_scripts, dependent: :nullify
 
   # Screenshots and photos it was started with. The Mini downloads them into
@@ -102,7 +111,15 @@ class FeatureBuild < ApplicationRecord
   # What the thread's system message says at each point. Every open one
   # carries a link: the session once there is one, and the builds page until
   # then.
+  #
+  # A card a later session carries on from shows that session: the work moved
+  # there, so that is where it has got to. One that closed itself says so
+  # briefly, since the message announcing it carries the reason.
   def status_line
+    latest = latest_child
+    return latest.status_line if latest
+
+    return card("Closed itself", links: [pr_markdown]) if closed_itself? && closed_reason.present?
     return card("Closed: #{closed_reason}", links: [pr_markdown]) if closed_reason.present?
 
     what, doing = KIND_WORDS.fetch(kind.to_sym)
@@ -113,10 +130,25 @@ class FeatureBuild < ApplicationRecord
     end
   end
 
+  def latest_child
+    children.order(:created_at).last
+  end
+
   # Every message about a build has the same shape, so a thread of them scans
   # down the left edge: its name, what's happening now, then where to go.
   def card(step, links: [link_markdown])
-    ["**#{full_title}**", step, links.compact_blank.join(" · ")].compact_blank.join("\n")
+    ["**#{thread_title}**", step, links.compact_blank.join(" · ")].compact_blank.join("\n")
+  end
+
+  # The name its card goes by: the first build in the chain it carries on from.
+  def thread_title
+    root = self
+    seen = [id]
+    while root.parent && seen.exclude?(root.parent_id)
+      seen << root.parent_id
+      root = root.parent
+    end
+    root.full_title
   end
 
   def images_note

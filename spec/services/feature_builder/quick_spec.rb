@@ -66,7 +66,7 @@ RSpec.describe FeatureBuilder::Quick do
       expect(build.id).not_to eq(earlier.id)
       expect(build.request).to start_with("Quick request: and admins?")
       expect(build.request).to include(
-        "carries on an earlier quick session",
+        "carries on an earlier session",
         "Quick request: how many users?",
         "/q how many users?",
         "346 real accounts.",

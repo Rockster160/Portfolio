@@ -101,6 +101,24 @@ RSpec.describe "call_jil_function tool" do
       expect(chip).to be_nil
     end
 
+    it "tells the model and the chip that a command answering false didn't go through" do
+      stub_execution(false)
+
+      result = run({ name: "HASS Sensor State", sensor: "kennel" })
+
+      expect(result[:how]).to include("did NOT work")
+      expect(chip.body).to eq("**HASS Sensor State** didn't go through")
+      expect(chip.metadata["ok"]).to be(false)
+    end
+
+    it "leaves a lookup's false as its reading" do
+      stub_execution(false)
+
+      result = run({ name: "HASS Sensor State", sensor: "kennel", expect_result: true })
+
+      expect(result[:how]).not_to include("did NOT work")
+    end
+
     it "still files one when the function returns nothing" do
       stub_execution(nil)
 

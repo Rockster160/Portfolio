@@ -418,6 +418,24 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:doors, :trunk)).to be(true)
     end
 
+    it "believes a poll taken after the last DoorState push" do
+      travel_to(1.minute.ago) {
+        described_class.record_telemetry(DoorState: { TrunkRear: false }, Locked: true)
+      }
+      described_class.record_endpoint(vehicle_state: { rt: 32, locked: false, timestamp: ms_ago(0) })
+
+      expect(car_data.dig(:doors, :trunk)).to eq(32)
+      expect(car_data.dig(:doors, :locked)).to be(false)
+    end
+
+    it "keeps a DoorState push that arrived after the poll" do
+      described_class.record_endpoint(vehicle_state: { rt: 32, locked: false, timestamp: ms_ago(1.minute) })
+      described_class.record_telemetry(DoorState: { TrunkRear: false }, Locked: true)
+
+      expect(car_data.dig(:doors, :trunk)).to be(false)
+      expect(car_data.dig(:doors, :locked)).to be(true)
+    end
+
     it "normalizes window-state strings to bool open/closed (matching door key names)" do
       described_class.record_telemetry(FdWindow: "WindowStateClosed", FpWindow: "WindowStateVent")
       expect(car_data.dig(:windows, :driver_front)).to be(false)

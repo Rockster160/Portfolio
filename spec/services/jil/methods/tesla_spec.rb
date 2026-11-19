@@ -37,6 +37,14 @@ RSpec.describe Jil::Methods::Tesla do
       "expected a say matching #{matcher.inspect}; got #{@says.inspect}"
   end
 
+  it "answers the drive time in words, blank when there's no estimate" do
+    allow(user.address_book).to receive(:traveltime_seconds).with("Costco").and_return(18.minutes.to_i)
+    expect(tesla.travelTime("Costco")).to eq("18 minutes")
+
+    allow(user.address_book).to receive(:traveltime_seconds).with("Costco").and_return(nil)
+    expect(tesla.travelTime("Costco")).to eq("")
+  end
+
   it "navigates, starts the trip, and says the destination with the travel time when there is one" do
     allow(user.address_book).to receive(:traveltime_seconds).with("Costco").and_return(12.minutes.to_i)
     expect(tesla.navigate("Costco")).to be(true)

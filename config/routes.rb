@@ -115,6 +115,9 @@ Rails.application.routes.draw do
   post   "/byte/messages/:id/retry"  => "byte#retry_message",  as: :byte_message_retry
   post   "/byte/messages/:id/react"  => "byte#react_message",  as: :byte_message_react
   post   "/byte/uploads" => "byte#uploads", as: :byte_uploads
+  # A production script's card in the thread: approved or skipped right there.
+  post   "/byte/production_scripts/:id/approve" => "byte#approve_production_script", as: :byte_approve_production_script
+  post   "/byte/production_scripts/:id/skip"    => "byte#skip_production_script",    as: :byte_skip_production_script
   get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf
   post "/byte/presence" => "byte#presence",       as: :byte_presence
   post "/byte/font_scale" => "byte#font_scale",   as: :byte_font_scale

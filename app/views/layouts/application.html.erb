@@ -29,7 +29,7 @@
   <% if content_for? :favicon %>
     <%= yield :favicon %>
   <% else %>
-    <%= render "favicon" %>
+    <%= render favicon_partial %>
   <% end %>
   <%= csrf_meta_tags %>
 </head>

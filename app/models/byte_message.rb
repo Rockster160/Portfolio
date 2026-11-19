@@ -122,7 +122,7 @@ class ByteMessage < ApplicationRecord
   # to a conversation the recipient can't see, and be dropped. Default is the
   # home thread, so every existing caller is unaffected.
   def as_wire(conversation_id: byte_conversation_id)
-    {
+    wire = {
       id:              id,
       conversation_id: conversation_id,
       direction:       direction,
@@ -134,6 +134,11 @@ class ByteMessage < ApplicationRecord
       created_at:      created_at.iso8601(3),
       delivered_at:    delivered_at&.iso8601(3),
     }
+    # A production script's card is drawn from the script as it is now.
+    if metadata.to_h["kind"] == ProductionScripts::Card::KIND
+      wire[:script] = ProductionScripts::Card.wire(self)
+    end
+    wire
   end
 
   # Image attachments as {filename, content_type, url} for the model paths:

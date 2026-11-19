@@ -609,6 +609,7 @@
   #heatDriver::Boolean
   #heatPassenger::Boolean
   #isAt(String:"Contact/Address")::Boolean
+  #travelTime(String:"Contact/Address")::String // The drive there from where the car is now, in words like "18 minutes". Blank when there is no estimate.
 *[TeslaStartOptions]@me
   #temp(Numeric)
   #navigate(Text)

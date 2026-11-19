@@ -238,7 +238,7 @@ class TeslaCacheStore
         drive:      compose_drive(ep, tel, sec_ts, field_ts, ep_ts, prev[:drive]),
         trip:       compose_trip(ep, tel, sec_ts, field_ts, ep_ts, location),
         climate:    compose_climate(ep, tel, sec_ts),
-        doors:      compose_doors(ep, tel, sec_ts),
+        doors:      compose_doors(ep, tel, sec_ts, field_ts),
         windows:    compose_windows(ep, tel, sec_ts),
         tires:      compose_tires(ep, tel, sec_ts),
         odometer:   compose_odometer(ep, tel, sec_ts),
@@ -523,14 +523,19 @@ class TeslaCacheStore
       }.compact
     end
 
-    def compose_doors(ep, tel, sec_ts)
-      ds = tel[:DoorState] if tel[:DoorState].is_a?(Hash)
+    # Telemetry pushes DoorState only when a door changes, and can trail the
+    # car by a minute, so a poll taken since the last push is believed over it:
+    # a trunk opened moments ago reads open even while the push still says shut.
+    def compose_doors(ep, tel, sec_ts, field_ts={})
       v  = ep[:vehicle_state] || {}
+      ds = tel[:DoorState] if tel[:DoorState].is_a?(Hash)
+      ds = nil if ds && v.any? && !tel_fresher?(field_ts[:DoorState] || sec_ts[:doors], v[:timestamp])
       out = DOOR_KEYS.each_with_object({}) { |(key, tel_key), h|
         h[key] = ds ? ds[tel_key] : v[DOOR_ENDPOINT_FALLBACK[key]]
       }
-      out[:locked] = tel[:Locked].nil? ? v[:locked] : tel[:Locked]
-      out[:ts] = sec_ts[:doors] || v[:timestamp]
+      locked_from_tel = !tel[:Locked].nil? && (v[:locked].nil? || tel_fresher?(field_ts[:Locked], v[:timestamp]))
+      out[:locked] = locked_from_tel ? tel[:Locked] : v[:locked]
+      out[:ts] = ds ? (sec_ts[:doors] || v[:timestamp]) : (v[:timestamp] || sec_ts[:doors])
       out.compact
     end
 

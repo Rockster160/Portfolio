@@ -200,6 +200,10 @@ Buddy::Tools.register(
     raw    = (execution.result if execution.respond_to?(:result))
     answer = Buddy::RawOutput.localize(raw, ctx.user)&.strip.presence
     lookup = ActiveModel::Type::Boolean.new.cast(payload[:expect_result])
+    # A command answering `false` is reporting that it didn't do the thing: a
+    # car it couldn't read, a refusal, a call that failed. A lookup's `false` is
+    # its reading, which RawOutput already leaves to the model.
+    failed = raw == false && !lookup
 
     # An answering tool never reaches ProposalBuilder, so it files its own trace
     # (see Buddy::ActivityChip). A declared lookup skips it: Buddy is about to
@@ -209,7 +213,8 @@ Buddy::Tools.register(
         conversation: ctx.conversation,
         user:         ctx.user,
         tool_name:    :call_jil_function,
-        body:         "Called **#{task.name}**",
+        body:         failed ? "**#{task.name}** didn't go through" : "Called **#{task.name}**",
+        ok:           !failed,
         # What went out AND what came back. The prose above the chip is the
         # model's reading of the answer; this is the answer.
         detail:       [fn_args.map { |k, v| "#{k}: #{v}" }.join("\n").presence, answer.presence].compact.join("\n"),
@@ -218,12 +223,15 @@ Buddy::Tools.register(
     end
 
     {
-      fired:     true,
+      fired:     !failed,
       task_id:   task.id,
       task_name: task.name,
       answer:    answer,
       how:       (
-        if answer.blank?
+        if failed
+          "It ran and reported that it did NOT work, so nothing happened. Tell them plainly it " \
+            "didn't go through, never that it's done or on its way, and don't guess at why."
+        elsif answer.blank?
           "It ran and returned nothing to report, which is normal for a command. Say it's " \
             "done, briefly, and don't invent a result for it."
         else
