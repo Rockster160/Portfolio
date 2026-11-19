@@ -1,0 +1,28 @@
+<%
+  build = builds_by_id[session["build_id"].to_i] || FeatureBuild.find_by(id: session["build_id"])
+  conversation = conversations[session["conversation_id"].to_i]
+%>
+<div class="cs-row <%= session["working"] ? "cs-working" : "cs-waiting" %>">
+  <div class="cs-head">
+    <div class="cs-title">
+      <%= kind_label.fetch(FeatureBuilder.kind_of(session, conversations, builds_by_id)) %>
+      <% if build %>
+        · <%= build.full_title %>
+      <% elsif conversation %>
+        · <%= link_to conversation.display_name, thread_url.call(conversation) %>
+      <% end %>
+    </div>
+    <div class="cs-meta">
+      <span class="cs-badge"><%= session["working"] ? "working" : "waiting on you" %></span>
+      since <%= stamp.call(parse.call(session["started_at"])) %>
+    </div>
+  </div>
+  <% if build %>
+    <div class="cs-links">
+      <% if build.rc_url.present? %>
+        <%= link_to "Open in Claude", build.rc_url, class: "cs-link", target: :_blank, rel: :noopener %>
+      <% end %>
+      <%= render "system/claude_stop", build: build %>
+    </div>
+  <% end %>
+</div>

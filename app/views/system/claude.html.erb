@@ -32,8 +32,19 @@
     *@pending[:prs].map { |build| [build, "PR open"] },
   ].reject { |build, _| shown.include?(build.id) }
   shown += waiting.map { |build, _| build.id }
-  running = @sessions.reject { |session| shown.include?(session["build_id"].to_i) }
-  shown += running.filter_map { |session| session["build_id"]&.to_i }
+  # A session belongs to one of the two by whether it's working right now, so
+  # an idle one never sits under "Running now" saying it's waiting on you.
+  sessions = @sessions.reject { |session| shown.include?(session["build_id"].to_i) }
+  idle, running = sessions.partition { |session| !session["working"] }
+  shown += sessions.filter_map { |session| session["build_id"]&.to_i }
+  session_locals = {
+    builds_by_id:  builds_by_id,
+    conversations: @conversations,
+    kind_label:    kind_label,
+    stamp:         stamp,
+    parse:         parse,
+    thread_url:    thread_url,
+  }
   history = @builds.reject { |build| shown.include?(build.id) }
 %>
 
@@ -103,7 +114,7 @@
     <% end %>
   <% end %>
 
-  <% if waiting.any? %>
+  <% if waiting.any? || idle.any? %>
     <h3 class="cs-heading">Waiting on you</h3>
     <% waiting.each do |build, reason| %>
       <div class="cs-row cs-waiting">
@@ -122,6 +133,9 @@
         </div>
       </div>
     <% end %>
+    <% idle.each do |session| %>
+      <%= render "system/claude_session", session: session, **session_locals %>
+    <% end %>
   <% end %>
 
   <h3 class="cs-heading">Running now</h3>
@@ -130,35 +144,7 @@
   <% end %>
 
   <% running.each do |session| %>
-    <%
-      kind = FeatureBuilder.kind_of(session, @conversations, builds_by_id)
-      build = builds_by_id[session["build_id"].to_i] || FeatureBuild.find_by(id: session["build_id"])
-      conversation = @conversations[session["conversation_id"].to_i]
-    %>
-    <div class="cs-row <%= session["working"] ? "cs-working" : "cs-waiting" %>">
-      <div class="cs-head">
-        <div class="cs-title">
-          <%= kind_label.fetch(kind) %>
-          <% if build %>
-            · <%= build.full_title %>
-          <% elsif conversation %>
-            · <%= link_to conversation.display_name, thread_url.call(conversation) %>
-          <% end %>
-        </div>
-        <div class="cs-meta">
-          <span class="cs-badge"><%= session["working"] ? "working" : "waiting on you" %></span>
-          since <%= stamp.call(parse.call(session["started_at"])) %>
-        </div>
-      </div>
-      <% if build %>
-        <div class="cs-links">
-          <% if build.rc_url.present? %>
-            <%= link_to "Open in Claude", build.rc_url, class: "cs-link", target: :_blank, rel: :noopener %>
-          <% end %>
-          <%= render "system/claude_stop", build: build %>
-        </div>
-      <% end %>
-    </div>
+    <%= render "system/claude_session", session: session, **session_locals %>
   <% end %>
 
   <% if history.any? || @builds.none? %>

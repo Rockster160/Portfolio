@@ -73,6 +73,26 @@ RSpec.describe "Claude on the Mini page", type: :request do
     expect(response.body).to include("Waiting on you", "Bigger icons")
   end
 
+  it "lists an idle session under waiting on you and leaves running for the working ones" do
+    quick = FeatureBuild.create!(
+      user:    user,
+      title:   "Workout reminder",
+      request: "workout reminder",
+      kind:    :quick,
+      status:  :running,
+    )
+    FeatureBuilder.report_sessions!(machine: :mini, sessions: [
+      { "build_id" => quick.id, "kind" => "quick", "working" => false },
+    ])
+
+    get system_claude_path
+
+    waiting, running = response.body.split("Running now")
+    expect(waiting).to include("Waiting on you", "Workout reminder")
+    expect(running).not_to include("Workout reminder")
+    expect(running).to include("Nothing is running on Portfolio on the Mini.")
+  end
+
   it "lists the PRs in the merge queue, and not a plan it's building from" do
     planned = FeatureBuild.create!(
       user:       user,
