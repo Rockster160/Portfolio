@@ -73,7 +73,7 @@ RSpec.describe "Claude on the Mini page", type: :request do
     expect(response.body).to include("Waiting on you", "Bigger icons")
   end
 
-  it "lists an idle session under waiting on you and leaves running for the working ones" do
+  it "lists an idle session left open on purpose at rest, apart from what waits on you" do
     quick = FeatureBuild.create!(
       user:    user,
       title:   "Workout reminder",
@@ -81,16 +81,22 @@ RSpec.describe "Claude on the Mini page", type: :request do
       kind:    :quick,
       status:  :running,
     )
+    asking = FeatureBuild.create!(user: user, title: "Bigger icons", request: "bigger icons", status: :running)
     FeatureBuilder.report_sessions!(machine: :mini, sessions: [
-      { "build_id" => quick.id, "kind" => "quick", "working" => false },
+      { "build_id" => quick.id, "kind" => "builder", "working" => false },
+      { "build_id" => asking.id, "kind" => "builder", "working" => false },
+      { "kind" => "questions", "working" => false },
     ])
 
     get system_claude_path
 
-    waiting, running = response.body.split("Running now")
-    expect(waiting).to include("Waiting on you", "Workout reminder")
-    expect(running).not_to include("Workout reminder")
+    waiting, rest = response.body.split("Running now")
+    running, resting = rest.split("At rest")
+    expect(waiting).to include("Waiting on you", "Bigger icons")
+    expect(waiting).not_to include("Workout reminder", "Questions")
     expect(running).to include("Nothing is running on Portfolio on the Mini.")
+    expect(resting).to include("Workout reminder", "Questions", "at rest")
+    expect(resting).not_to include("Bigger icons")
   end
 
   it "lists the PRs in the merge queue, and not a plan it's building from" do

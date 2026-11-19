@@ -1,11 +1,19 @@
 <%
   build = builds_by_id[session["build_id"].to_i] || FeatureBuild.find_by(id: session["build_id"])
   conversation = conversations[session["conversation_id"].to_i]
+  kind = FeatureBuilder.kind_of(session, conversations, builds_by_id)
+  state = (
+    if session["working"]
+      :working
+    else
+      FeatureBuilder.at_rest?(kind) ? :resting : :waiting
+    end
+  )
 %>
-<div class="cs-row <%= session["working"] ? "cs-working" : "cs-waiting" %>">
+<div class="cs-row cs-<%= state %>">
   <div class="cs-head">
     <div class="cs-title">
-      <%= kind_label.fetch(FeatureBuilder.kind_of(session, conversations, builds_by_id)) %>
+      <%= kind_label.fetch(kind) %>
       <% if build %>
         · <%= build.full_title %>
       <% elsif conversation %>
@@ -13,7 +21,7 @@
       <% end %>
     </div>
     <div class="cs-meta">
-      <span class="cs-badge"><%= session["working"] ? "working" : "waiting on you" %></span>
+      <span class="cs-badge"><%= { working: "working", resting: "at rest", waiting: "waiting on you" }[state] %></span>
       since <%= stamp.call(parse.call(session["started_at"])) %>
     </div>
   </div>

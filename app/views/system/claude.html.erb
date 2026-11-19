@@ -34,8 +34,13 @@
   shown += waiting.map { |build, _| build.id }
   # A session belongs to one of the two by whether it's working right now, so
   # an idle one never sits under "Running now" saying it's waiting on you.
+  # One left open on purpose (the questions session, a /q, a Claude thread,
+  # the daily audit) isn't waiting on anyone when it's idle: it's at rest.
   sessions = @sessions.reject { |session| shown.include?(session["build_id"].to_i) }
   idle, running = sessions.partition { |session| !session["working"] }
+  resting, idle = idle.partition { |session|
+    FeatureBuilder.at_rest?(FeatureBuilder.kind_of(session, @conversations, builds_by_id))
+  }
   shown += sessions.filter_map { |session| session["build_id"]&.to_i }
   session_locals = {
     builds_by_id:  builds_by_id,
@@ -170,6 +175,14 @@
     <%= render "system/claude_session", session: session, **session_locals %>
   <% end %>
 
+  <% if resting.any? %>
+    <h3 class="cs-heading">At rest</h3>
+    <p class="cs-empty">Left open on purpose, for whenever you want them next.</p>
+    <% resting.each do |session| %>
+      <%= render "system/claude_session", session: session, **session_locals %>
+    <% end %>
+  <% end %>
+
   <% if history.any? || @builds.none? %>
     <h3 class="cs-heading">Feature builds</h3>
   <% end %>
@@ -222,6 +235,7 @@
     }
     .cs-row.cs-working, .cs-row.cs-build-working, .cs-row.cs-build-planning, .cs-row.cs-build-building { border-color: rgba(88, 214, 141, 0.45); }
     .cs-row.cs-waiting, .cs-row.cs-build-waiting-on-you, .cs-row.cs-build-pr-open { border-color: rgba(245, 176, 65, 0.45); }
+    .cs-row.cs-resting { border-color: rgba(93, 173, 226, 0.3); }
     .cs-row.cs-build-failed { border-color: rgba(236, 112, 99, 0.45); }
     .cs-row.cs-build-finished { opacity: 0.55; }
 
