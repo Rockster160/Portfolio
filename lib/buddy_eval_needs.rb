@@ -123,6 +123,7 @@ module BuddyEvalNeeds
     claws_chore:          { label: "a nail-trimming chore",        check: ->(u) { chore(u, /nail|claw/i) } },
     shower_chore:         { label: "a shower chore",               check: ->(u) { chore(u, /shower/i) } },
     game_chore:           { label: "a chore named for a game",     check: ->(u) { chore(u, /acnh|animal crossing/i) } },
+    exercise_chore:       { label: "an Exercise chore",            check: ->(u) { chore(u, /\Aexercise\z/i) } },
     dish_chores:          { label: "the load + unload dish chores", check: ->(u) { chore(u, /unload dishwasher/i) && chore(u, /load dishes/i) } },
     water_completion:     { label: "a water completion today",     check: ->(u) { completion(u, /water/i) } },
     recycling_completion: { label: "a recycling completion today", check: ->(u) { completion(u, /recycl/i) } },
