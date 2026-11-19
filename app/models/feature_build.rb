@@ -97,6 +97,10 @@ class FeatureBuild < ApplicationRecord
 
   validates :title, :request, presence: true
 
+  # The card follows the build: any change that could move it repaints the
+  # message, and the parent's when this one speaks on it.
+  after_commit :repaint_card, on: :update
+
   scope :newest,     -> { order(created_at: :desc) }
   scope :unfinished, -> { where(status: [:starting, :running, :stopped]) }
   scope :portfolio,  -> { where(repo: FeatureBuilder::Repos::PORTFOLIO) }
@@ -146,8 +150,49 @@ class FeatureBuild < ApplicationRecord
     case status.to_sym
     when :starting then card("Starting #{what} on the Mini#{images_note}…")
     when :failed then card("Couldn't start #{what}: #{error}")
-    else card("#{doing}#{" in #{repo_name}" unless portfolio?} on the Mini")
+    when :finished then card(finished_step, links: [pr_markdown])
+    when :stopped then card("Stopped", links: [pr_markdown, link_markdown])
+    else running_card(doing)
     end
+  end
+
+  # Where an open session has got to: its PR's place in the merge queue once
+  # it has one, and otherwise whether the Mini last saw it working or at rest.
+  def running_card(doing)
+    live = FeatureBuilder.sessions.find { |session| session["build_id"].to_i == id }
+    idle = live && !live["working"]
+    return card(idle ? "Answered" : "Looking into it on the Mini") if kind_quick?
+    return card(pr_step(live), links: [pr_markdown, link_markdown]) if pr_url.present?
+    return card("Waiting on you") if idle
+
+    doing = "Planning" if kind_feature? && live && planned_at.nil?
+    card("#{doing}#{" in #{repo_name}" unless portfolio?} on the Mini")
+  end
+
+  def pr_step(live)
+    return "Working on it again on the Mini" if live&.dig("working") && !MergeQueue.landing?(self)
+
+    {
+      landing:  "Merging",
+      held:     "Held",
+      approved: "Approved, in line to merge",
+      answer:   "Waiting on you",
+      review:   "Ready for review",
+    }.fetch(MergeQueue.state(self))
+  end
+
+  # A merged build is deploying until production runs it, or, in another
+  # repo, waiting until the laptop has pulled it.
+  def finished_step
+    return (pr_url.present? ? "PR closed without merging" : "Finished") if merge_sha.blank?
+    return (pulled_at ? "Shipped" : "Merged, waiting to be pulled") unless portfolio?
+
+    deployed_at ? "Shipped" : "Merged, deploying"
+  end
+
+  def repaint_card
+    FeatureBuilder.repaint!(self)
+    FeatureBuilder.repaint!(parent) if parent && parent.byte_message_id != byte_message_id
   end
 
   def latest_child
