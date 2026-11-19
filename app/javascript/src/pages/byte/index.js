@@ -56,6 +56,7 @@ import { initImageViewer } from "./image_viewer";
 import { setupSlashAutocomplete } from "./slash_commands";
 import { autocompleteOpenFor } from "../../emoji_autocomplete";
 import { renderMultiSelect } from "./message_actions/multi_select";
+import { renderProductionScriptCard } from "./production_script_card";
 import { renderForm } from "./message_actions/form";
 import { renderCycleButton } from "./message_actions/cycle_button";
 import { renderMessageButtons } from "./message_actions/message_buttons";
@@ -695,6 +696,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       bodyEl.innerHTML = renderMarkdown(message.body || "");
     } else if (kind === "system") {
       bodyEl.innerHTML = renderMarkdown(message.body || "");
+    } else if (kind === "production_script") {
+      // A script to approve: its code in a scrolling box, Approve / Skip under
+      // it. Widened like a form, because code is read across, not down.
+      renderProductionScriptCard(bodyEl, message);
+      node.classList.add("byte-msg-has-script");
     } else if (kind === "shell") {
       bodyEl.innerHTML = message.body || "";
     } else if (kind === "jarvis") {

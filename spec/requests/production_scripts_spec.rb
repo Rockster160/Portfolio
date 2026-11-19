@@ -140,4 +140,35 @@ RSpec.describe "Production scripts", type: :request do
       expect(script.reload).to be_status_pending
     end
   end
+  describe "on its card in Byte" do
+    before {
+      user.update!(password: "password123", password_confirmation: "password123")
+      post login_path, params: { user: { username: user.username, password: "password123" } }
+    }
+
+    it "is approved and skipped from the card, and every card for it is repainted" do
+      allow(Buddy::CompanionDelivery).to receive(:notify)
+      build.update!(byte_conversation: user.byte_conversations.create!(name: :Buddy, mode: :buddy))
+      card = ProductionScripts::Card.post!(script)
+      allow(MonitorChannel).to receive(:broadcast_to)
+
+      post byte_approve_production_script_path(script), as: :json
+      expect(response.parsed_body).to include("ok" => true, "status" => "approved")
+      repainted = hash_including(data: hash_including(update: true, message: hash_including(id: card.id)))
+      expect(MonitorChannel).to have_received(:broadcast_to).with(user, repainted)
+
+      script.update!(status: :pending)
+      post byte_skip_production_script_path(script), as: :json
+      expect(script.reload).to be_status_skipped
+    end
+
+    it "refuses to approve one that already ran" do
+      script.update!(status: :succeeded)
+
+      post byte_approve_production_script_path(script), as: :json
+
+      expect(response).to have_http_status(:conflict)
+      expect(script.reload).to be_status_succeeded
+    end
+  end
 end

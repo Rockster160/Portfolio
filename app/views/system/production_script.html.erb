@@ -58,21 +58,7 @@
   </div>
 
   <div class="ps-code">
-    <% @segments.each do |segment| %>
-      <% if segment.heredoc? %>
-        <div class="ps-heredoc<%= " ps-jil" if segment.jil? %>">
-          <% if segment.jil? %>
-            <details class="ps-check <%= segment.valid? ? "ps-valid" : "ps-invalid" %>" title="<%= segment.valid? ? "Valid Jil" : "Jil validation failed" %>">
-              <summary><%= segment.valid? ? "✓" : "✗" %></summary>
-              <% unless segment.valid? %><div class="ps-check-error"><%= segment.error %></div><% end %>
-            </details>
-          <% end %>
-          <pre><%= segment.html.html_safe %></pre>
-        </div>
-      <% else %>
-        <pre><%= segment.html.html_safe %></pre>
-      <% end %>
-    <% end %>
+    <%= ProductionScripts::Card.code_html(@script.code).html_safe %>
   </div>
 
   <details class="ps-edit">

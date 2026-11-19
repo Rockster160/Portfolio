@@ -478,7 +478,6 @@ class SystemController < ApplicationController
 
   def production_script
     @script = current_user.production_scripts.find(params[:id])
-    @segments = RubyHighlight.segments(@script.code)
   end
 
   # Written by hand. It needs the commit that's running now unless another is

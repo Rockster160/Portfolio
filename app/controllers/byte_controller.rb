@@ -1344,6 +1344,25 @@ class ByteController < ApplicationController
     render json: { token: form_authenticity_token }
   end
 
+  # The Approve and Skip buttons on a production script's card. The card
+  # repaints itself from the script once it has changed, so the answer is
+  # only whether it took.
+  def approve_production_script
+    script = current_user.production_scripts.find(params[:id])
+    ProductionScripts.approve!(script, by: current_user)
+    render json: { ok: true, status: script.status }
+  rescue ArgumentError => e
+    render json: { ok: false, error: e.message }, status: :conflict
+  end
+
+  def skip_production_script
+    script = current_user.production_scripts.find(params[:id])
+    ProductionScripts.skip!(script)
+    render json: { ok: true, status: script.status }
+  rescue ArgumentError => e
+    render json: { ok: false, error: e.message }, status: :conflict
+  end
+
   private
 
   # A board's own timer switch (see #timer_alerts).

@@ -57,6 +57,9 @@ class ProductionScript < ApplicationRecord
 
   before_save :withdraw_approval, if: :code_changed?, unless: :new_record?
   after_commit :refresh_chip, if: -> { destroyed? || saved_change_to_status? || saved_change_to_commit_sha? }
+  after_commit :repaint_cards, on: :update, if: -> {
+    saved_change_to_status? || saved_change_to_code? || saved_change_to_title?
+  }
 
   scope :newest, -> { order(created_at: :desc) }
   # What the System page counts: still to run, or ran and failed.
@@ -87,6 +90,10 @@ class ProductionScript < ApplicationRecord
 
   def refresh_chip
     ProductionScripts.refresh_chip!(user)
+  end
+
+  def repaint_cards
+    ProductionScripts::Card.repaint!(self)
   end
 
   def withdraw_approval
