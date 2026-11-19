@@ -543,6 +543,27 @@ RSpec.describe "Buddy commands that named a time" do
       expect(items.pluck(:name)).to eq(["milk"])
     end
 
+    it "reads a list named for a time of day as the list, not as when" do
+      bed = create(:list, user: user, name: "Before Bed")
+      client = ask(
+        "Add fill up turkey water to before bed list",
+        [{ name: :add_list_item, call_id: "c1", arguments: { "list" => "Before Bed", "item" => "Fill up turkey water" } }],
+      )
+
+      expect(output_for(client, "c1")["status"]).not_to eq("held")
+      expect(bed.list_items.pluck(:name)).to eq(["Fill up turkey water"])
+    end
+
+    it "still holds a write whose time is said beside a list named for one" do
+      create(:list, user: user, name: "Before Bed")
+      client = ask(
+        "Add fill up turkey water to before bed list in 2 minutes",
+        [{ name: :add_list_item, call_id: "c1", arguments: { "list" => "Before Bed", "item" => "Fill up turkey water" } }],
+      )
+
+      expect(output_for(client, "c1")["status"]).to eq("queued")
+    end
+
     # A WAIT is the model getting it right — it says the rest of the sequence
     # rides on the countdown — so the gate steps aside and ProposalBuilder takes
     # over. Without this the two fixes would fight, and the gate would refuse the
