@@ -277,6 +277,90 @@ RSpec.describe Buddy::Commands do
       expect(BuddyDeliverWorker).to have_received(:deliver_after_commit).with(seed.id)
     end
 
+    # The press is the whole request, so a step that worked leaves nothing in
+    # the thread to read.
+    it "says nothing in the thread when its steps work", :aggregate_failures do
+      set!("Hall Button", [chill_item])
+
+      expect(press).to be(true)
+      expect(user.byte_messages.where(direction: :inbound).not_hidden).to be_empty
+      expect(user.byte_messages.where("metadata->>'kind' = 'buddy_activity'").count).to eq(1)
+    end
+
+    it "shows a step that failed" do
+      set!("Hall Button", [chill_item])
+      allow(Buddy::Tools).to receive(:dispatch).and_return({ ok: false, error: "the house didn't answer" })
+
+      press
+
+      chips = user.byte_messages.not_hidden.where("metadata->>'kind' = 'buddy_activity'")
+      expect(chips.map { |chip| chip.metadata["ok"] }).to eq([false])
+    end
+
+    describe "toggling a list item" do
+      let(:list) { create(:list, user: user, name: "GO") }
+      let!(:section) { Section.create!(list: list, name: "Rocco", color: "#888888") }
+
+      before { set!("Hall Button", [{ tool_name: :toggle_list_item, payload: { list: "GO", item: "Watch Charging" } }]) }
+
+      it "adds it when it's missing and takes it off when it's there, in the section it was in", :aggregate_failures do
+        list.list_items.create!(name: "Watch Charging", section: section).soft_destroy
+        expect(list.list_items.reload.pluck(:name)).to be_empty
+
+        press
+        expect(list.list_items.reload.pluck(:name, :section_id)).to eq([["Watch Charging", section.id]])
+
+        press
+        expect(list.list_items.reload.pluck(:name)).to be_empty
+        expect(user.byte_messages.where(direction: :inbound).not_hidden).to be_empty
+      end
+    end
+
+    describe "an item that only runs sometimes" do
+      let(:workout) { { find: "action_events", query: 'name:"Workout"' } }
+
+      before {
+        set!("Hall Button", [
+          chill_item.merge(only_if: [workout.merge(expect: "found")]),
+          ask_item.merge(only_if: [workout.merge(expect: "missing")]),
+        ])
+        allow(Jil).to receive(:trigger).and_call_original
+        allow(BuddyDeliverWorker).to receive(:deliver_after_commit)
+      }
+
+      it "is saved with its condition, and says so" do
+        expect(described_class.roster(user).first).to include('only if any action events match `name:"Workout"`')
+      end
+
+      it "runs only the items whose conditions hold, with no model turn", :aggregate_failures do
+        ActionEvent.create!(user: user, name: "Workout", timestamp: Time.current)
+
+        press
+
+        expect(Jil).to have_received(:trigger).with(user, :"chill-mode", {}, auth: :buddy, auth_id: user.id)
+        expect(BuddyDeliverWorker).not_to have_received(:deliver_after_commit)
+      end
+
+      it "skips the ones that don't" do
+        press
+
+        expect(Jil).not_to have_received(:trigger)
+        expect(BuddyDeliverWorker).to have_received(:deliver_after_commit).once
+      end
+    end
+
+    it "skips an item whose condition can't be answered, and says so" do
+      described_class.save!(user, "Hall Button", [
+        { "tool_name" => "run_jil_task", "payload" => { "name" => "Chill Mode" }, "only_if" => { "kind" => "jil", "task" => "Gone", "expect" => "truthy" } },
+      ])
+      expect(Jil).not_to receive(:trigger)
+
+      press
+
+      chip = user.byte_messages.not_hidden.find_by!("metadata->>'kind' = 'buddy_activity'")
+      expect(chip.metadata["ok"]).to be(false)
+    end
+
     it "does not press itself again from inside its own run" do
       button.update!(buddy_enabled: true, code: %(cmd = Buddy.command("Hall Button")::Boolean))
       set!("Hall Button", [{ tool_name: :run_jil_task, payload: { name: "Hall Button" } }])

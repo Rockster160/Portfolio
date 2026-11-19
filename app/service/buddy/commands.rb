@@ -11,6 +11,10 @@ module Buddy
 
     CACHE_KEY = :buddy_commands
     ASK = "ask_buddy".freeze
+    # What an item may carry beside its call: the condition that has to hold
+    # at the press for it to run.
+    ONLY_IF = "only_if".freeze
+    GATE_KEYS = [ONLY_IF, "only_if_any"].freeze
 
     # A literal key: `Buddy.command("Top Button")`. A key built at run time
     # can't be found by reading the code, so it can't be offered either.
@@ -151,10 +155,29 @@ module Buddy
       user.caches.dig_set(CACHE_KEY, key, list.presence)
     end
 
+    # The condition an item was saved with, from the rows `set_command` takes
+    # beside its call (`only_if`, and `only_if_any` for any one of them).
+    # Checked against the house as it is now, so a device or function that
+    # doesn't exist is refused while they're still in the conversation.
+    def gate(user, row)
+      rows = row[ONLY_IF]
+      return nil if rows.blank?
+
+      rows = [rows] unless rows.is_a?(Array) || rows.is_a?(String)
+      match = ActiveModel::Type::Boolean.new.cast(row["only_if_any"]) ? :any : :all
+      condition = ScheduleCondition.from_rows(rows, match: match)
+      ScheduleCondition.validate!(condition, user)
+      condition&.deep_stringify_keys
+    end
+
     # The step's own phrase, then every argument it carries. The phrase names
     # one argument at most, and a key is changed by saving it whole again, so a
     # save rebuilt from the phrase alone loses whatever it left out.
     def phrase(item)
+      [step_phrase(item), ScheduleCondition.describe(item[ONLY_IF])].compact.join(" ")
+    end
+
+    def step_phrase(item)
       return "ask Buddy: \"#{item.dig("payload", "text")}\"" if item["tool_name"] == ASK
 
       args = (item["payload"] || {}).to_h
@@ -186,6 +209,9 @@ module Buddy
     # False when nothing is saved under the key, or when the key is already
     # running further up: a step that fires the task holding it would
     # otherwise press it again from inside its own press.
+    #
+    # Every item's condition is asked before any item runs, so "add it if it's
+    # missing, take it off if it's there" can't see its own first half.
     def run!(user, key)
       list = items(user, key)
       running = (Thread.current[:buddy_commands_running] ||= [])
@@ -193,11 +219,14 @@ module Buddy
 
       running << key
       mine = true
-      asks, steps = list.partition { |item| item["tool_name"] == ASK }
       conversation = Buddy::CompanionRelay.conversation_for(user)
+      list = list.select { |item| holds?(user, conversation, key, item) }
+      asks, steps = list.partition { |item| item["tool_name"] == ASK }
       if steps.any?
-        markers = BuddyRoutine.new(steps: steps).markers
-        Buddy::ProposalBuilder.run_markers!(user: user, conversation: conversation, markers: markers, body: nil)
+        markers = BuddyRoutine.new(steps: steps.map { |item| item.slice("tool_name", "payload") }).markers
+        Buddy::ProposalBuilder.run_markers!(
+          user: user, conversation: conversation, markers: markers, body: nil, quiet: true,
+        )
       end
       asks.each { |item|
         Buddy::CompanionDelivery.deliver_prompt(
@@ -210,6 +239,25 @@ module Buddy
       true
     ensure
       running.delete(key) if mine
+    end
+
+    # A condition that doesn't hold skips its item without a word: that's the
+    # press doing what it was set to. One that can't be answered skips it too,
+    # and says so, because that press needs a look.
+    def holds?(user, conversation, key, item)
+      return true if item[ONLY_IF].blank?
+
+      ScheduleCondition.met?(item[ONLY_IF], user: user)
+    rescue StandardError => e
+      Buddy::ActivityChip.post!(
+        conversation: conversation,
+        user:         user,
+        tool_name:    :set_command,
+        body:         "#{key} skipped #{step_phrase(item)}",
+        ok:           false,
+        detail:       "couldn't check #{ScheduleCondition.describe(item[ONLY_IF])}: #{e.message}",
+      )
+      false
     end
   end
 end

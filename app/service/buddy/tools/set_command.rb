@@ -26,9 +26,21 @@ Buddy::Tools.register(
     between. Read each candidate's options before deciding a request needs
     more than that - one whose options already cover the action covers it.
 
-    Only when the action can't be fixed ahead of time - what to act on, or
-    what to say, depends on how things stand at the moment it runs, or nothing
-    they have can do it - use
+    An item can also carry `only_if` beside its call: a JSON array of
+    conditions checked at every run before any item goes ahead, and the item
+    is skipped when they don't all hold (`only_if_any: true` for any one).
+
+      {"device": <name in device_states>, "state": <its state>}
+      {"device": <name in device_states>, "state": <its state>, "expect": "is_not"}
+      {"after": "22:00", "before": "06:00"}            a window of the day
+      {"place": "home", "expect": "away"}              where THEY are
+      {"find": "chore_completions", "query": "name:\\"<Chore Name>\\" is:today", "expect": "missing"}
+      {"task": <a function from jil_functions>, "expect": "truthy"}   or "falsy"
+
+    "This if that, otherwise the other" is two items with opposite
+    conditions, and still runs with no model in between.
+
+    Only when nothing they have can do it, even with a condition on it, use
     `{"tool_name":"ask_buddy","payload":{"text":<their words>}}`, which hands
     the words back to you as a fresh request on every run.
 
@@ -44,7 +56,7 @@ Buddy::Tools.register(
   feature:     :jil,
   args:        {
     key:      { type: :string, required: true, description: "The key to fill, from the list after the summary, or the name for a new one" },
-    items:    { type: :string, required: true, description: "JSON array of {tool_name, payload}, in order; [] clears it" },
+    items:    { type: :string, required: true, description: "JSON array of {tool_name, payload, only_if?}, in order; [] clears it" },
     add:      { type: :boolean, required: false, description: "true puts the items after what's already there instead of replacing it" },
     button:   { type: :string, required: false, description: "A button's name, from the list after the summary" },
     press:    { type: :string, required: false, description: "single, double or hold; omit for any press" },
@@ -88,8 +100,13 @@ Buddy::Tools.register(
     asks, tools = rows.partition { |row| row["tool_name"] == Buddy::Commands::ASK }
     raise "an ask_buddy item needs its `text`" if asks.any? { |row| row.dig("payload", "text").blank? }
 
-    steps = tools.any? ? Buddy::Routines.sanitize(tools, ctx).each : [].each
-    items = rows.map { |row| row["tool_name"] == Buddy::Commands::ASK ? row.slice("tool_name", "payload") : steps.next }
+    gates = Buddy::Commands::GATE_KEYS
+    steps = tools.any? ? Buddy::Routines.sanitize(tools.map { |row| row.except(*gates) }, ctx).each : [].each
+    items = rows.map { |row|
+      item = row["tool_name"] == Buddy::Commands::ASK ? row.slice("tool_name", "payload") : steps.next
+      condition = Buddy::Commands.gate(ctx.user, row)
+      condition ? item.merge(Buddy::Commands::ONLY_IF => condition) : item
+    }
     items = Buddy::Commands.items(ctx.user, key) + items if ActiveModel::Type::Boolean.new.cast(payload[:add])
     if created && items.empty?
       raise "#{Buddy::Commands.trigger_phrase(created) || created} has nothing on it to clear"

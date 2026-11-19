@@ -254,6 +254,11 @@ BUDDY_TOOL_PROBES = {
     avoid: %i[add_list_item schedule_reminder request_feature],
   },
   remove_list_item:       { say: "take the oat milk off the groceries", needs: :oat_milk_listed },
+  toggle_list_item:       {
+    say:   "toggle oat milk on the groceries",
+    needs: :oat_milk_listed,
+    avoid: %i[add_list_item remove_list_item],
+  },
   # The failure this one is watching for is not another tool - it is the model
   # answering out of `lists` in prose, which reads fine and hands them something
   # they still have to go and act on somewhere else.
@@ -701,6 +706,47 @@ BUDDY_EDGE_PROBES = [
     run:          true,
     effect_label: "the Movie time task is still listening for the phrase",
     effect:       ->(user) { Buddy::Commands.made_task(user, "Movie time").nil? },
+  },
+  {
+    case:       "prod 11598",
+    say:        "Program button 9 to toggle \"Oat Milk\" on the groceries list",
+    tool:       :set_command,
+    avoid:      :toggle_list_item,
+    args:       { set_command: { items: /toggle_list_item/ } },
+    never_args: { set_command: { items: /ask_buddy/ } },
+    needs:      :grocery_list,
+    note:       "saved the toggle as ask_buddy, so every press was a model turn, and the third " \
+                "one filed the item under a section nobody asked for",
+    seed:       ->(user, _convo) { user.caches.dig_set(:hass, "Btn#9", { state: "single", at: Time.current.to_i }) },
+  },
+  {
+    case:       "prod 11591",
+    say:        "Program button 9 to run the darkness scene if any lights are on, but otherwise daytime",
+    tool:       :set_command,
+    avoid:      %i[call_jil_function save_routine],
+    args:       { set_command: { items: /only_if/ } },
+    never_args: { set_command: { items: /ask_buddy/ } },
+    note:       "a choice made at the press could only be an ask_buddy, so the button needed a " \
+                "model turn every time it was pressed",
+    seed:       ->(user, _convo) {
+      user.caches.dig_set(:hass, "Btn#9", { state: "single", at: Time.current.to_i })
+      user.tasks.find_by(name: "Any Lights On") || user.tasks.create!(
+        name:          "Any Lights On",
+        listener:      "function()::Boolean",
+        enabled:       true,
+        buddy_enabled: true,
+        description:   "True when any light in the house is on",
+        code:          "",
+      )
+      user.tasks.find_by(name: "HASS Scene") || user.tasks.create!(
+        name:          "HASS Scene",
+        listener:      %(function("Scene" TAB ["daytime" "darkness"]("daytime"))::String),
+        enabled:       true,
+        buddy_enabled: true,
+        description:   "Runs a lighting scene",
+        code:          "",
+      )
+    },
   },
   # --- how the house works is worth keeping ------------------------------------
   {
@@ -3449,6 +3495,21 @@ BUDDY_EDGE_PROBES = [
     avoid: %i[schedule_list_items],
     needs: :before_bed_list,
     note:  "read \"Before Bed\" as a when and asked for a clock time or a delay before adding it",
+  },
+  {
+    case:         "prod 11576",
+    say:          "Add fill up turkey water to before bed list",
+    tool:         :add_list_item,
+    avoid:        %i[schedule_list_items request_feature],
+    needs:        :before_bed_list,
+    run:          true,
+    effect_label: "Fill up turkey water isn't on Before Bed",
+    effect:       ->(u) {
+      bed = u.lists.reload.find { |l| l.name.match?(/before bed/i) }
+      bed&.list_items&.any? { |i| i.name.to_s.match?(/turkey water/i) }
+    },
+    note:         "the list's own name read as \"before bed\", a time, so the add was held three " \
+                  "times and filed as a feature request instead",
   },
   # Who "Mom" is had to be explained twice, and nothing kept it either time.
   {

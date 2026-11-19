@@ -10,7 +10,23 @@ module Buddy
   module ActivityChip
     module_function
 
+    # Inside this, a chip for something that worked is kept as a record but
+    # stays out of the thread: a programmed button press is the whole request,
+    # and only a step that failed is worth reading (see Buddy::Commands.run!).
+    def quietly(quiet)
+      was = Thread.current[:buddy_quiet_chips]
+      Thread.current[:buddy_quiet_chips] = quiet
+      yield
+    ensure
+      Thread.current[:buddy_quiet_chips] = was
+    end
+
+    def quiet?
+      Thread.current[:buddy_quiet_chips] == true
+    end
+
     def post!(conversation:, user:, tool_name:, body:, ok: true, detail: nil, payload: {})
+      hidden = ok && quiet?
       chip = conversation.byte_messages.create!(
         user:         user,
         direction:    :inbound,
@@ -24,10 +40,11 @@ module Buddy
           "ok"        => ok,
           "detail"    => detail.presence,
           "payload"   => payload.to_h.transform_keys(&:to_s),
+          "hidden"    => (true if hidden),
         }.compact,
         delivered_at: Time.current,
       )
-      broadcast(user, chip)
+      broadcast(user, chip) unless hidden
       chip
     rescue StandardError => e
       # A missing receipt is a gap in the record, never a reason to fail the

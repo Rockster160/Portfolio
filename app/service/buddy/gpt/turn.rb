@@ -4627,7 +4627,16 @@ module Buddy
         body = @inbound.body.to_s
         return false unless body.match?(COMMAND_REQUEST_RX) || body.match?(WRITE_REQUEST_RX) || short_order?(body)
 
+        body = without_list_names(body)
         body.match?(DEFERRED_COMMAND_RX) || Buddy::DeferredTime.at(body, user: @user).present?
+      end
+
+      # A list named for a time ("Before Bed", "Tonight") is somewhere to put
+      # things, so its name is taken out before the request is read for a when.
+      # Longest first, so "Before Bed Kids" goes whole rather than leaving "Kids".
+      def without_list_names(body)
+        names = @user.lists.pluck(:name).compact_blank.sort_by { |name| -name.length }
+        names.reduce(body) { |text, name| text.gsub(/\b#{Regexp.escape(name)}\b/i, " ") }
       end
 
       # "TV off in 30" is an order with no verb in it, and too short to be

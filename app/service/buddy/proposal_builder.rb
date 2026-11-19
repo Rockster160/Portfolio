@@ -235,8 +235,13 @@ module Buddy
     # marked hidden instead, which the PWA already drops on receipt — the same
     # mechanism the Today seed uses. So nothing renders above the message the
     # step is about to post.
-    def run_markers!(user:, conversation:, markers:, body:)
-      silent = body.blank?
+    #
+    # `quiet` is for steps a button or phrase was programmed with: the press is
+    # the whole request, so what ran says nothing in the thread - no answer and
+    # no receipt chip. A step that FAILED still shows, as does a run where
+    # nothing could run at all, because those are the presses that need a look.
+    def run_markers!(user:, conversation:, markers:, body:, quiet: false)
+      silent = body.blank? || quiet
       msg    = conversation.byte_messages.create!(
         user:         user,
         direction:    :inbound,
@@ -246,7 +251,7 @@ module Buddy
         delivered_at: Time.current,
       )
 
-      result = create(user: user, byte_message: msg, markers: markers)
+      result = Buddy::ActivityChip.quietly(quiet) { create(user: user, byte_message: msg, markers: markers) }
 
       # A step that ANSWERED gets its answer said. There is no model turn behind
       # a routine, so nothing else is left to read it back: a Garage routine
@@ -255,7 +260,7 @@ module Buddy
       # all along — `Toggle Garage` returns "Closing the garage now" — and this
       # is only a matter of not dropping it on the floor. Verbatim, deliberately:
       # rephrasing it costs a model turn to say something the task already said.
-      if result[:answers].present?
+      if result[:answers].present? && !quiet
         # The header is a label for something that has now described itself, so
         # when the one answer says what the label said, the label goes. Prod
         # 5401: "Whisper nap sound." over "Playing the nap sound on Whisper",
@@ -1144,9 +1149,14 @@ module Buddy
               "payload"   => stringify(p[:payload]),
               # Pre-resolution arguments, for Buddy::Routines.capture.
               "args"      => stringify(p[:args] || p[:payload]),
-            },
+              # A programmed press that worked keeps its record but stays out
+              # of the thread (see run_markers!).
+              "hidden"    => (true if result[:ok] && Buddy::ActivityChip.quiet?),
+            }.compact,
             delivered_at: Time.current,
           )
+          next if chip.metadata["hidden"]
+
           MonitorChannel.broadcast_to(user, {
             id:      :byte,
             channel: :byte,
