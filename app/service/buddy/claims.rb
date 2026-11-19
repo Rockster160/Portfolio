@@ -97,8 +97,9 @@ module Buddy
         verbs:    %w[added put stuck popped slotted threw],
         # The feature list is where request_feature files things, not a list.
         about:    /\b(?<!feature\s)lists?\b|\bon\s+there\b|\bto\s+(?:\*\*|`)/,
-        # A bolded destination is just as often a calendar.
-        also:     %i[schedule_list_items edit_list_item add_agenda_item],
+        # A bolded destination is just as often a calendar, and a new chore
+        # lands on the Today list.
+        also:     %i[schedule_list_items edit_list_item add_agenda_item create_chore],
         examples: {
           "Kk! I added those three to **Before Bed**." => "turn spec, silent turn",
           "Popped milk on the grocery list."           => "the same claim, opening the sentence",
