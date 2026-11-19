@@ -98,34 +98,47 @@ module Buddy
       meta["mood"]       = mood if mood
       ::Buddy::BoardFeedGroups.remember!(user, groups)
 
-      open = ::BuddyAlert.open_for(user, key)
-      return open if open && !open.board_only?
+      # Two runs holding the same key at once both find nothing open, and the
+      # second create meets the first's row in the unique index. That row is
+      # the one to hold, so the loser goes round once more and finds it.
+      raced = false
+      begin
+        open = ::BuddyAlert.open_for(user, key)
+        return open if open && !open.board_only?
 
-      if open
-        merged = open.metadata.merge(meta)
-        return open if open.body == body && merged == open.metadata
+        if open
+          merged = open.metadata.merge(meta)
+          return open if open.body == body && merged == open.metadata
 
-        # Changed is sent again, so it is the newest dream once more.
-        open.update!(body: body, metadata: merged, last_raised_at: Time.current)
-        broadcast_outstanding!(user)
-        return open
+          # Changed is sent again, so it is the newest dream once more.
+          open.update!(body: body, metadata: merged, last_raised_at: Time.current)
+          broadcast_outstanding!(user)
+          return open
+        end
+
+        conversation ||= ::Buddy::CompanionRelay.conversation_for(user)
+        return nil if conversation.nil?
+
+        now   = Time.current
+        alert = ::BuddyAlert.transaction(requires_new: true) {
+          ::BuddyAlert.create!(
+            user:              user,
+            byte_conversation: conversation,
+            key:               key,
+            body:              body,
+            status:            :open,
+            raised_at:         now,
+            last_raised_at:    now,
+            raised_count:      1,
+            metadata:          meta,
+          )
+        }
+      rescue ::ActiveRecord::RecordNotUnique
+        raise if raced
+
+        raced = true
+        retry
       end
-
-      conversation ||= ::Buddy::CompanionRelay.conversation_for(user)
-      return nil if conversation.nil?
-
-      now   = Time.current
-      alert = ::BuddyAlert.create!(
-        user:              user,
-        byte_conversation: conversation,
-        key:               key,
-        body:              body,
-        status:            :open,
-        raised_at:         now,
-        last_raised_at:    now,
-        raised_count:      1,
-        metadata:          meta,
-      )
       broadcast_outstanding!(user)
       alert
     end
