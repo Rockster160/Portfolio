@@ -13,7 +13,7 @@ module Buddy
     # Inside this, a chip for something that worked is kept as a record but
     # stays out of the thread: a programmed button press is the whole request,
     # and only a step that failed is worth reading (see Buddy::Commands.run!).
-    def quietly(quiet=true)
+    def quietly(quiet)
       was = Thread.current[:buddy_quiet_chips]
       Thread.current[:buddy_quiet_chips] = quiet
       yield

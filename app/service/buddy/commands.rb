@@ -163,7 +163,7 @@ module Buddy
       rows = row[ONLY_IF]
       return nil if rows.blank?
 
-      rows = rows.is_a?(Array) || rows.is_a?(String) ? rows : [rows]
+      rows = [rows] unless rows.is_a?(Array) || rows.is_a?(String)
       match = ActiveModel::Type::Boolean.new.cast(row["only_if_any"]) ? :any : :all
       condition = ScheduleCondition.from_rows(rows, match: match)
       ScheduleCondition.validate!(condition, user)

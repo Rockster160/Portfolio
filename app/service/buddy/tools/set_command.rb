@@ -34,7 +34,7 @@ Buddy::Tools.register(
       {"device": <name in device_states>, "state": <its state>, "expect": "is_not"}
       {"after": "22:00", "before": "06:00"}            a window of the day
       {"place": "home", "expect": "away"}              where THEY are
-      {"find": "chore_completions", "query": "name:\"<Chore Name>\" is:today", "expect": "missing"}
+      {"find": "chore_completions", "query": "name:\\"<Chore Name>\\" is:today", "expect": "missing"}
       {"task": <a function from jil_functions>, "expect": "truthy"}   or "falsy"
 
     "This if that, otherwise the other" is two items with opposite
