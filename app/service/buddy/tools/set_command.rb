@@ -32,7 +32,10 @@ Buddy::Tools.register(
     `{"tool_name":"ask_buddy","payload":{"text":<their words>}}`, which hands
     the words back to you as a fresh request on every run.
 
-    Saving REPLACES what was there; an empty array `[]` clears it. When
+    Saving REPLACES what was there; an empty array `[]` clears it. A key
+    made here, by naming a button or phrase, goes too when it's cleared, so
+    "unprogram button 9" or "stop listening for movie time" leaves the button
+    or phrase doing nothing at all, free to program again. When
     they want it to do something more as well ("also", "and"), pass
     `add: true` with only the new items, and they go after what's there. A
     replace that keeps some of what's there passes those items with every
@@ -88,22 +91,35 @@ Buddy::Tools.register(
     steps = tools.any? ? Buddy::Routines.sanitize(tools, ctx).each : [].each
     items = rows.map { |row| row["tool_name"] == Buddy::Commands::ASK ? row.slice("tool_name", "payload") : steps.next }
     items = Buddy::Commands.items(ctx.user, key) + items if ActiveModel::Type::Boolean.new.cast(payload[:add])
+    if created && items.empty?
+      raise "#{Buddy::Commands.trigger_phrase(created) || created} has nothing on it to clear"
+    end
+
+    retire = Buddy::Commands.made_task(ctx.user, key) if items.empty?
     {
-      summary:  "Set **#{key}**?",
-      resolved: { key: key, items: items, new_listener: created },
+      summary:  "#{retire ? "Clear" : "Set"} **#{key}**?",
+      resolved: {
+        key:          key,
+        items:        items,
+        new_listener: created,
+        retire_task:  retire&.id,
+        retire_on:    retire && Buddy::Commands.trigger_phrase(retire.listener.to_s),
+      },
     }
   },
   label:       ->(payload, _ctx) {
     lines = Array(payload[:items]).map { |item| Buddy::Commands.phrase(item.to_h.deep_stringify_keys) }
     on = Buddy::Commands.trigger_phrase(payload[:new_listener].to_s) if payload[:new_listener].present?
     lines.unshift("when #{on}") if on
-    { title: payload[:key].to_s, sub: lines.join("\n").presence || "does nothing extra" }
+    gone = "nothing happens when #{payload[:retire_on] || "its task runs"}" if payload[:retire_task]
+    { title: payload[:key].to_s, sub: lines.join("\n").presence || gone || "does nothing extra" }
   },
   execute:     ->(payload, ctx) {
     if payload[:new_listener].present?
       Buddy::Commands.create!(ctx.user, payload[:key].to_s, payload[:new_listener])
     end
     Buddy::Commands.save!(ctx.user, payload[:key].to_s, Array(payload[:items]))
+    ctx.user.tasks.active.find_by(id: payload[:retire_task])&.archive! if payload[:retire_task]
     { key: payload[:key].to_s, cleared: Array(payload[:items]).empty? }
   },
   receipt:     ->(result, _ctx) { result[:cleared] ? "Cleared **#{result[:key]}** ✓" : "Set **#{result[:key]}** ✓" },

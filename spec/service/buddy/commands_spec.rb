@@ -78,6 +78,7 @@ RSpec.describe Buddy::Commands do
 
       set!("Hall Button", [])
       expect(described_class.items(user, "Hall Button")).to be_empty
+      expect(button.reload.archived_at).to be_nil
     end
 
     it "adds to what's there when asked to, leaving the saved arguments as they were" do
@@ -186,6 +187,41 @@ RSpec.describe Buddy::Commands do
         tool[:confirm].call({ key: "Button 12", items: "[]", button: "button 12" }, ctx)
       }.to raise_error(/no button called "button 12".*Btn#9 and Remote/)
       expect(user.tasks.where(name: "Button 12")).to be_empty
+    end
+
+    it "removes the task it made when the key is cleared", :aggregate_failures do
+      program!("Button 9", [chill_item], button: "button 9")
+      program!("Button 9", [], button: "button 9")
+
+      expect(user.tasks.active.where(name: "Button 9")).to be_empty
+      expect(described_class.roster(user)).to include("button Btn#9 (nothing on it yet)")
+
+      program!("Christmas tree button", [ask_item], button: "button 9")
+      again = user.tasks.active.find_by!(name: "Christmas tree button")
+      expect(again.listener).to eq(%(hass-button:device_name::"Btn#9"))
+    end
+
+    it "stops a cleared phrase from matching at all" do
+      program!("Movie time", [chill_item], phrase: "movie time")
+      program!("movie time", [])
+
+      expect(user.tasks.active.where(name: "Movie time")).to be_empty
+    end
+
+    it "leaves a task alone when it does more than run the key" do
+      program!("Button 9", [chill_item], button: "button 9")
+      task = user.tasks.find_by!(name: "Button 9")
+      task.update!(code: "#{task.code}\nGlobal.stop_propagation()::Any")
+      program!("Button 9", [])
+
+      expect(task.reload.archived_at).to be_nil
+    end
+
+    it "refuses to make a task just to clear it" do
+      expect {
+        tool[:confirm].call({ key: "Button 9", items: "[]", button: "button 9" }, ctx)
+      }.to raise_error(/pressing Btn#9 has nothing on it to clear/)
+      expect(user.tasks.where(name: "Button 9")).to be_empty
     end
 
     it "refuses a new key named the same as one that runs from something else" do

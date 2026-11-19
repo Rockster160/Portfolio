@@ -665,6 +665,43 @@ BUDDY_EDGE_PROBES = [
       ])
     },
   },
+  {
+    case:         "unprogram a button",
+    say:          "Unprogram button 9",
+    tool:         :set_command,
+    avoid:        %i[forget_routine save_routine],
+    args:         { set_command: { items: /\A\s*\[\s*\]\s*\z/ } },
+    never_args:   { set_command: { add: /true/ } },
+    note:         "clearing a programmed button left its Jil task listening, and nothing had " \
+                  "checked that \"unprogram\" reaches the tool at all",
+    seed:         ->(user, _convo) {
+      user.caches.dig_set(:hass, "Btn#9", { state: "single", at: Time.current.to_i })
+      Buddy::Commands.create!(user, "Button 9", %(hass-button:device_name::"Btn#9"))
+      Buddy::Commands.save!(user, "Button 9", [
+        { "tool_name" => "ask_buddy", "payload" => { "text" => "toggle the christmas tree" } },
+      ])
+    },
+    run:          true,
+    effect_label: "the Button 9 task is still listening for presses",
+    effect:       ->(user) { Buddy::Commands.made_task(user, "Button 9").nil? },
+  },
+  {
+    case:         "stop a programmed phrase",
+    say:          "Stop listening for movie time",
+    tool:         :set_command,
+    avoid:        %i[forget_term forget_routine],
+    args:         { set_command: { items: /\A\s*\[\s*\]\s*\z/ } },
+    note:         "a cleared phrase kept its tell: task, so the words never reached Jarvis again",
+    seed:         ->(user, _convo) {
+      Buddy::Commands.create!(user, "Movie time", Buddy::Commands.phrase_listener("movie time"))
+      Buddy::Commands.save!(user, "Movie time", [
+        { "tool_name" => "ask_buddy", "payload" => { "text" => "dim the lights" } },
+      ])
+    },
+    run:          true,
+    effect_label: "the Movie time task is still listening for the phrase",
+    effect:       ->(user) { Buddy::Commands.made_task(user, "Movie time").nil? },
+  },
   # --- how the house works is worth keeping ------------------------------------
   {
     case:  "prod 11366",

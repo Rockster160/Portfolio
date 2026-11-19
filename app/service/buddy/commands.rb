@@ -108,8 +108,19 @@ module Buddy
         name:     key,
         listener: listener,
         enabled:  true,
-        code:     %(ran = Buddy.command("#{key}")::Boolean),
+        code:     made_code(key),
       )
+    end
+
+    def made_code(key)
+      %(ran = Buddy.command("#{key}")::Boolean)
+    end
+
+    # The task `create!` made for a key, still exactly as it made it. One that
+    # was written by hand, or edited since, does more than run the key, so
+    # clearing the key leaves it alone.
+    def made_task(user, key)
+      user.tasks.active.find_by(name: key, code: made_code(key))
     end
 
     # How a key gets run, for the roster: "pressing Btn#4".
