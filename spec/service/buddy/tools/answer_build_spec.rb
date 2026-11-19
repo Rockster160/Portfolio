@@ -50,6 +50,19 @@ RSpec.describe "answer_build" do
     expect(sent).to have_been_requested
   end
 
+  it "types an answer into a /q whose last turn is waiting on one" do
+    quick = FeatureBuild.create!(
+      user: user, status: :running, kind: :quick, title: "Workout ping",
+      request: "Quick request: ping me", question: "1. Should I start a /feature for it?", asked_at: Time.current
+    )
+    sent = stub_request(:post, %r{/byte/builder\z}).with(
+      body: hash_including("action" => "message", "build_id" => quick.id, "text" => "Yep! Do it."),
+    ).to_return(status: 200, body: "{}")
+
+    expect(run({ id: quick.id, answer: "Yep! Do it." })).to eq("Sent to Workout ping 🛠️")
+    expect(sent).to have_been_requested
+  end
+
   it "sends no images when the message being answered has none" do
     convo = user.byte_conversations.create!(name: :Buddy, mode: :buddy)
     convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "yes")
@@ -61,7 +74,7 @@ RSpec.describe "answer_build" do
   it "refuses a build that isn't asking anything" do
     build.update!(question: nil, asked_at: nil)
 
-    expect { run({ id: build.id, answer: "yes" }) }.to raise_error(/no build is asking/)
+    expect { run({ id: build.id, answer: "yes" }) }.to raise_error(/no session is waiting/)
   end
 
   it "says so when the Mini doesn't take it" do
@@ -85,6 +98,23 @@ RSpec.describe "answer_build" do
       holding_mac(true)
 
       expect(turn.send(:builds_asking)).to eq([{ id: build.id, title: "dark mode", asked: "Dark by default?" }])
+    end
+
+    it "carries a /q whose last turn is waiting, and marks the one said last in the thread" do
+      holding_mac(true)
+      convo = user.byte_conversations.create!(name: :Buddy, mode: :buddy)
+      quick = FeatureBuild.create!(
+        user: user, byte_conversation: convo, status: :running, kind: :quick, title: "Workout ping",
+        request: "Quick request: ping me", question: "1. Should I start a /feature for it?", asked_at: Time.current
+      )
+      FeatureBuilder.say(convo, quick.card(quick.question), feature_build_id: quick.id)
+      inbound = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Yep! Do it.")
+      turn.instance_variable_set(:@conversation, convo)
+      turn.instance_variable_set(:@inbound, inbound)
+
+      expect(turn.send(:builds_asking)).to include(
+        { id: quick.id, title: "Workout ping", asked: "1. Should I start a /feature for it?", said_last: true },
+      )
     end
 
     it "leaves it out for anyone without the Mac" do

@@ -582,6 +582,29 @@ BUDDY_EVAL_READERS = %i[
 #               paths. The same fields as the probe (tool, with, order, args,
 #               avoid...), laid over it; the turn passes if it meets either.
 BUDDY_EDGE_PROBES = [
+  # --- a /q's question, answered without a reply ------------------------------
+  {
+    case:  "prod 11466-11469",
+    say:   "Yep! Do it.",
+    tool:  :answer_build,
+    args:  { answer_build: { answer: /do it/i } },
+    note:  "a /q asked whether to start a /feature; the plain \"Yep! Do it.\" under it was " \
+           "answered twice with \"I can't see which Feature Builder is waiting\"",
+    seed:  ->(user, convo) {
+      build = FeatureBuild.create!(
+        user:              user,
+        byte_conversation: convo,
+        status:            :running,
+        kind:              :quick,
+        title:             "Automatic workout start reminder",
+        request:           "Quick request: start a workout when I arrive at Lowes Airsports.",
+        question:          "The fix is one line in task 49: change the key to \"Lowes Airsports\". " \
+          "1. Should I start a /feature for it?",
+        asked_at:          1.minute.ago,
+      )
+      FeatureBuilder.say(convo, build.card(build.question), feature_build_id: build.id)
+    },
+  },
   # --- contacts --------------------------------------------------------------
   {
     case:  "add a contact with an address",

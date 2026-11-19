@@ -126,6 +126,9 @@ module FeatureBuilder
   # goes by the request's first line only until then.
   # A block is given the build before its status line is posted, so what's
   # posted there reads above it.
+  #
+  # A build with a `parent` posts no card of its own: it takes over its
+  # parent's, which from then on shows this build and answers to it.
   def launch!(
     user:,
     conversation:,
@@ -134,25 +137,54 @@ module FeatureBuilder
     title: nil,
     title_from: nil,
     kind: :feature,
+    parent: nil,
     attachment_signed_ids: [])
     build = FeatureBuild.create!(
       user:              user,
       byte_conversation: conversation,
       feature_request:   feature_request,
+      parent:            parent,
       title:             FeatureBuild.title_for(title.presence || request),
-      request:           request,
+      request:           without_session_links(request),
       kind:              kind,
     )
     blobs = blobs_for(attachment_signed_ids)
     build.images.attach(blobs) if blobs.any?
     if conversation
       yield build if block_given?
-      message = say(conversation, build.status_line, feature_build_id: build.id)
-      build.update!(byte_message: message)
+      take_over_card!(build) || post_card!(build, conversation)
     end
     refresh_looks!(user)
     FeatureBuildStartWorker.perform_async(build.id, title.present? ? nil : (title_from.presence || request))
     build
+  end
+
+  # A Claude session's Remote Control link.
+  SESSION_LINK = %r{https://claude\.ai/code/session_\w+}
+
+  # The request is the session's first prompt, so it is on the new pane's
+  # screen as it starts, and the Mini takes the first session link it finds
+  # there as the new session's own. A brief quoting an earlier build's
+  # messages carries that build's link, which would be found first.
+  def without_session_links(request)
+    request.to_s.gsub(SESSION_LINK, "(session link)")
+  end
+
+  def post_card!(build, conversation)
+    message = say(conversation, build.status_line, feature_build_id: build.id)
+    build.update!(byte_message: message)
+  end
+
+  # The parent's card, now this build's: rewritten to show it, and a reply to
+  # it reaches this session. Nil when the parent has no card to take.
+  def take_over_card!(build)
+    message = build.parent&.byte_message
+    return nil if message.nil? || message.byte_conversation_id != build.byte_conversation_id
+
+    message.update!(metadata: message.metadata.to_h.merge("feature_build_id" => build.id))
+    build.update!(byte_message: message)
+    repaint!(build)
+    true
   end
 
   # `waiting_at` isn't kept: it's the Mini saying a turn just ended with
@@ -242,14 +274,16 @@ module FeatureBuilder
 
   # The session closed itself (`builder-pr close`): what it was asked for is
   # already in master, or needed no code. The Mini closes the PR and removes the
-  # worktree on its own; this records why, and says so in the thread.
+  # worktree on its own; this records why, and says so in the thread. The why
+  # is said once, in the message: the card only says it closed itself.
   def closed!(build, attributes)
     build.update!(
       **attributes.slice("closed_reason", "pr_number", "pr_url"),
-      status:      :finished,
-      finished_at: Time.current,
-      question:    nil,
-      asked_at:    nil,
+      status:        :finished,
+      finished_at:   Time.current,
+      question:      nil,
+      asked_at:      nil,
+      closed_itself: true,
     )
     repaint!(build)
     announce!(
@@ -335,16 +369,20 @@ module FeatureBuilder
     announce!(build, build.card(step), build.full_title)
   end
 
-  # A production script a `/q` session sent: its page, where it's approved, in
-  # the thread. A build's scripts are listed with its PR instead.
+  # A production script a session sent, as a card in its thread to read and
+  # approve there (ProductionScripts::Card).
   def script_sent!(script, updated: false)
-    build = script.feature_build
-    return if build.nil? || !build.kind_quick?
+    ProductionScripts::Card.post!(script, updated: updated)
+  end
 
-    url = Rails.application.routes.url_helpers.system_production_script_url(script)
-    step = updated ? "A script changed and needs approving again" : "A script needs your approval"
-    text = build.card(step, links: ["[#{script.title}](#{url})"])
-    announce!(build, text, "Script: #{script.title}")
+  # The script a session carrying on from another is sending in place of one
+  # of its parent's: the same title, and not yet run. It replaces that one
+  # rather than standing beside it, since it was started to change it.
+  def replaced_script(build, title)
+    return nil if build&.parent.nil? || title.blank?
+
+    scope = build.parent.production_scripts.where(title: title)
+    scope.where(status: [:pending, :approved, :failed]).order(:created_at).last
   end
 
   def announce!(build, text, push_title)
@@ -408,6 +446,15 @@ module FeatureBuilder
     scope.where.not(question: nil).order(:asked_at)
   end
 
+  # Every session whose last turn is waiting on its owner, `/q`s included: what
+  # Buddy weighs a message typed without a reply against. A `/q` often ends a
+  # turn on a question of its own ("should I start a /feature for it?"), and
+  # the answer to it is typed as a plain message as often as a reply.
+  def awaiting_reply(user)
+    scope = FeatureBuild.unfinished.where(user: user)
+    scope.where.not(question: nil).order(:asked_at)
+  end
+
   # Types `text` into the build's session as its owner's next message, with
   # `images` ({filename, content_type, url}) downloaded on the Mini and listed
   # under it. False when the Mini didn't take it, and the question stays open.
@@ -433,11 +480,17 @@ module FeatureBuilder
 
   # A reply typed at one of the build's messages: an answer when it's asking,
   # more to go on when it isn't. Said in the thread when it didn't get there,
-  # since nothing else would show it.
-  def answer_from_thread!(build, message)
+  # since nothing else would show it. `target` is the message replied to: on a
+  # production script's card, the session is told which script it's about.
+  def answer_from_thread!(build, message, target: nil)
+    script = ProductionScripts::Card.script_for(target)
     if build.status_finished? || build.status_failed?
-      # A `/q` that has closed carries on in a new session of its own.
-      return FeatureBuilder::Quick.resume!(build, message).present? if build.kind_quick?
+      # A `/q` that has closed carries on in a new session of its own, and so
+      # does any build whose script is being asked to change: that is work a
+      # quick session can do on its own.
+      if build.kind_quick? || script
+        return FeatureBuilder::Quick.resume!(build, message, script: script).present?
+      end
 
       over = build.status_failed? ? "Never started" : "Finished"
       say(
@@ -447,7 +500,8 @@ module FeatureBuilder
       )
       return false
     end
-    return true if answer!(build, message.body, images: message.model_image_sources)
+    text = script ? script_reply(script, message.body) : message.body
+    return true if answer!(build, text, images: message.model_image_sources)
 
     say(
       message.byte_conversation,
@@ -457,6 +511,17 @@ module FeatureBuilder
     false
   end
   # rubocop:enable Naming/PredicateMethod
+
+  # A reply to a script's card, as the session that wrote it is given it.
+  def script_reply(script, text)
+    <<~TXT.strip
+      About production script ##{script.id}, "#{script.title}" (#{ProductionScripts::Card.url(script)}):
+
+      #{text.to_s.strip}
+
+      To change it, send it again with `builder-pr script` under the same title. It replaces this one, and needs approving again.
+    TXT
+  end
 
   # ---- GitHub ----
 

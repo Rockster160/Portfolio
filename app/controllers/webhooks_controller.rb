@@ -589,7 +589,7 @@ class WebhooksController < ApplicationController
 
   # A build handed over by a Claude session on the Mini (`bin/feature-build`),
   # with the brief that session wrote. It speaks in the owner's primary Buddy
-  # thread, the same as one started from a feature request, or in the thread of
+  # thread, the same as one started from a feature request, or on the card of
   # the `/q` that handed it over (`from_build_id`).
   def byte_create_build
     return head :unauthorized unless byte_authorized?
@@ -604,6 +604,7 @@ class WebhooksController < ApplicationController
       conversation: quick&.byte_conversation || ByteConversation.for_self_initiated(user),
       request:      request_text,
       title:        params[:title],
+      parent:       quick,
     )
     render json: {
       ok:     true,
@@ -632,6 +633,17 @@ class WebhooksController < ApplicationController
     return head :unauthorized unless byte_authorized?
 
     build = FeatureBuild.find_by(id: params[:build_id])
+    if (replaced = FeatureBuilder.replaced_script(build, params[:title].to_s))
+      ProductionScripts.edit!(
+        replaced,
+        code:       params[:code].to_s,
+        commit_sha: params[:commit_sha].presence,
+        edited_by:  :mini,
+      )
+      FeatureBuilder.script_sent!(replaced, updated: true)
+      return render json: production_script_json(replaced)
+    end
+
     script = ProductionScripts.create!(
       user:          build&.user || User.me,
       feature_build: build,

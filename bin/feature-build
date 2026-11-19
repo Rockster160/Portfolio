@@ -9,7 +9,8 @@
 #
 # Runs on the Mini, where the session's pane has BYTE_LOCAL_SECRET. Rails
 # answers once the build is recorded; the Mini then starts the session and its
-# link arrives in the primary Buddy thread.
+# link arrives in the primary Buddy thread, or on the `/q`'s own card for one
+# a `/q` started.
 
 require "json"
 require "net/http"
@@ -65,4 +66,5 @@ fail!("Rails answered #{response.code}: #{response.body.to_s[0, 300]}") unless r
 
 build = JSON.parse(response.body)
 puts("Started build ##{build["id"]}: #{build["title"]}")
-puts("Its link arrives in the primary Buddy thread. All builds: #{build["page"]}")
+where = quick ? "on this /q's card, in the same thread" : "in the primary Buddy thread"
+puts("Its link arrives #{where}. All builds: #{build["page"]}")

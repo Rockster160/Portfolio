@@ -3291,18 +3291,24 @@ module Buddy
         }.compact
       end
 
-      # Feature Builders on the Mini stopped on a question for this person.
-      # Here for the reason open_questions_from_partner is: "yes, go with your
-      # defaults" answers one of these when it's open and nothing at all when
-      # none is. Only the end of what it said: that's where a session puts its
-      # questions, and it only has to tell one build from another.
+      # Sessions on the Mini - Feature Builders and `/q`s - whose last turn is
+      # waiting on this person. Here for the reason open_questions_from_partner
+      # is: "yes, go with your defaults" answers one of these when it's open
+      # and nothing at all when none is. Only the end of what it said: that's
+      # where a session puts its questions, and it only has to tell one build
+      # from another. `said_last` marks the one whose message is the last thing
+      # said in this thread before theirs, which is what a bare "yep, do it"
+      # is most likely answering.
       def builds_asking
         return nil unless Buddy::Features.enabled?(@user, :mac)
 
-        builds = FeatureBuilder.asking(@user).map { |build|
+        last_build_id = (last_companion_message&.metadata.to_h["feature_build_id"] if @conversation && @inbound)
+        builds = FeatureBuilder.awaiting_reply(@user).map { |build|
           asked = build.question.to_s.squish
           asked = "…#{asked.last(300)}" if asked.length > 300
-          { id: build.id, title: build.title, asked: asked }
+          entry = { id: build.id, title: build.thread_title, asked: asked }
+          entry[:said_last] = true if last_build_id.to_s == build.id.to_s
+          entry
         }
         builds.presence
       rescue StandardError
