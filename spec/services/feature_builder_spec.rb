@@ -49,7 +49,7 @@ RSpec.describe FeatureBuilder do
 
     it "is sent the PR once, when the Mini first reports it, with the session's link" do
       allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original
-      build.update!(rc_url: "https://claude.ai/code/session_abc")
+      build.update!(status: :running, rc_url: "https://claude.ai/code/session_abc")
       pr = { "pr_number" => 42, "pr_url" => "https://github.com/Rockster160/Portfolio/pull/42" }
 
       described_class.update_from_mini!(build, pr)
@@ -60,6 +60,22 @@ RSpec.describe FeatureBuilder do
         "[PR #42](https://github.com/Rockster160/Portfolio/pull/42)",
         "[Open it in Claude](https://claude.ai/code/session_abc)",
       )
+    end
+
+    it "moves its card to the bottom of the thread when the PR opens, leaving no copy behind" do
+      build.update!(status: :running)
+      card = build.byte_message
+      described_class.say(thread, "something in between")
+
+      described_class.update_from_mini!(build, { "pr_number" => 42, "pr_url" => "https://x/pull/42" })
+
+      expect(ByteMessage.exists?(card.id)).to be(false)
+      expect(thread.byte_messages.order(:id).last).to eq(build.reload.byte_message)
+      expect(build.byte_message.body).to include("\nReady for review\n")
+
+      build.update!(approved_at: Time.current, landing_at: 1.hour.ago)
+      expect(build.byte_message.reload.body).to include("\nMerging\n")
+      expect(thread.byte_messages.where("body LIKE ?", "%Ready for review%")).to be_empty
     end
 
     it "says why when the build couldn't start" do
@@ -210,6 +226,7 @@ RSpec.describe FeatureBuilder do
     end
 
     it "says only the PR when the turn that ended opened it" do
+      build.update!(status: :running)
       now = Time.current.iso8601
       described_class.update_from_mini!(build, {
         "pr_number"  => 42,
@@ -396,7 +413,10 @@ RSpec.describe FeatureBuilder do
   end
 
   describe "the production scripts a build sent" do
-    before { allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original }
+    before {
+      allow(Buddy::CompanionDelivery).to receive(:deliver_plain).and_call_original
+      build.update!(status: :running)
+    }
 
     let!(:script) {
       ProductionScripts.create!(
@@ -418,7 +438,7 @@ RSpec.describe FeatureBuilder do
           text: a_string_including(
             "**dark mode**\nReady for review, with 1 production script to approve\n",
             "[PR #42](https://github.com/x/pull/42) · ",
-            " · [Add the dark mode task](#{link}) (waiting on approval)",
+            ")\n📜 Script: [Add the dark mode task](#{link}) (waiting on approval)",
           ),
         ),
       )
@@ -440,7 +460,7 @@ RSpec.describe FeatureBuilder do
       expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).with(
         hash_including(
           text: "**dark mode**\nClosed itself, with 1 production script to approve: Only needed a script.\n" \
-                "[Add the dark mode task](#{link}) (waiting on approval)",
+                "📜 Script: [Add the dark mode task](#{link}) (waiting on approval)",
         ),
       )
     end

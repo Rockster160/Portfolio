@@ -44,7 +44,8 @@
 #
 # `byte_message` is the one system message in the thread it was asked from. It
 # is rewritten as the build moves - starting, then the link to the session -
-# rather than followed by more of them.
+# rather than followed by more of them. Its PR opening moves it to the bottom
+# of the thread (FeatureBuilder.move_card!), so that news pushes.
 #
 # `repo` is the GitHub repo it builds in (FeatureBuilder::Repos), Portfolio
 # unless the request was for another. Only Portfolio's PRs go through the
@@ -150,7 +151,7 @@ class FeatureBuild < ApplicationRecord
     case status.to_sym
     when :starting then card("Starting #{what} on the Mini#{images_note}…")
     when :failed then card("Couldn't start #{what}: #{error}")
-    when :finished then card(finished_step, links: [pr_markdown])
+    when :finished then card(finished_step, links: [pr_markdown], scripts: script_links)
     when :stopped then card("Stopped", links: [pr_markdown, link_markdown])
     else running_card(doing)
     end
@@ -162,7 +163,9 @@ class FeatureBuild < ApplicationRecord
     live = FeatureBuilder.sessions.find { |session| session["build_id"].to_i == id }
     idle = live && !live["working"]
     return card(idle ? "Answered" : "Looking into it on the Mini") if kind_quick?
-    return card(pr_step(live), links: [pr_markdown, link_markdown]) if pr_url.present?
+    if pr_url.present?
+      return card(pr_step(live), links: [pr_markdown, link_markdown], scripts: script_links)
+    end
     return card("Waiting on you") if idle
 
     doing = "Planning" if kind_feature? && live && planned_at.nil?
@@ -177,7 +180,7 @@ class FeatureBuild < ApplicationRecord
       held:     "Held",
       approved: "Approved, in line to merge",
       answer:   "Waiting on you",
-      review:   "Ready for review",
+      review:   "Ready for review#{scripts_note}",
     }.fetch(MergeQueue.state(self))
   end
 
@@ -200,9 +203,11 @@ class FeatureBuild < ApplicationRecord
   end
 
   # Every message about a build has the same shape, so a thread of them scans
-  # down the left edge: its name, what's happening now, then where to go.
-  def card(step, links: [link_markdown])
-    ["**#{thread_title}**", step, links.compact_blank.join(" · ")].compact_blank.join("\n")
+  # down the left edge: its name, what's happening now, where to go, then its
+  # production scripts a line each.
+  def card(step, links: [link_markdown], scripts: [])
+    lines = ["**#{thread_title}**", step, links.compact_blank.join(" · "), *scripts]
+    lines.compact_blank.join("\n")
   end
 
   # The name its card goes by: the first build in the chain it carries on from.
@@ -239,12 +244,18 @@ class FeatureBuild < ApplicationRecord
     "[#{"#{repo_name} " unless portfolio?}PR ##{pr_number}](#{pr_url})" if pr_url.present?
   end
 
+  # Marks a production script's line on a card, so one reads as something to
+  # run against production rather than another place to go.
+  SCRIPT_ICON = "📜".freeze
+
   # The production scripts it sent, each linked to the page it's approved on,
-  # for the messages that say the build is done. Empty when it sent none.
+  # for its card once it has a PR and the messages that say it's done. Empty
+  # when it sent none.
   def script_links
     helpers = Rails.application.routes.url_helpers
     production_scripts.where.not(status: :skipped).order(:created_at).map { |script|
-      "[#{script.title}](#{helpers.system_production_script_url(script)}) (#{script.status_label})"
+      url = helpers.system_production_script_url(script)
+      "#{SCRIPT_ICON} Script: [#{script.title}](#{url}) (#{script.status_label})"
     }
   end
 

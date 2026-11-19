@@ -107,6 +107,20 @@ RSpec.describe Buddy::Alerts do
       expect(repaint.dig(:data, :update)).to be(true)
     end
 
+    it "counts it again when another run opened it between looking and creating" do
+      looked = false
+      allow(BuddyAlert).to receive(:open_for).and_wrap_original { |original, *args|
+        next original.call(*args) if looked
+
+        looked = true
+        nil
+      }
+
+      expect { described_class.raise!(user: user, key: "gate", body: "The gate is still open") }
+        .not_to change(ByteMessage, :count)
+      expect(BuddyAlert.status_open.sole.raised_count).to eq(2)
+    end
+
     it "keeps a different key entirely separate" do
       expect { described_class.raise!(user: user, key: "garage", body: "Garage is open") }
         .to change(ByteMessage, :count).by(1)
@@ -285,6 +299,21 @@ RSpec.describe Buddy::Alerts do
         user: user, key: "gate-board", body: "The gate is open",
         groups: ["Whisper"], expression: "pounce", **opts,
       )
+    end
+
+    it "takes the one another run opened between looking and creating" do
+      held = hold!
+      looked = false
+      allow(BuddyAlert).to receive(:open_for).and_wrap_original { |original, *args|
+        next original.call(*args) if looked
+
+        looked = true
+        nil
+      }
+
+      expect(hold!(body: "Still open")).to eq(held)
+      expect(held.reload.body).to eq("Still open")
+      expect(BuddyAlert.status_open.count).to eq(1)
     end
 
     it "posts nothing and pushes nothing" do

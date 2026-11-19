@@ -97,9 +97,16 @@ module SlackNotifier
     )
   end
 
+  # Enough frames to see where it went wrong. A deep stack - Jil nests a frame
+  # per block - runs long enough that Slack splits the post, and the link in
+  # the trailer goes to the row holding all of it.
+  BACKTRACE_LINES = 12
+
   def format_exception(exception)
     focused = Array(exception.backtrace).select { |l| l.include?("/app/") }
-    focused.map { |line| line[/releases\/\d+(.*)/, 1] || line }.join("\n")
+    lines = focused.first(BACKTRACE_LINES).map { |line| line[/releases\/\d+(.*)/, 1] || line }
+    lines << "… #{focused.length - BACKTRACE_LINES} more" if focused.length > BACKTRACE_LINES
+    lines.join("\n")
   end
 
   # Taken from this file rather than from Rails.root, so a deploy running out of

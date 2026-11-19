@@ -99,23 +99,13 @@ module Buddy
       ::Buddy::BoardFeedGroups.remember!(user, groups)
 
       open = ::BuddyAlert.open_for(user, key)
-      return open if open && !open.board_only?
-
-      if open
-        merged = open.metadata.merge(meta)
-        return open if open.body == body && merged == open.metadata
-
-        # Changed is sent again, so it is the newest dream once more.
-        open.update!(body: body, metadata: merged, last_raised_at: Time.current)
-        broadcast_outstanding!(user)
-        return open
-      end
+      return held_again!(user, open, body, meta) if open
 
       conversation ||= ::Buddy::CompanionRelay.conversation_for(user)
       return nil if conversation.nil?
 
       now   = Time.current
-      alert = ::BuddyAlert.create!(
+      alert = create_open(
         user:              user,
         byte_conversation: conversation,
         key:               key,
@@ -126,8 +116,32 @@ module Buddy
         raised_count:      1,
         metadata:          meta,
       )
+      return held_again!(user, ::BuddyAlert.open_for(user, key), body, meta) if alert.nil?
+
       broadcast_outstanding!(user)
       alert
+    end
+
+    def held_again!(user, open, body, meta)
+      return open if open.nil? || !open.board_only?
+
+      merged = open.metadata.merge(meta)
+      return open if open.body == body && merged == open.metadata
+
+      # Changed is sent again, so it is the newest dream once more.
+      open.update!(body: body, metadata: merged, last_raised_at: Time.current)
+      broadcast_outstanding!(user)
+      open
+    end
+
+    # The open alert, or nil when another run opened one under the same key
+    # between the caller looking and this insert: a task listening on two
+    # triggers that fire together runs twice at once. The savepoint keeps the
+    # failed insert from aborting a transaction the caller is inside.
+    def create_open(**attrs)
+      ::BuddyAlert.transaction(requires_new: true) { ::BuddyAlert.create!(**attrs) }
+    rescue ActiveRecord::RecordNotUnique
+      nil
     end
 
     # It's been dealt with. `body` is what the bubble should say now; without
@@ -215,7 +229,7 @@ module Buddy
     def open!(user, conversation, key, body, look={})
       now   = Time.current
       meta  = look.dup
-      alert = ::BuddyAlert.create!(
+      alert = create_open(
         user:              user,
         byte_conversation: conversation,
         key:               key,
@@ -226,6 +240,11 @@ module Buddy
         raised_count:      1,
         metadata:          meta,
       )
+      if alert.nil?
+        again = ::BuddyAlert.open_for(user, key)
+        return again && seen_again!(again, body, look)
+      end
+
       message = ::Buddy::CompanionDelivery.deliver_plain(
         user:         user,
         conversation: conversation,

@@ -178,6 +178,20 @@ RSpec.describe SlackNotifier do
     end
   end
 
+  describe ".format_exception" do
+    it "keeps the first frames of a deep stack and counts the rest" do
+      exception = RuntimeError.new("deep").tap { |e|
+        e.set_backtrace(Array.new(40) { |i| "/releases/1/app/service/jil/executor.rb:#{i}" })
+      }
+
+      lines = described_class.format_exception(exception).lines(chomp: true)
+
+      expect(lines.length).to eq(described_class::BACKTRACE_LINES + 1)
+      expect(lines.first).to eq("/app/service/jil/executor.rb:0")
+      expect(lines.last).to eq("… 28 more")
+    end
+  end
+
   describe ".err" do
     # It is handed the exception, so it says so rather than relying on where it
     # was called from.

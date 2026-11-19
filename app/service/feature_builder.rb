@@ -290,7 +290,8 @@ module FeatureBuilder
       build,
       build.card(
         "Closed itself#{build.scripts_note}: #{build.closed_reason}",
-        links: build.script_links,
+        links:   [],
+        scripts: build.script_links,
       ),
       "Closed: #{build.full_title}",
     )
@@ -360,9 +361,37 @@ module FeatureBuilder
   end
 
   def announce_pr!(build)
-    links = [build.pr_markdown, build.link_markdown, *build.script_links]
-    text = build.card("Ready for review#{build.scripts_note}", links: links)
-    announce!(build, text, "PR ready: #{build.full_title}")
+    move_card!(build, "PR ready: #{build.full_title}")
+  end
+
+  # The build's card, posted again at the bottom of the thread and taken away
+  # from where it was, so the news pushes and the thread still holds one card
+  # for the build, the one that keeps up, rather than a live one further up
+  # and a copy below that never changes again. Every build speaking on the old
+  # card (a parent and the session carrying it on) moves with it.
+  def move_card!(build, push_title)
+    old = build.byte_message
+    message = announce!(build, build.status_line, push_title)
+    return if message.nil?
+
+    build.update!(byte_message: message)
+    return if old.nil? || old == message
+
+    FeatureBuild.where(byte_message_id: old.id).update_all(byte_message_id: message.id)
+    remove!(old)
+  end
+
+  def remove!(message)
+    message.destroy!
+    MonitorChannel.broadcast_to(message.user, {
+      id:      :byte,
+      channel: :byte,
+      data:    {
+        kind:                 :message_deleted,
+        message_id:           message.id,
+        byte_conversation_id: message.byte_conversation_id,
+      },
+    })
   end
 
   def announce_waiting!(build)
