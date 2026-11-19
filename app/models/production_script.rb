@@ -94,6 +94,7 @@ class ProductionScript < ApplicationRecord
 
   def repaint_cards
     ProductionScripts::Card.repaint!(self)
+    FeatureBuilder.repaint_script_links!(self) if saved_change_to_status?
   end
 
   def withdraw_approval

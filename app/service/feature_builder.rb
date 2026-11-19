@@ -342,6 +342,23 @@ module FeatureBuilder
     broadcast(message, update: true)
   end
 
+  # Each message about a build that links a script says, after the link, what
+  # the script is doing: rewritten whenever that changes.
+  def repaint_script_links!(script)
+    url = ProductionScripts::Card.url(script)
+    link = /\]\(#{Regexp.escape(url)}\) \([^)\n]*\)/
+    scope = ByteMessage.where(user_id: script.user_id).where("byte_messages.metadata->>'source' = 'feature_builder'")
+    scope = scope.where("byte_messages.metadata->>'kind' = 'system'")
+    scope = scope.where("byte_messages.body LIKE ?", "%(#{ActiveRecord::Base.sanitize_sql_like(url)}) (%")
+    scope.find_each { |message|
+      body = message.body.gsub(link, "](#{url}) (#{script.status_label})")
+      next if body == message.body
+
+      message.update!(body: body)
+      broadcast(message, update: true)
+    }
+  end
+
   def announce_pr!(build)
     links = [build.pr_markdown, build.link_markdown, *build.script_links]
     text = build.card("Ready for review#{build.scripts_note}", links: links)
@@ -688,6 +705,7 @@ module FeatureBuilder
     DataStorage[storage_key(machine)] = { reported_at: Time.current.iso8601(6), sessions: listed }
     if machine.to_s == "mini"
       answered_elsewhere!(listed)
+      repaint_open_cards!
       refresh_chip!(User.me)
       refresh_needs_you!(User.me)
       refresh_look!
@@ -701,6 +719,12 @@ module FeatureBuilder
 
     stored = DataStorage[storage_key(machine)].to_h.with_indifferent_access
     Array(stored[:sessions]).map { |session| session.to_h.stringify_keys }
+  end
+
+  # A card says whether its session is working or at rest, which only the
+  # Mini's report knows.
+  def repaint_open_cards!
+    FeatureBuild.where(status: :running).find_each(&:repaint_card)
   end
 
   # A build working again was answered some other way (the Claude app, the
@@ -728,6 +752,14 @@ module FeatureBuilder
     return :questions if session["kind"].to_s == "questions"
 
     conversations[session["conversation_id"].to_i]&.name == ByteDailyAudit::NAME ? :audit : :claude
+  end
+
+  # The sessions that stay open when they have nothing to do: idle, they're
+  # at rest rather than waiting on anyone.
+  AT_REST_KINDS = %i[questions quick claude audit].freeze
+
+  def at_rest?(kind)
+    AT_REST_KINDS.include?(kind)
   end
 
   # Two to four words on the chip, saying what is working right now. A builder

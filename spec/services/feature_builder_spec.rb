@@ -14,6 +14,7 @@ RSpec.describe FeatureBuilder do
     allow(FeatureBuilderFeedbackWorker).to receive(:perform_in)
     ActiveStorage::Current.url_options = { host: "example.com", protocol: "https" }
   }
+
   after { ActiveStorage::Current.url_options = nil }
 
   def pull_request(ref: branch, number: 42, merged: false)
@@ -443,6 +444,72 @@ RSpec.describe FeatureBuilder do
         ),
       )
     end
+
+    it "rewrites the label after each link as the script moves along" do
+      described_class.update_from_mini!(build, { "pr_number" => 42, "pr_url" => "https://github.com/x/pull/42" })
+      ready = thread.byte_messages.reload.find { |message| message.body.include?("Ready for review") }
+
+      script.update!(status: :approved)
+      expect(ready.reload.body).to include("[Add the dark mode task](#{link}) (approved, waiting for its deploy)")
+
+      script.update!(status: :succeeded)
+      expect(ready.reload.body).to include("[Add the dark mode task](#{link}) (ran)")
+      expect(ready.body).not_to include("waiting on approval")
+    end
+  end
+
+  describe "a build's card as it moves along" do
+    let(:pr) { { "pr_number" => 42, "pr_url" => "https://github.com/Rockster160/Portfolio/pull/42" } }
+
+    before { allow(ByteLocal).to receive(:builder).and_return(true) }
+
+    def card
+      build.byte_message.reload.body.lines.second.strip
+    end
+
+    def report(working)
+      described_class.report_sessions!(machine: :mini, sessions: [
+        { "build_id" => build.id, "kind" => "builder", "working" => working },
+      ])
+    end
+
+    it "says it's planning, then building, then waiting on its owner" do
+      build.update!(status: :running)
+      report(true)
+      expect(card).to eq("Planning on the Mini")
+
+      described_class.update_from_mini!(build, { "planned_at" => Time.current.iso8601 })
+      expect(card).to eq("Building on the Mini")
+
+      report(false)
+      expect(card).to eq("Waiting on you")
+    end
+
+    it "follows its PR through review, the queue, the merge and the deploy" do
+      build.update!(status: :running)
+      described_class.update_from_mini!(build, pr)
+      expect(card).to eq("Ready for review")
+
+      build.update!(approved_at: Time.current, landing_at: 1.hour.ago)
+      expect(card).to eq("Merging")
+
+      build.update!(landing_at: nil)
+      expect(card).to eq("Approved, in line to merge")
+
+      build.update!(merge_sha: "abc1234")
+      described_class.finished!(build, merged: true)
+      expect(card).to eq("Merged, deploying")
+
+      build.update!(deployed_at: Time.current)
+      expect(card).to eq("Shipped")
+    end
+
+    it "says a PR closed without merging" do
+      build.update!(status: :running, **pr.symbolize_keys)
+      described_class.finished!(build, merged: false)
+
+      expect(card).to eq("PR closed without merging")
+    end
   end
 
   describe "the merge queue" do
@@ -561,7 +628,7 @@ RSpec.describe FeatureBuilder do
     it "stays out of the merge queue, and shows the repo on its card and its PR" do
       expect(build.reload.queue_position).to be_nil
       expect(MergeQueue.builds(user)).to eq([portfolio_build])
-      expect(build.status_line).to include("Building in hass-config on the Mini")
+      expect(build.status_line).to include("Ready for review", "[hass-config PR #42]")
       expect(build.pr_markdown).to eq("[hass-config PR #42](https://github.com/#{hass}/pull/42)")
     end
 
@@ -1153,6 +1220,7 @@ RSpec.describe FeatureBuilder do
       expect(look(:reviewed)).to be_nil
     end
   end
+
   describe "a build carrying on from a /q" do
     let(:quick) {
       allow(FeatureBuildStartWorker).to receive(:perform_async)
@@ -1186,7 +1254,7 @@ RSpec.describe FeatureBuilder do
 
       described_class.update_from_mini!(child, { "closed_reason" => "No code needed: sent script #10." })
 
-      bodies = thread.byte_messages.reload.map(&:body)
+      bodies = thread.byte_messages.order(:id).map(&:body)
       expect(bodies.count { |body| body.include?("No code needed") }).to eq(1)
       expect(quick.byte_message.reload.body).to eq("**Automatic workout start reminder**\nClosed itself")
       expect(bodies.last).to start_with("**Automatic workout start reminder**\nClosed itself: No code needed")
