@@ -334,6 +334,14 @@ class BuddyEvalWorld
         reward_pebbles: 1, recurrence: { freq: :daily }
       )
     }
+    # A chore that shares its subject with a workout, so logging one has a
+    # chore beside it that it isn't.
+    @exercise = reuse(live.detect { |chore| chore.name.match?(/\Aexercise\z/i) }) {
+      Chore.create!(
+        created_by_user: user, chore_household: household, name: "Exercise",
+        reward_pebbles: 2, recurrence: { freq: :daily }
+      )
+    }
     completion!(@water)
     completion!(@recycling)
   end
