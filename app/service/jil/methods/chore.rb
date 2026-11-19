@@ -296,6 +296,23 @@ class Jil::Methods::Chore < Jil::Methods::Base
     row[:skipped_today] || row[:done_count_today].to_i >= row[:target_count].to_i
   end
 
+  # Chore.ask_who_did_it("Vitamins", at) → the chore was done at `at` (now when
+  # blank) by somebody the press can't tell apart. Marks it done by a stand-in
+  # and asks who it was, the same question every board press and logged event
+  # asks (see ChoreWhoDidIt). Returns the Prompt, or nil when no chore matches
+  # or there's nobody in the household to choose between.
+  def ask_who_did_it(name_or_chore, at=nil)
+    chore = load_chore(name_or_chore)
+    return nil if chore.nil?
+
+    ::ChoreWhoDidIt.ask!(
+      @jil.user,
+      chore,
+      at:          sanitize_time(at) || Time.current,
+      stand_in_on: chore.completion_leaf_for(@jil.user),
+    )
+  end
+
   # Chore.unmark_due("Vitamins") → clear the "needs to get done"
   # stamp without completing the chore. No-op when not stamped.
   # Returns the Chore (or nil if no match).

@@ -329,6 +329,7 @@
   #mark_due(String:Name)::Chore
   #unmark_due(String:Name)::Chore
   #done_today(String:Name)::Boolean
+  #ask_who_did_it(String:Name Date?:"Done At")::Prompt
   #sync_event(String:"Chore Name" ActionEvent Hash?:"Event Attrs")::Boolean
   #sync_completion(String:"Chore Name" Hash:"Completion" Hash:"Event Attrs")::Boolean
   #balance::Numeric
