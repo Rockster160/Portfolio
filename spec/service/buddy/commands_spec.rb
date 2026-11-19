@@ -165,6 +165,15 @@ RSpec.describe Buddy::Commands do
       expect(described_class.items(user, "Button 9").pluck("tool_name")).to eq(["ask_buddy"])
     end
 
+    it "still knows a button programmed under its own name", :aggregate_failures do
+      program!("Btn#9", [chill_item], button: "Btn#9")
+      program!("Btn#9", [ask_item], button: "Btn#9")
+
+      expect(described_class.button(user, "button 9")).to eq("Btn#9")
+      expect(user.tasks.where(name: "Btn#9").count).to eq(1)
+      expect(described_class.items(user, "Btn#9").pluck("tool_name")).to eq(["ask_buddy"])
+    end
+
     it "listens for one kind of press when it's given" do
       program!("Remote hold", [chill_item], button: "remote", press: "hold")
 

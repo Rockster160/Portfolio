@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :complete_chore,
-  summary:     "Mark a household chore done (count for repeats, e.g. waters). A drink or meal to " \
-               "track is log_event.",
+  summary:     "Mark a household chore done (count for repeats, e.g. waters). A drink, meal or " \
+               "workout to track is log_event.",
   always:      true,
   description: <<~TXT,
     Mark a chore as done. Use it when one is DONE: "took the bins out", "fed

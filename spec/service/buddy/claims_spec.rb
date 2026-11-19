@@ -39,6 +39,14 @@ RSpec.describe Buddy::Claims do
     expect(hits).to be_empty
   end
 
+  it "takes a new chore as backing an add to the Today list" do
+    sentence = "Added Stretch as a daily chore, high priority, so it sits near the top of your Today list."
+    hits = described_class.unbacked(sentence, ran: Set[:create_chore])
+
+    expect(hits).to be_empty
+    expect(described_class.unbacked(sentence, ran: Set.new)).not_to be_empty
+  end
+
   it "takes an event added to a bolded calendar as backing an add" do
     hits = described_class.unbacked("Added Leon's brunch to **Ours** for Saturday at 10.", ran: Set[:add_agenda_item])
 

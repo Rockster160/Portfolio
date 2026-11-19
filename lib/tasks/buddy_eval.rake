@@ -728,6 +728,16 @@ BUDDY_EDGE_PROBES = [
     note:  "calories and duration went into notes, so the calorie tracker asked for them again, " \
            "and the duration was later stored as seconds",
   },
+  {
+    case:  "prod 11483",
+    say:   "Log a workout at Lowe's. 90m starting at 3. 700 cal",
+    tool:  :log_event,
+    avoid: %i[complete_chore],
+    needs: :exercise_chore,
+    args:  { log_event: { name: /workout/i } },
+    note:  "a workout became a completion of their Exercise chore, with the place, minutes and " \
+           "calories as a note, instead of a Workout event",
+  },
   # --- one request, several things, later -----------------------------------
   # Asked for directly: three things on one condition and a time-and-device
   # rule, all with nothing run now. The pieces existed as a `steps` JSON field

@@ -42,9 +42,13 @@ module Buddy
     end
 
     # Every button that has reported a press, by the name the house gives it.
-    # A task can record its own press under its key, and those aren't devices.
+    # A task can record its own press under its key, and those aren't devices,
+    # unless a key's listener is bound to that name: a button programmed under
+    # its own name ("Btn#6") is still that button.
     def buttons(user)
-      taken = keys(user).map(&:downcase)
+      taken = slots(user).filter_map { |key, listener|
+        key.downcase unless listener[/device_name::"([^"]+)"/, 1]&.casecmp?(key)
+      }
       presses = user.caches.get(:hass).to_h.select { |_, entry|
         entry.is_a?(Hash) && entry.with_indifferent_access[:state].to_s.match?(PRESS_RX)
       }
