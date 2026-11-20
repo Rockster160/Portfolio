@@ -183,6 +183,42 @@ RSpec.describe "BuddyMemory lifecycle" do
       end
     end
 
+    describe "bringing a held fact up to date" do
+      let!(:count) {
+        BuddyMemory.create!(
+          user: user, kind: :followup, summary: "Gulliver count",
+          content: "Nine Gulliver rescues are left out of ten.",
+        )
+      }
+
+      def replace(fact, id)
+        Buddy::SideEffects.call(
+          user.byte_conversations.create!(mode: :buddy, name: "Byte"),
+          :remember,
+          { fact: fact, replaces: id },
+        )
+      end
+
+      it "rewrites the row it names and keeps the old wording on its thread", :aggregate_failures do
+        expect { replace("Eight Gulliver rescues are left out of ten.", count.id) }.not_to change { BuddyMemory.count }
+
+        expect(count.reload.content).not_to include("Nine")
+        expect(count.content).to eq("Eight Gulliver rescues are left out of ten.")
+        expect(count.notes.map(&:body)).to include("Was: Nine Gulliver rescues are left out of ten.")
+      end
+
+      it "never rewrites a stashed idea or someone else's row", :aggregate_failures do
+        idea = BuddyMemory.create!(user: user, kind: :stash, content: "Build a greenhouse")
+        theirs = BuddyMemory.create!(user: create(:user), kind: :concept, content: "Their own fact")
+
+        replace("Build a solar greenhouse", idea.id)
+        replace("Rewritten", theirs.id)
+
+        expect(idea.reload.content).to eq("Build a greenhouse")
+        expect(theirs.reload.content).to eq("Their own fact")
+      end
+    end
+
     describe BuddyMemoryPruneWorker do
       it "deletes expired memories with their notes but keeps durable ones", :aggregate_failures do
         expired = BuddyMemory.create!(user: user, content: "gone", expires_at: 1.minute.ago)

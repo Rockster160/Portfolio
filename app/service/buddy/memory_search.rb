@@ -35,25 +35,39 @@ module Buddy
       scope = scope.where(id: BuddyMemoryNote.select(:buddy_memory_id)) if threads_only
 
       ordered = scope.order(Arel.sql("severity DESC, COALESCE(last_touched_at, created_at) DESC"))
-      { memories: ordered.limit(limit).includes(:notes).to_a, total: scope.count }
+      { memories: ordered.limit(limit).includes(:notes).to_a, total: scope.unscope(:order).count }
     end
 
     # A plain OR across the content, the summary and the notes. Deliberately not
     # the tokenizing query syntax the events search uses: a memory has no fields
     # worth addressing individually, and every term someone would search for is
     # somewhere in the prose.
+    #
+    # Every word first. A query written as a bag of words - "Gulliver rescued
+    # count logged" - rarely has all of them in one row, so when nothing holds
+    # every word, any word will do, and the rows holding the most come first.
     def matching(scope, query)
       words = query.to_s.split(/\s+/).map(&:strip).compact_blank
       return scope if words.empty?
 
-      words.reduce(scope) { |acc, word|
-        like = "%#{sanitize_like(word)}%"
-        acc.where(
-          "buddy_memories.content ILIKE :q OR buddy_memories.summary ILIKE :q OR buddy_memories.id IN (" \
-          "SELECT buddy_memory_id FROM buddy_memory_notes WHERE body ILIKE :q)",
-          q: like,
-        )
+      every = words.reduce(scope) { |acc, word| acc.where(HOLDS_WORD, q: like(word)) }
+      return every if every.exists?
+
+      held = words.select { |word| word.length >= 3 }.map { |word|
+        BuddyMemory.sanitize_sql_array([HOLDS_WORD, { q: like(word) }])
       }
+      return every if held.empty?
+
+      scope.where(held.map { |sql| "(#{sql})" }.join(" OR ")).order(
+        Arel.sql("#{held.map { |sql| "(CASE WHEN #{sql} THEN 1 ELSE 0 END)" }.join(" + ")} DESC"),
+      )
+    end
+
+    HOLDS_WORD = "buddy_memories.content ILIKE :q OR buddy_memories.summary ILIKE :q OR " \
+                 "buddy_memories.id IN (SELECT buddy_memory_id FROM buddy_memory_notes WHERE body ILIKE :q)"
+
+    def like(word)
+      "%#{sanitize_like(word)}%"
     end
 
     # Tag containment, OR across the terms — someone asking about camping wants
@@ -87,10 +101,13 @@ module Buddy
       memories.map { |memory| row(memory, now) }
     end
 
+    # A summary is a label and carries none of the facts - "Gulliver count" has
+    # no count in it - so the content always follows it, given the room a whole
+    # sentence needs.
     def row(memory, now=Time.current)
       bits = ["##{memory.id}"]
-      bits << memory.summary.presence.to_s.strip if memory.summary.present?
-      bits << memory.content.to_s.strip.truncate(90) if memory.summary.blank?
+      bits << "#{memory.summary.strip}:" if memory.summary.present?
+      bits << memory.content.to_s.strip.truncate(160)
       bits << "(#{labels(memory, now).join(", ")})"
       latest = memory.notes.last
       bits << "— latest: #{latest.body.to_s.strip.truncate(70)}" if latest

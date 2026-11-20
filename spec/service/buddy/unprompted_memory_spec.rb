@@ -199,6 +199,42 @@ RSpec.describe Buddy::UnpromptedMemory do
     end
   end
 
+  describe "a chore the seed carried" do
+    let(:note) {
+      Struct.new(:content, :kind_preference?).new(
+        "Jil needs explicit daytime context when scheduling time-based things.",
+        false,
+      )
+    }
+    let(:seeded) {
+      {
+        jobs:    [{ name: "Refill Kitty Food", due_today: true }, { name: "Gather Bins", group: "Trash" }],
+        weather: { notable: "snow" },
+      }
+    }
+
+    def chores(body) = described_class.trim(body, [note], seeded)
+
+    it "keeps a sentence naming one however it is worded", :aggregate_failures do
+      [
+        "Morning! Kitty food needs a refill today, and Fae will want that sorted.",
+        "Morning! It's trash day, so the bins need to go out.",
+      ].each { |body| expect(chores(body)).to eq(body), body }
+    end
+
+    it "still drops a sentence naming the note and no chore" do
+      expect(chores("Morning! Jil still needs that daytime context.")).to eq("Morning!")
+    end
+  end
+
+  # A blank line starts a new beat, so a sentence opening one points back at
+  # nothing that was cut before it.
+  it "keeps a paragraph opening with \"it\" after a cut" do
+    body = "Morning!\n\nI'm holding that audit note for you.\n\nIt's snowing today, so bundle up."
+
+    expect(trim(body)).to eq("Morning!\n\nIt's snowing today, so bundle up.")
+  end
+
   it "is not a veto on a sentence for sharing a preposition with a carried memory", :aggregate_failures do
     held_back = [held.new("Worried about what happens before the review")]
     [

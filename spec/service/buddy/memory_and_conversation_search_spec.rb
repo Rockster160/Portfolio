@@ -60,6 +60,31 @@ RSpec.describe "Buddy recall" do
 
       expect(out[:memories].join(" ")).to include("##{once.id}")
     end
+
+    it "hands back what a labelled memory says, not only its label" do
+      user.buddy_memories.create!(
+        kind: :followup, summary: "Gulliver count", severity: 10,
+        content: "Rocco is tracking a running count for rescuing Gulliver, and nine rescues are left " \
+                 "after he said he had rescued him once out of ten.",
+      )
+
+      out = answer(:search_memories, { query: "Gulliver" })
+
+      expect(out[:memories].join(" ")).to include("Gulliver count", "nine rescues are left")
+    end
+
+    it "finds a row by the words it holds when the query also has words it doesn't", :aggregate_failures do
+      count = user.buddy_memories.create!(kind: :followup, content: "Nine Gulliver rescues are left out of ten.")
+      rescue_only = user.buddy_memories.create!(kind: :concept, content: "Two cat rescues at the shelter this year.")
+      user.buddy_memories.create!(kind: :concept, content: "The boiler needs bleeding.")
+
+      out = answer(:search_memories, { query: "Gulliver rescues count logged" })
+
+      expect(out[:memories].first).to include("##{count.id}")
+      expect(out[:memories].join(" ")).to include("##{rescue_only.id}")
+      expect(out[:memories].join(" ")).not_to include("boiler")
+      expect(answer(:search_memories, { query: "Gulliver rescues" })[:total]).to eq(1)
+    end
   end
 
   describe "search_conversations" do

@@ -68,7 +68,14 @@ module Buddy
       when :sort_stash then Buddy::Stash.apply_sort(user, args, conversation: conversation)
       when :add_note   then apply_note(conversation, args[:fact])
       when :remember
-        apply_remember(user, args[:fact], args[:expires_in], args[:check_in_days], relevant_days: args[:relevant_days])
+        apply_remember(
+          user,
+          args[:fact],
+          args[:expires_in],
+          args[:check_in_days],
+          relevant_days: args[:relevant_days],
+          replaces:      args[:replaces],
+        )
       when :forget     then apply_forget(user, args[:match])
       else false
       end
@@ -102,7 +109,9 @@ module Buddy
           "through, what is coming up for them, how they want to be handled while it lasts. That " \
           "last kind takes `expires_in`, and `check_in_days` too when it is the sort of thing you " \
           "would ask a friend about again. Not conversational trivia, not this turn's mood, not " \
-          "counts. One fact per call. Silent.",
+          "a tally of things they log. A running count they asked you to keep IS a fact: each " \
+          "time it moves, write it whole with the new figure and pass `replaces`. One fact per " \
+          "call. Silent.",
           {
             fact:          {
               type:        :string,
@@ -134,6 +143,13 @@ module Buddy
               description: "Days from now until the thing this is about actually arrives, when that " \
                            "is ahead. Count from what they said, and for something that comes round " \
                            "on a regular rhythm, from that rhythm. A check-in never lands before it",
+            },
+            replaces:      {
+              type:        :integer,
+              required:    false,
+              description: "The #id of a fact you already hold that this one brings up to date - " \
+                           "a figure that moved, a detail that changed - from search_memories. " \
+                           "Its wording is rewritten instead of a second one being started",
             },
           },
         ),
@@ -194,9 +210,12 @@ module Buddy
     # claims. A reinforced near-duplicate counts: the person asked for it to be
     # remembered and it is remembered, and answering that with a retraction is
     # the wrong fact twice over.
-    def apply_remember(user, fact, expires_in=nil, check_in_days=nil, relevant_days: nil) # rubocop:disable Naming/PredicateMethod -- it writes; `?` would imply a query
+    def apply_remember(user, fact, expires_in=nil, check_in_days=nil, relevant_days: nil, replaces: nil) # rubocop:disable Naming/PredicateMethod -- it writes; `?` would imply a query
       fact = fact.to_s.strip
       return false if fact.empty?
+
+      held = replaceable(user, replaces)
+      return revise(held, fact) if held
 
       ttl = parse_duration(expires_in, user) || implied_ttl(fact, user)
       relevant_at = relevant_days.to_i.days.from_now if relevant_days.present? && relevant_days.to_i.positive?
@@ -330,6 +349,26 @@ module Buddy
       return Time.current.end_of_day + offset.days if user.nil?
 
       Buddy::Day.range(user, date: Buddy::Day.today(user) + offset).last
+    end
+
+    # The row a `replaces` names, when it is theirs and is a fact. A stashed
+    # idea changes through the stash tools, which leave a card they can undo.
+    def replaceable(user, id)
+      return if id.blank?
+
+      BuddyMemory.where(user: user).where.not(kind: :stash).find_by(id: id.to_i)
+    end
+
+    # A fact that moved on is the same fact, newer - "nine left" becoming
+    # "eight left" shares nearly every word, so the matcher below would only
+    # bump the old wording. The version it replaces goes on the row's thread,
+    # the same as Buddy::Compile's `revise_memory`, so a bad rewrite is visible.
+    def revise(memory, fact)
+      return true if memory.content == fact
+
+      memory.notes.create!(body: "Was: #{memory.content.to_s.truncate(400)}", source: :companion)
+      memory.update!(content: fact.first(BuddyMemory::MAX_CONTENT), last_used_at: Time.current)
+      true
     end
 
     # An active memory that's effectively the same fact. Three ways to be the

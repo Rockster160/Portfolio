@@ -893,7 +893,10 @@ module Buddy
       # today's arithmetic. "with my period about 6 days away", written on the
       # 10th and rendered bare on the 12th, came out of a briefing as six days
       # from that morning - stated as if she had just said it.
-      lines = rows.map { |m| "- (#{m.waiting_label}) #{m.content.to_s.strip}" }
+      #
+      # The id is what `remember`'s `replaces` takes, so a line here that moves
+      # on - a count going down - can be rewritten without a lookup first.
+      lines = rows.map { |m| "- ##{m.id} (#{m.waiting_label}) #{m.content.to_s.strip}" }
       <<~TXT
         ## What you're holding for #{user.first_name}
 

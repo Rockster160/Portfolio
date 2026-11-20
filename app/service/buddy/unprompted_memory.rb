@@ -80,13 +80,13 @@ module Buddy
 
         # A sentence pointing back at the one just cut goes with it - otherwise
         # "That one's been sitting for 9 weeks" lands on whatever was said
-        # before it.
-        orphaned = dropped && part.match?(BACK_REFERENCE)
-        dropped = orphaned || (
-          !seed_item?(part, facts) && (
-            names?(part, private_words, at_least: 1) ||
-            loose_sets.any? { |words| names?(part, words, at_least: 2) }
-          )
+        # before it. Only inside the same paragraph: a blank line starts a new
+        # beat, and "It's snowing today" opening one is about the weather.
+        orphaned = dropped && !kept.last.to_s.include?("\n\n") && part.match?(BACK_REFERENCE)
+        dropped = !seed_item?(part, facts) && (
+          orphaned ||
+          names?(part, private_words, at_least: 1) ||
+          loose_sets.any? { |words| names?(part, words, at_least: 2) }
         )
         if dropped
           Rails.logger.info("[Buddy::UnpromptedMemory] dropped a sentence naming a prompt-resident memory")
@@ -148,10 +148,29 @@ module Buddy
     # A stashed thought the seed handed over is the same: ON THEIR MIND asks
     # for it by name, so the sentence floating it is doing what it was told,
     # whatever a preference note shares with the words around it.
+    #
+    # So is a chore the seed listed under JOBS TODAY.
     def seed_item?(part, facts)
       return false unless facts.is_a?(::Hash)
 
-      Buddy::SeedItem.any_named_in?(part, facts) || seed_stash_named?(part, facts)
+      Buddy::SeedItem.any_named_in?(part, facts) ||
+        seed_stash_named?(part, facts) ||
+        seed_job_named?(part, facts)
+    end
+
+    # A chore reaches a sentence conjugated and reordered - "Refill Kitty Food"
+    # comes back as "Kitty food needs a refill" - so it is matched on words
+    # rather than the title: half of its name's own, or its group, which is
+    # what a summarized day says instead ("it's trash day").
+    def seed_job_named?(part, facts)
+      words = Buddy::Flourish.significant(part).to_set
+      Array(facts[:jobs]).any? { |job|
+        next false unless job.is_a?(::Hash)
+
+        name = Buddy::Flourish.significant(job[:name]).select { |word| word.length >= 4 }
+        Buddy::Flourish.significant(job[:group]).any? { |word| words.include?(word) } ||
+          (name.any? && name.count { |word| words.include?(word) } * 2 >= name.length)
+      }
     end
 
     def seed_stash_named?(part, facts)

@@ -225,6 +225,7 @@ module Buddy
         bits << memory.status unless memory.status_active?
         bits << memory.content.to_s.squish.truncate(220)
         bits << "(tags: #{memory.tag_list.join(", ")})" if memory.tag_list.any?
+        bits << Buddy::Compile::REWRITTEN if Buddy::Compile.rewritten_since?(memory, @messages.first&.created_at)
         "- #{bits.join(" ")}"
       end
 

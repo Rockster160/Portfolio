@@ -157,6 +157,17 @@ BUDDY_EVAL_DAY = ->(word, offset) {
   ->(got) { got.match?(/\A#{word}\z/i) || got == (User.me.perceived_today + offset).iso8601 }
 }
 
+# A running count Byte keeps for them, as `remember` writes one: the ask and
+# the figure on one line, which rides in every prompt with its id.
+BUDDY_EVAL_GULLIVER_COUNT = ->(user) {
+  BuddyMemory.create!(
+    user:    user,
+    kind:    :preference,
+    content: "Rocco is rescuing Gulliver 10 times in Animal Crossing and has 9 rescues left. " \
+             "Each rescue is one fewer, kept here only - not a chore and not a logged event.",
+  )
+}
+
 BUDDY_TOOL_PROBES = {
   # --- logging, chores, lists ---
   log_event:              { say: "ate a sandwich", avoid: %i[complete_chore] },
@@ -886,6 +897,42 @@ BUDDY_EDGE_PROBES = [
       convo.byte_messages.create!(
         user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
         body: "That sounds like a side quest that got away from you. What happened?",
+      )
+    },
+  },
+  # The count is held as a memory Byte wrote itself, and a rescue moves it.
+  {
+    case:  "prod 11768",
+    say:   "Just rescued Gulliver",
+    tool:  :remember,
+    args:  { remember: { replaces: /\d/, fact: /\b(?:8|eight)\b/i } },
+    avoid: %i[log_event complete_chore],
+    note:  "logged a \"Rescued Gulliver\" event and said it would leave the count there - " \
+           "`remember` refused counts and could only add a row or bump one, never move a figure",
+    seed:  ->(user, _convo) { BUDDY_EVAL_GULLIVER_COUNT.call(user) },
+  },
+  {
+    case:         "prod 11770",
+    say:          "How many more do I have?",
+    tool:         :search_memories,
+    avoid:        %i[log_event complete_chore],
+    expect_reply: /\b(?:8|eight)\b/i,
+    never_reply:  /don.t have the (?:number|count)|isn.t coming back/i,
+    note:         "found the \"Gulliver count\" note and said the figure wasn't coming back to it - " \
+                  "a labelled memory's search row was the label alone, with no count in it",
+    seed:         ->(user, convo) {
+      BuddyMemory.create!(
+        user:     user,
+        kind:     :followup,
+        severity: 10,
+        summary:  "Gulliver count",
+        content:  "Rocco is tracking a running count for rescuing Gulliver, and nine rescues are " \
+                  "left after he said he had rescued him once out of ten.",
+      )
+      convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Rescued Gulliver")
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        body: "Another one for the count!",
       )
     },
   },
@@ -4442,13 +4489,14 @@ namespace :buddy do
     client.finish if client.respond_to?(:finish)
   end
 
-  # `BUDDY_EVAL_MODEL` puts the turn to another model. A Claude one goes to
-  # Claude Code on the Mac Mini, the same client production's turns use, with
-  # no fallback so a miss is Claude's. Each round's timings go to
+  # The model production's turns use: Claude Code on the Mac Mini, through the
+  # same client, with no fallback so a miss is Claude's. OpenAI only answers a
+  # production turn the Mini can't, so `BUDDY_EVAL_MODEL=gpt-5.4-mini` is for
+  # checking that backup, not the default. Each round's timings go to
   # tmp/buddy_eval/mini_rounds.jsonl.
   def eval_client
     model = ENV["BUDDY_EVAL_MODEL"].to_s
-    return Buddy::GPT::Client.new(model: model) unless model.start_with?("claude-")
+    return Buddy::GPT::Client.new(model: model) if model.start_with?("gpt-")
 
     Buddy::GPT::ClaudeClient.new(
       model:      model,

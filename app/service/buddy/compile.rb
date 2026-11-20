@@ -58,6 +58,12 @@ module Buddy
     # good at, it's the work Buddy needs done quietly.
     MODEL = "gpt-5.4-mini".freeze
 
+    # The companion can rewrite a row in the moment (`remember` with
+    # `replaces`), and a count it already moved must not be moved again for the
+    # same message. A rewrite leaves its "Was:" note, so one dated inside the
+    # stretch is the companion having got there first.
+    REWRITTEN = "(already rewritten during this stretch)".freeze
+
     # Kinds that aren't somebody talking. Same list Buddy::IdeaDwell skips, for
     # the same reason: a doorbell notification should not get a vote on what the
     # conversation was about. `jarvis` is a "." aside — a house command said
@@ -233,6 +239,14 @@ module Buddy
       revise when THIS conversation gave you a reason to. Tidying for its own
       sake, across rows nobody mentioned, is how a memory quietly turns into
       something they never said.
+
+      A COUNT THEY ARE KEEPING MOVES; IT DOES NOT CLOSE. When a held row carries
+      a running figure - rescues left, days to go, pages read - and the stretch
+      reports another one, `revise_memory` that row with the new figure, worked
+      out from the one it holds. Whatever the companion said or did about it at
+      the time, the figure lives in that row and nowhere else. It is `done` only
+      once the figure reaches the end. A row marked #{REWRITTEN} was already
+      moved by the companion for this stretch - leave its figure alone.
 
       SEVERITY, 0-100
 
@@ -537,7 +551,7 @@ module Buddy
         AVAILABLE FACES: #{Buddy::Faces.selectable(conversation.buddy_theme).join(", ")}
 
         ALREADY KEPT (do not repeat any of these):
-        #{existing(user)}
+        #{existing(user, since: messages.first&.created_at)}
 
         FOLLOW-UPS ALREADY SCHEDULED (update these by id if the conversation touched them):
         #{pending(user, now: now)}
@@ -645,11 +659,20 @@ module Buddy
     # at 80 characters. It used to be labels only — enough to avoid writing a
     # fourth copy of the same fact, and not enough to fix the three already
     # there.
-    def existing(user)
-      rows = BuddyMemory.where(user: user).unexpired.for_recall.limit(40).to_a
+    def existing(user, since: nil)
+      rows = BuddyMemory.where(user: user).unexpired.for_recall.limit(40).includes(:notes).to_a
       return "(nothing yet)" if rows.empty?
 
-      rows.map { |m| "- ##{m.id} [#{m.kind}] #{m.content.to_s.squish.truncate(200)}" }.join("\n")
+      rows.map { |m|
+        line = "- ##{m.id} [#{m.kind}] #{m.content.to_s.squish.truncate(200)}"
+        rewritten_since?(m, since) ? "#{line} #{REWRITTEN}" : line
+      }.join("\n")
+    end
+
+    def rewritten_since?(memory, since)
+      return false if since.nil?
+
+      memory.notes.any? { |note| note.created_at >= since && note.body.to_s.start_with?("Was: ") }
     end
 
     # Timestamped, and marked where the last run stopped reading. Both are
