@@ -937,6 +937,45 @@ BUDDY_EDGE_PROBES = [
     },
   },
 
+  # --- a scheduled message that has to be worked out when it goes off --------
+  {
+    case:  "prod 11814",
+    say:   "Can you please let me know at 9pm each evening what the weather forecast is for each day?",
+    tool:  :schedule_reminder,
+    args:  { schedule_reminder: { kind: "prompt", repeat: /daily:21:00/ } },
+    avoid: %i[request_feature],
+    note:  "set the 9pm reminder and in the next turn said it couldn't do it yet, filing a " \
+           "feature request for a message the reminder it had just set would send",
+  },
+  {
+    case:  "prod 11805",
+    say:   "How about 9am?",
+    tool:  :schedule_reminder,
+    args:  { schedule_reminder: { kind: "prompt", repeat: /daily:09:00/ } },
+    note:  "a daily count to Memorial Day was set as a plain reminder reading \"Memorial Day " \
+           "count\", which says those words every morning and never the number",
+    seed:  ->(user, convo) {
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "Can you keep a daily count to Memorial day?",
+      )
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        body: "I can do that! What time each day would you like the Memorial Day count to pop up?",
+      )
+    },
+  },
+  {
+    case:         "prod 11814, firing",
+    # Buddy::CompanionDelivery::SEED_FRAME, as the fired reminder sends it.
+    say:          "[nothing was said to you - this fired on its own at 9:00pm, and your reply is " \
+                  "the notification] Look up the forecast for the coming days and tell them what " \
+                  "each day's weather will be.",
+    tool:         :check_weather,
+    expect_reply: /\b(?:mon|tue|wed|thu|fri|sat|sun|tomorrow)/i,
+    note:         "the 9pm reminder fires a turn with its text as the instruction, and that turn " \
+                  "has to look the forecast up rather than tell them to check it",
+  },
+
   # --- an interview booked out loud, with no mail behind it -----------------
   {
     case:  "prod 9371",

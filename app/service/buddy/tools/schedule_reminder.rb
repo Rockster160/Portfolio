@@ -1,9 +1,8 @@
 Buddy::Tools.register(
   name:        :schedule_reminder,
-  summary:     "Remind them, or a partner: \"at 6\", \"tomorrow morning\" (9am), \"30m before " \
-               "any interview\", \"10 days before anyone's birthday\", \"before I go\", " \
-               "\"when a chore's due\", \"9pm daily unless I've showered\", \"at 11 if the " \
-               "garage is open and I'm out\".",
+  summary:     "Remind them, or a partner: \"at 6\", \"30m before any interview\", \"before I " \
+               "go\", \"9pm daily unless I've showered\". Or a message worked out fresh each " \
+               "time: \"the forecast every night at 9\", \"a daily countdown to my trip\".",
   description: <<~TXT,
     Schedule a nudge to fire at a future local time. Use when the person
     says "remind me to X at Y", "at 3pm ping me about the vet appt",
@@ -34,7 +33,8 @@ Buddy::Tools.register(
     aimed at them, and the two are almost never the same sentence. "Please ping
     me when it's time to do that!" stored verbatim arrives as a message asking
     them to ask you, at the moment they were supposed to be told what to do.
-    Write the action itself, as the nudge they'll read.
+    Write the action itself, as the nudge they'll read. (A `prompt` reminder is
+    the one exception - see `kind`.)
 
     `notify` aims it at SOMEBODY ELSE in the house, and that makes it a MESSAGE
     from this person that leaves later. "Send Chelsea a cute note in 10
@@ -111,11 +111,19 @@ Buddy::Tools.register(
     YYYY-MM-DD) stops it repeating after that day.
 
     `kind` controls what happens at fire time:
-      "reminder" (default) - plain text nudge + push notification.
-      "prompt" - fresh Buddy turn triggered with `text` as the seed.
-        Use for "check in with me every day at 9" where you want Buddy
-        to compose a fresh check-in each time, not repeat the exact
-        same words.
+      "reminder" (default) - plain text nudge + push notification. The
+        words are fixed the moment it's set and arrive the same every time.
+      "prompt" - a fresh turn of yours when it comes due, with your tools,
+        and what you write then is the message they get. Anything that has
+        to be LOOKED UP or WORKED OUT when it goes off is this: the forecast
+        every evening, a daily count of the days left until a date, what's
+        on today, a check-in in your own words. As a plain reminder, "daily
+        Memorial Day count" arrives every morning as those words and never
+        the number.
+        For a "prompt", `text` is the instruction to yourself at that moment,
+        not what they'll read: "Look up the forecast for the coming days and
+        tell them each day's weather", "Tell them how many days are left
+        until Memorial Day, Monday 31 May 2027".
 
     **A reminder whose text contains an "if" needs a check, or the "if" is
     decorative.** "Charge the car if the chore isn't done yet" with no check is
@@ -311,7 +319,8 @@ Buddy::Tools.register(
                    "days later, out of any context, and it is the whole message they get. " \
                    "Name the thing, and its time if it has one, never a bare \"time to go\" or " \
                    "\"get ready\". A nudge that doesn't say what it is for makes them come and " \
-                   "ask you.",
+                   "ask you. With `kind: prompt` it is your instruction for when it goes off " \
+                   "instead.",
     },
     at:            { type: :string, required: false, description: "First fire time (ISO datetime). Required for one-shot." },
     anchor:        {
@@ -347,7 +356,16 @@ Buddy::Tools.register(
     only_if_any:   { type: :boolean, required: false, description: "Fire when ANY of `only_if` holds instead of all of them." },
     steps:         { type: :string, required: false, description: "JSON array of {tool_name, payload} to RUN when it fires, in order - save_routine's shape. `text` is the line posted above them." },
     then_run_rest: { type: :boolean, required: false, description: "The calls you make after this one in this reply are what it RUNS when it fires, instead of happening now." },
-    kind:          { type: :enum,   required: false, default: :reminder, values: %i[reminder prompt] },
+    kind:          {
+      type:        :enum,
+      required:    false,
+      default:     :reminder,
+      values:      %i[reminder prompt],
+      description: "`prompt` when what it says has to be looked up or worked out when it goes off - " \
+                   "the forecast, a count of days left, what's on today: you get a turn then, " \
+                   "with your tools, and `text` is your instruction for it. `reminder` posts " \
+                   "`text` exactly as written, the same every time.",
+    },
     notify:        { type: :string, required: false, description: "Household member this reminder is FOR, if not the person asking" },
   },
   confirm: ->(payload, ctx) {

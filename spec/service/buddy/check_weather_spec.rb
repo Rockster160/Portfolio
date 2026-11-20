@@ -31,6 +31,21 @@ RSpec.describe "check_weather tool" do
     expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
   end
 
+  it "hands back the coming days as well, each by name" do
+    allow(WeatherService).to receive(:summary).and_return("currently 38°F, snow.")
+    allow(WeatherService).to receive(:week_days)
+      .with(lat: WeatherService::HOME_LAT, lng: WeatherService::HOME_LNG, user: user)
+      .and_return([
+        { date: Date.new(2026, 11, 21), high: 36, low: 27, rain: 60, sky: "Snow", clouds: 56, notable: "snow" },
+        { date: Date.new(2026, 11, 22), high: 41, low: 22, rain: 0, sky: "Clouds", clouds: 56, notable: nil },
+      ])
+
+    days = read({})[:days]
+
+    expect(days.map { |day| day[:day] }).to eq(["Saturday", "Sunday"])
+    expect(days.first).to include(high: 36, low: 27, rain: 60, sky: "Snow")
+  end
+
   it "resolves a named saved place and reads it there" do
     contact = user.contacts.create!(name: "The Gym")
     contact.addresses.create!(user: user, street: "1 Fit Way", lat: 40.6, lng: -111.8, primary: true)

@@ -11,11 +11,16 @@
 # kept by hand.
 Buddy::Tools.register(
   name:        :check_weather,
-  summary:     "Current weather and today's high/low, at home or another place.",
+  summary:     "Current weather, today's high/low and the coming week day by day, at home or " \
+               "another place.",
   description: <<~TXT,
     Look up the current weather + today's high/low for a place, then tell the
     person about it in your own words. Use whenever they ask about the weather,
     whether to bring a jacket, if it'll rain, how hot it'll get, etc.
+
+    `days` comes back too: the coming week, one row per day by name, with its
+    high, low, chance of rain and sky. That is the forecast for "what's the
+    weekend looking like" or "the weather for each day".
 
     `location` is OPTIONAL:
       - omit it for home / local weather ("what's it like out?").
@@ -53,9 +58,24 @@ Buddy::Tools.register(
 
     raise "the weather service didn't answer for #{label}" if summary.to_s.strip.empty?
 
+    # The week is extra: a forecast that fails to come back still leaves the
+    # reading, which is what most questions are about.
+    days = (
+      begin
+        lat && lng ? WeatherService.week_days(lat: lat.to_f, lng: lng.to_f, user: ctx.user) : []
+      rescue StandardError
+        []
+      end
+    )
+
     {
       place:   label,
       reading: summary,
+      days:    days.map { |day|
+        { day: day[:date].strftime("%A"), date: day[:date].iso8601 }.merge(
+          day.slice(:high, :low, :rain, :sky, :notable).compact,
+        )
+      },
       how:     "Tell them in your own words - warm and brief - factoring in whatever they were " \
                "asking about. Don't recite the raw numbers as a list.",
     }
