@@ -21,7 +21,23 @@ module Buddy
   module PlungeAdvisor
     module_function
 
+    # Where the weather is read: the saved place they call "Plunge", or the
+    # middle of Alpine when that place or its coordinates are missing.
+    PLACE_NAME = "Plunge".freeze
     ALPINE = { lat: 40.4527, lng: -111.7688 }.freeze
+
+    def spot(user)
+      book = user.address_book
+      loc = book.contact_place(PLACE_NAME)&.loc
+      return ALPINE unless book.valid_loc?(loc)
+
+      { lat: loc[0].to_f, lng: loc[1].to_f }
+    end
+
+    def forecast(user)
+      point = spot(user)
+      WeatherService.data(lat: point[:lat], lng: point[:lng])
+    end
 
     RAINY_MAINS   = %w[Rain Drizzle Thunderstorm Snow].freeze
     DRIVE_MINUTES = 30          # rough Alpine round-trip leg
@@ -63,7 +79,7 @@ module Buddy
     # guesses at somebody's day and came out sounding presumptuous on days that
     # were in fact wide open.
     def briefing_lines(user, now: Time.current)
-      data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
+      data = forecast(user)
       return [] if data.blank?
 
       tz = Buddy::Day.zone(user).name
@@ -81,7 +97,7 @@ module Buddy
     # know what it asked for before it can tell that the briefing didn't say
     # it. Empty whenever the block itself would be.
     def today_rain_windows(user, now: Time.current)
-      data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
+      data = forecast(user)
       return [] if data.blank?
 
       a = analyze(data, user, Buddy::Day.zone(user).name, now)
@@ -110,7 +126,7 @@ module Buddy
     # The same days as `week_rain_lines`, as data: a `window` where the hourly
     # forecast reaches, and a `kind` and `pop` where it doesn't.
     def week_rain(user, now: Time.current)
-      data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
+      data = forecast(user)
       return [] if data.blank?
 
       tz     = Buddy::Day.zone(user).name
@@ -125,7 +141,7 @@ module Buddy
     # has room for: the hours where there are hours and the odds where there
     # aren't. Dry days are absent.
     def forecast_cells(user, now: Time.current)
-      data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
+      data = forecast(user)
       return {} if data.blank?
 
       cells = Hash.new { |hash, date| hash[date] = [] }
