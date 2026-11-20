@@ -58,9 +58,41 @@ RSpec.describe AddressBook do
       end
     }
 
+    it "reads words from the address itself as that address" do
+      contact_with("Horsetail Falls", [[nil, "Horsetail Falls Trailhead, Alpine, UT  84004, United States", true]])
+
+      ["Horsetail Falls, Alpine, UT", "Horsetail Falls Trailhead in Alpine"].each do |phrase|
+        expect(book.address_in_phrase(phrase)&.contact&.name).to eq("Horsetail Falls"), phrase.inspect
+      end
+    end
+
     it "leaves a bare name, a bare branch, an unknown branch, or a nearby-place phrase alone" do
       ["Trader Joe's near home", "DMV", "Herriman", "the DMV in Draper"].each do |phrase|
         expect(book.address_in_phrase(phrase)).to be_nil, phrase.inspect
+      end
+    end
+  end
+
+  describe "a place phrase naming a saved place" do
+    let(:user) { create(:user) }
+    let(:book) { described_class.new(user) }
+
+    before {
+      falls = user.contacts.create!(name: "Horsetail Falls", nickname: "Plunge")
+      falls.addresses.create!(
+        user:    user,
+        primary: true,
+        street:  "Horsetail Falls Trailhead, Alpine, UT  84004, United States",
+        lat:     40.48301384647123,
+        lng:     -111.7503783541636,
+      )
+    }
+
+    it "resolves to the contact's stored coordinates without a geocode" do
+      expect(book).not_to receive(:geocode)
+
+      ["Horsetail Falls, Alpine, UT", "the plunge", "Plunge", "the plunge in Alpine"].each do |phrase|
+        expect(book.coords_for_location(phrase).map { |v| v.round(4) }).to eq([40.483, -111.7504]), phrase.inspect
       end
     end
   end

@@ -80,6 +80,37 @@ RSpec.describe Buddy::PlungeAdvisor do
   # The week ahead, which is a different question from today's plunge window and
   # answered at two different resolutions: real hours for as far as the hourly
   # forecast reaches, and odds alone past that.
+  describe "where the weather is read" do
+    it "is the saved Plunge place's own point" do
+      falls = user.contacts.create!(name: "Horsetail Falls", nickname: "Plunge")
+      falls.addresses.create!(user: user, primary: true, street: "Horsetail Falls Trailhead", lat: 40.4830, lng: -111.7504)
+      allow(WeatherService).to receive(:data).and_return(nil)
+
+      described_class.briefing_lines(user)
+
+      expect(WeatherService).to have_received(:data).with(lat: 40.4830, lng: -111.7504)
+    end
+
+    it "is the middle of Alpine when there's no such place" do
+      allow(WeatherService).to receive(:data).and_return(nil)
+
+      described_class.briefing_lines(user)
+
+      expect(WeatherService).to have_received(:data).with(**described_class::ALPINE)
+    end
+
+    it "is the middle of Alpine when the place has no coordinates" do
+      falls = user.contacts.create!(name: "Horsetail Falls", nickname: "Plunge")
+      falls.addresses.create!(user: user, primary: true, street: "Horsetail Falls Trailhead")
+      allow_any_instance_of(AddressBook).to receive(:geocode).and_return(nil)
+      allow(WeatherService).to receive(:data).and_return(nil)
+
+      described_class.briefing_lines(user)
+
+      expect(WeatherService).to have_received(:data).with(**described_class::ALPINE)
+    end
+  end
+
   describe ".week_rain_lines" do
     let(:now) { tz.parse("2026-08-20 07:00") } # a Thursday
 

@@ -27,14 +27,17 @@ module AgendaTravelChain
       return nil if ::AddressBook.non_travelable?(text)
 
       # 1. Contact match wins — "Sarah's House", "Mom", "Costco" (if the
-      # user has a Costco contact). AddressBook#match_contact handles
-      # possessive/plural normalisation. We geocode the contact's street
-      # rather than the raw input so the lat/lng matches the address text
-      # we hand back.
-      contact_addr = address_book.match_contact(text)&.primary_address&.street
-      if contact_addr.present?
-        latlng = address_book.geocode(contact_addr)
-        return { address: contact_addr, lat: latlng[0], lng: latlng[1] } if latlng.present?
+      # user has a Costco contact), or a contact named inside the phrase
+      # ("Horsetail Falls, Alpine, UT"). Its stored coordinates are used when
+      # it has them; otherwise its street is geocoded so the lat/lng matches
+      # the address text we hand back.
+      saved = address_book.match_contact(text)&.primary_address
+      saved ||= address_book.address_in_phrase(text)
+      if saved.present?
+        street = saved.street.presence || text.to_s.strip
+        latlng = saved.loc if address_book.valid_loc?(saved.loc)
+        latlng ||= address_book.geocode(saved.street) if saved.street.present?
+        return { address: street, lat: latlng[0], lng: latlng[1] } if latlng.present?
         # Contact matched but their address won't geocode — fall through
         # rather than return nil so we still try Places.
       end

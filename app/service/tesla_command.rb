@@ -163,8 +163,12 @@ module TeslaCommand
       #   1. Explicit address recognized by Jarvis::Regex (e.g. "1 Main St")
       #   2. Smart contact match (handles "Sarah", "Sarah's house", etc.)
       #   3. Fuzzy nearest-by-name fallback for things like landmarks
-      address = opt[::Jarvis::Regex.address]&.squish.presence if opt.match?(::Jarvis::Regex.address)
+      # The car is sent the phrase itself, not the street found here, so
+      # TeslaControl#navigate can resolve it to the place's name and coordinates.
+      explicit = opt[::Jarvis::Regex.address]&.squish.presence if opt.match?(::Jarvis::Regex.address)
+      address = explicit
       address ||= address_book.match_contact(original_opt)&.primary_address&.street
+      address ||= address_book.address_in_phrase(original_opt)&.street
       address ||= address_book.nearest_from_name(original_opt, extract: :address)
 
       if address.present?
@@ -182,7 +186,7 @@ module TeslaCommand
         if !@cancel && !quick
           ::PrettyLogger.info("starting")
           car.start_car
-          car.navigate(address)
+          car.navigate(explicit || original_opt)
         end
       else
         @response = "I can't find #{original_opt.squish}"

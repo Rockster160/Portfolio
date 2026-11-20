@@ -219,6 +219,9 @@ class TripState
       saved = contact_coords(ab.match_contact(destination.to_s))
       return saved if saved.present?
 
+      named = ab.address_in_phrase(destination.to_s)&.loc
+      return [named.map(&:to_f)] if coord?(named)
+
       geo = ab.geocode(destination.to_s)
       coord?(geo) ? [geo.map(&:to_f)] : []
     end
