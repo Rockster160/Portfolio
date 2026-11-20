@@ -53,22 +53,19 @@ RSpec.describe TeslaControl do
 
     before do
       allow(User).to receive(:me).and_return(instance_double(User, address_book: address_book))
-      allow(address_book).to receive_messages(match_contact: nil, address_in_phrase: nil, nearest_from_name: nil)
+      allow(address_book).to receive_messages(contact_place: nil, nearest_from_name: nil)
+      allow(address_book).to receive(:valid_loc?) { |loc| AddressBook.new(nil).valid_loc?(loc) }
     end
 
-    it "uses a contact named inside the phrase before asking Places" do
-      address = instance_double(Address, street: "5278 W Anthem Peak Ln")
-      allow(address_book).to receive(:address_in_phrase).with("Herriman DMV").and_return(address)
+    def saved(street, loc=[nil, nil], name: "Saved")
+      instance_double(Address, street: street, loc: loc, contact: instance_double(Contact, name: name))
+    end
+
+    it "uses a contact's address before asking Places" do
+      allow(address_book).to receive(:contact_place).with("Herriman DMV").and_return(saved("5278 W Anthem Peak Ln"))
 
       expect(described_class.resolve_destination("Herriman DMV")).to eq("5278 W Anthem Peak Ln")
       expect(address_book).not_to have_received(:nearest_from_name)
-    end
-
-    it "returns a matched contact's street address first" do
-      contact = instance_double(Contact, primary_address: instance_double(Address, street: "123 Main St"))
-      allow(address_book).to receive(:match_contact).with("Sarah").and_return(contact)
-
-      expect(described_class.resolve_destination("Sarah")).to eq("123 Main St")
     end
 
     it "passes a bare lat,lng pair straight through" do
@@ -76,9 +73,9 @@ RSpec.describe TeslaControl do
     end
 
     it "resolves a fuzzy place name to a concrete address instead of shipping the phrase" do
-      allow(address_book).to receive(:nearest_from_name)
-        .with("the plunge in Alpine")
-        .and_return("100 Plunge Way, Alpine, UT 84004, USA")
+      allow(address_book).to receive(:nearest_from_name).with("the plunge in Alpine", extract: :place).and_return(
+        { name: "Plunge Spot", address: "100 Plunge Way, Alpine, UT 84004, USA", loc: [40.4, -111.7] },
+      )
 
       expect(described_class.resolve_destination("the plunge in Alpine"))
         .to eq("100 Plunge Way, Alpine, UT 84004, USA")
@@ -86,6 +83,73 @@ RSpec.describe TeslaControl do
 
     it "falls back to the raw text when nothing resolves" do
       expect(described_class.resolve_destination("somewhere unknowable")).to eq("somewhere unknowable")
+    end
+
+    describe "the text shared with the car" do
+      def shared(input)
+        described_class.share_text(described_class.resolve_place(input))
+      end
+
+      it "sends a place with coordinates as its name, its street on one line and a pinned map link" do
+        falls = saved(
+          "Horsetail Falls Trail\r\nDeer Creek-Dry Creek, Alpine, UT  84004, United States",
+          [40.48301384647123, -111.7503783541636],
+          name: "Horsetail Falls",
+        )
+        allow(address_book).to receive(:contact_place).with("the plunge").and_return(falls)
+
+        expect(shared("the plunge")).to eq(
+          <<~TEXT.chomp,
+            Horsetail Falls
+            Horsetail Falls Trail, Deer Creek-Dry Creek, Alpine, UT 84004, United States
+            https://www.google.com/maps/search/?api=1&query=40.48301384647123,-111.7503783541636
+          TEXT
+        )
+        expect(address_book).not_to have_received(:nearest_from_name)
+      end
+
+      it "keeps the house number" do
+        allow(address_book).to receive(:contact_place).with("Sarah").and_return(
+          saved("123 Main St, Draper, UT", [40.5, -111.9], name: "Sarah"),
+        )
+
+        expect(shared("Sarah").lines[1].strip).to eq("123 Main St, Draper, UT")
+      end
+
+      it "sends just the street for a saved place with no coordinates" do
+        allow(address_book).to receive(:contact_place).with("Sarah").and_return(saved("123 Main\nSt"))
+
+        expect(shared("Sarah")).to eq("123 Main, St")
+      end
+
+      it "sends a Places hit the same way, pinned to its point" do
+        allow(address_book).to receive(:nearest_from_name).with("Costco", extract: :place).and_return(
+          { name: "Costco Wholesale", address: "13123 S 5600 W, Herriman, UT 84096", loc: [40.51, -112.01] },
+        )
+
+        expect(shared("Costco")).to eq(
+          "Costco Wholesale\n13123 S 5600 W, Herriman, UT 84096\n" \
+          "https://www.google.com/maps/search/?api=1&query=40.51,-112.01",
+        )
+      end
+
+      it "sends a bare lat,lng pair and unknown text unchanged" do
+        expect(shared("40.4804, -111.998")).to eq("40.4804,-111.998")
+        expect(shared("somewhere unknowable")).to eq("somewhere unknowable")
+      end
+
+      it "is what navigate shares" do
+        allow(address_book).to receive(:contact_place).with("Sarah").and_return(saved("123 Main St"))
+        ctrl = described_class.allocate
+        allow(ctrl).to receive(:command)
+
+        ctrl.navigate("Sarah")
+
+        expect(ctrl).to have_received(:command).with(
+          :navigation_request,
+          hash_including(type: :share_ext_content_raw, value: { "android.intent.extra.TEXT": "123 Main St" }),
+        )
+      end
     end
   end
 
@@ -141,7 +205,7 @@ RSpec.describe TeslaControl do
 
     before do
       allow(User.me).to receive(:address_book).and_return(address_book)
-      allow(TeslaControl).to receive(:resolve_destination).with("Costco").and_return("Costco")
+      allow(TeslaControl).to receive(:resolve_place).with("Costco").and_return({ text: "Costco" })
     end
 
     it "geocodes the resolved address and sends a single navigation_gps_request at order:1" do
@@ -150,8 +214,17 @@ RSpec.describe TeslaControl do
       expect(ctrl.add_stop("Costco")).to be(true)
     end
 
+    it "uses the place's stored coordinates without geocoding" do
+      allow(TeslaControl).to receive(:resolve_place).with("the plunge").and_return(
+        { name: "Horsetail Falls", street: "Horsetail Falls Trailhead", loc: [40.483, -111.7504] },
+      )
+      expect(address_book).not_to receive(:geocode)
+      expect(ctrl).to receive(:proxy_command).with(:navigation_gps_request, lat: 40.483, lon: -111.7504, order: 1)
+      expect(ctrl.add_stop("the plunge")).to be(true)
+    end
+
     it "returns false without sending if address resolves blank" do
-      allow(TeslaControl).to receive(:resolve_destination).with("").and_return("")
+      allow(TeslaControl).to receive(:resolve_place).with("").and_return({ text: "" })
       expect(ctrl).not_to receive(:proxy_command)
       expect(ctrl.add_stop("")).to be(false)
     end

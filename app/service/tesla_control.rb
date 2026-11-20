@@ -148,25 +148,29 @@ class TeslaControl
     # navigation_request is REST-only on the Fleet API — sending it through
     # the signed Go-proxy path returns "command requires using the REST API".
     # All other vehicle commands go via proxy_command; this is the exception.
-    address = self.class.resolve_destination(input)
     address_params = {
       type:         :share_ext_content_raw,
       locale:       :"en-US",
       timestamp_ms: (Time.current.to_f * 1000).round,
-      value:        { "android.intent.extra.TEXT": address },
+      value:        { "android.intent.extra.TEXT": self.class.share_text(self.class.resolve_place(input)) },
     }
 
     command(:navigation_request, address_params)
   end
 
   # Inserts a single stop into the active trip at `order` (default 1 — first
-  # waypoint after the current destination). Resolves contact → address →
-  # lat/lng via AddressBook; no-op if geocoding fails.
+  # waypoint after the current destination). Uses the place's own coordinates
+  # when it has them, and geocodes the street only when it doesn't; no-op if
+  # neither gives a point.
   def add_stop(input, order: 1)
-    address = self.class.resolve_destination(input)
-    return false if address.blank?
+    place = self.class.resolve_place(input)
+    latlng = place[:loc]
+    if latlng.blank?
+      address = place[:street].presence || place[:text]
+      return false if address.blank?
 
-    latlng = User.me.address_book.geocode(address)
+      latlng = User.me.address_book.geocode(address)
+    end
     return false if latlng.blank?
 
     proxy_command(:navigation_gps_request, lat: latlng[0].to_f, lon: latlng[1].to_f, order: order.to_i)
@@ -176,40 +180,76 @@ class TeslaControl
     false
   end
 
+  LATLNG_RX = /\A-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\z/
+
+  # Where a destination phrase points, as { name:, street:, loc: } for a place
+  # we know, or { text: } for text the car has to search itself.
+  #
   # Resolution order:
   #   1. Contact name match (highest priority — e.g. "Sarah" → her address).
   #      AddressBook#match_contact handles possessive/plural normalization
   #      ("Sarah's", "Sarahs", "Sarah's house", "Sarah's place", etc.), then
-  #      a contact named inside the phrase ("Herriman DMV") via
-  #      AddressBook#address_in_phrase, which picks the labelled address.
+  #      a contact named inside the phrase ("Herriman DMV", "Horsetail Falls,
+  #      Alpine, UT") via AddressBook#address_in_phrase, which picks the
+  #      labelled address.
   #   2. Bare "lat,lng" pair (e.g. "40.4804,-111.998")
-  #   3. A fuzzy place name resolved to a real formatted address via Places,
-  #      biased to where we are now.
+  #   3. A fuzzy place name resolved to a real place via Places, biased to
+  #      where we are now.
   #   4. Anything else passed through as a free-form address string
-  # Tesla's share endpoint accepts both addresses and lat,lng — we just
-  # hand the text along once we've picked the right form.
-  def self.resolve_destination(input)
+  def self.resolve_place(input)
     text = input.to_s.strip
-    return text if text.empty?
+    return { text: text } if text.empty?
 
     address_book = User.me.address_book
-    contact_address = address_book.match_contact(text)&.primary_address&.street
-    contact_address ||= address_book.address_in_phrase(text)&.street
-    return contact_address if contact_address.present?
+    address = address_book.contact_place(text)
+    if address.present?
+      street = one_line(address.street)
+      loc = address.loc.map(&:to_f) if address_book.valid_loc?(address.loc)
+      if street.present? || loc.present?
+        return { name: address.contact&.name.presence, street: street, loc: loc }.compact
+      end
+    end
 
-    return text.gsub(/\s/, "") if text.match?(/\A-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\z/)
+    if text.match?(LATLNG_RX)
+      bare = text.gsub(/\s/, "")
+      return { text: bare, loc: bare.split(",").map(&:to_f) }
+    end
 
     # Resolve a fuzzy place ("the plunge in Alpine", "Costco") to a concrete
-    # address near our current location BEFORE handing it to the car. Without
+    # place near our current location BEFORE handing it to the car. Without
     # this the raw phrase goes to Tesla's onboard search, which happily grabs
     # the nearest city with a matching word — that's the bug where "the plunge
     # in Alpine" navigated to the town of Alpine instead of the actual spot.
     # Falls through to the raw text when Places can't place it (and off-prod,
     # where nearest_from_name is a no-op).
-    place = (User.me.address_book.nearest_from_name(text) rescue nil)
-    return place if place.present?
+    place = (address_book.nearest_from_name(text, extract: :place) rescue nil)
+    return { name: place[:name], street: one_line(place[:address]), loc: place[:loc] }.compact if place
 
-    text
+    { text: text }
+  end
+
+  # The address text for a destination: the street when the place has one,
+  # otherwise the text as given (or a bare "lat,lng").
+  def self.resolve_destination(input)
+    place = resolve_place(input)
+    place[:street].presence || place[:text] || place[:loc]&.join(",")
+  end
+
+  # What the car is sent to search for. A place with coordinates goes the way a
+  # phone shares one: its name, its street and a map link pinned to the exact
+  # point, so the car lands on the spot rather than on whatever its own search
+  # makes of the street. Without coordinates it's the street, or the text.
+  def self.share_text(place)
+    loc = place[:loc]
+    named = place[:name].present? || place[:street].present?
+    return place[:street].presence || place[:text].to_s unless loc.present? && named
+
+    link = "https://www.google.com/maps/search/?api=1&query=#{loc.join(",")}"
+    [place[:name], place[:street], link].compact_blank.uniq.join("\n")
+  end
+
+  def self.one_line(street)
+    street.to_s.gsub(/\s*[\r\n]+\s*/, ", ").squish.presence
   end
 
   def set_temp(temp_F, skip_verify: false)
