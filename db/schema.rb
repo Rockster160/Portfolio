@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_11_19_024408) do
+ActiveRecord::Schema[8.0].define(version: 2026_11_20_192806) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
@@ -1748,6 +1748,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_19_024408) do
     t.float "total_time"
     t.bigint "calls"
     t.datetime "captured_at", precision: nil
+    t.index ["database", "captured_at"], name: "index_pghero_query_stats_on_database_and_captured_at"
   end
 
   create_table "production_scripts", force: :cascade do |t|
