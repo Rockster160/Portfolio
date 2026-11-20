@@ -16,6 +16,8 @@ RSpec.describe AgendaTravelChain::Resolver do
     allow(address_book).to receive(:plausible_drive?) { |latlng, **|
       ::AddressBook.new(user).plausible_drive?(latlng, from: address_book.current_loc)
     }
+    allow(address_book).to receive(:address_in_phrase).and_return(nil)
+    allow(address_book).to receive(:valid_loc?) { |loc| ::AddressBook.new(user).valid_loc?(loc) }
   }
 
   describe "#resolve_location" do
@@ -33,7 +35,7 @@ RSpec.describe AgendaTravelChain::Resolver do
 
     it "prioritizes a contact match over direct geocoding (Sarah's House)" do
       allow(::AddressBook).to receive(:non_travelable?).and_return(false)
-      contact = double(primary_address: double(street: "123 Main St"))
+      contact = double(primary_address: double(street: "123 Main St", loc: [nil, nil]))
       allow(address_book).to receive(:match_contact).with("Sarah's House").and_return(contact)
       allow(address_book).to receive(:geocode).with("123 Main St").and_return([40.6, -111.8])
       expect(address_book).not_to receive(:geocode).with("Sarah's House")
@@ -46,7 +48,7 @@ RSpec.describe AgendaTravelChain::Resolver do
 
     it "falls through past a matched contact whose address won't geocode" do
       allow(::AddressBook).to receive(:non_travelable?).and_return(false)
-      contact = double(primary_address: double(street: "Apt B"))
+      contact = double(primary_address: double(street: "Apt B", loc: [nil, nil]))
       allow(address_book).to receive(:match_contact).with("Bob").and_return(contact)
       allow(address_book).to receive(:geocode).with("Apt B").and_return(nil)
       allow(address_book).to receive(:geocode).with("Bob").and_return(nil)

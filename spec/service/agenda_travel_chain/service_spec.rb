@@ -41,7 +41,8 @@ RSpec.describe AgendaTravelChain::Service do
     allow(address_book).to receive(:plausible_drive?).and_return(true)
     # Default to no contact match — individual specs can override when testing
     # the contact-first branch added in resolver.rb.
-    allow(address_book).to receive(:match_contact).and_return(nil)
+    allow(address_book).to receive_messages(match_contact: nil, address_in_phrase: nil)
+    allow(address_book).to receive(:valid_loc?) { |loc| ::AddressBook.new(user).valid_loc?(loc) }
     allow(address_book).to receive(:geocode) { |addr| [40.0 + addr.to_s.length * 0.001, -111.0] }
     allow(address_book).to receive(:traveltime_seconds) { |to, from, _opts = {}|
       drive_matrix[[from.to_s, to.to_s]] || 600

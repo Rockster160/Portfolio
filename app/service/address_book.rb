@@ -74,6 +74,16 @@ class AddressBook
       .find(&:present?)
   end
 
+  # The saved address a place phrase means: a contact by name ("Sarah's
+  # house", "Plunge"), or a contact named inside a longer phrase ("the plunge",
+  # "Horsetail Falls, Alpine, UT"). Nil when the phrase isn't one of theirs.
+  def contact_place(text)
+    address = match_contact(text)&.primary_address
+    return address if address.present? && (address.street.present? || valid_loc?(address.loc))
+
+    address_in_phrase(text)
+  end
+
   PHRASE_FILLER = %w[the a an in at on by near to].freeze
 
   # A contact named inside a longer phrase, where everything else in it is
@@ -81,6 +91,8 @@ class AddressBook
   # in Riverton" each pick a DMV address, "Momentum Sandy" the Sandy gym. Any
   # other word left over means the phrase is about something else ("Trader
   # Joe's near home"), so it returns nil and the caller goes on to Places.
+  # Words from the address itself count too, so "Horsetail Falls, Alpine, UT"
+  # is the Horsetail Falls address whose street is in Alpine, UT.
   # The longest matching name wins, so "Home Depot" beats "Home".
   def address_in_phrase(text)
     words = self.class.phrase_words(text)
@@ -271,7 +283,7 @@ class AddressBook
 
   def nearest_from_name(name, loc: nil, extract: :address)
     return unless Rails.env.production?
-    raise "Unacceptable extraction: #{extract}" unless extract.in?([:address, :loc])
+    raise "Unacceptable extraction: #{extract}" unless extract.in?([:address, :loc, :place])
 
     loc ||= current_loc
     return if name.blank? || loc.compact.blank?
@@ -281,7 +293,7 @@ class AddressBook
       params = {
         input:        name,
         inputtype:    :textquery,
-        fields:       [:formatted_address, :geometry].join(","),
+        fields:       [:name, :formatted_address, :geometry].join(","),
         locationbias: "point:#{loc.join(",")}",
         key:          ENV.fetch("PORTFOLIO_GMAPS_PAID_KEY", nil),
       }.to_query
@@ -305,6 +317,7 @@ class AddressBook
       case extract
       when :address then candidate&.dig(:formatted_address)
       when :loc then candidate&.dig(:geometry, :location)&.slice(:lat, :lng)&.values
+      when :place then places_hit(candidate)
       end
     }
   # Degrade to nil on a Places failure, exactly as #geocode and
@@ -525,7 +538,7 @@ class AddressBook
   def coords_for_location(location)
     return if location.blank?
 
-    loc = match_contact(location)&.primary_address&.loc
+    loc = contact_place(location)&.loc
     return loc if valid_loc?(loc)
 
     loc = @user.addresses.where("street ILIKE ?", location.to_s.strip).first&.loc
@@ -589,6 +602,14 @@ class AddressBook
 
   private
 
+  # { name:, address:, loc: } of a Places candidate, or nil without a point.
+  def places_hit(candidate)
+    loc = candidate&.dig(:geometry, :location)&.values_at(:lat, :lng)
+    return unless valid_loc?(loc)
+
+    { name: candidate[:name].presence, address: candidate[:formatted_address].presence, loc: loc }
+  end
+
   def contact_names(contact)
     [contact.name, *contact.nickname.to_s.split(",")].map(&:strip).compact_blank
   end
@@ -605,9 +626,12 @@ class AddressBook
     addresses = contact.addresses.to_a
     return addresses.find(&:primary) || addresses.first if rest.empty?
 
-    addresses.find { |address|
+    labelled = addresses.find { |address|
       label_words = self.class.phrase_words(address.label)
       label_words.any? && (rest - label_words).empty?
+    }
+    labelled || addresses.find { |address|
+      (rest - self.class.phrase_words(address.label) - self.class.phrase_words(address.street)).empty?
     }
   end
 end
