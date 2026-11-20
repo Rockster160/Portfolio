@@ -187,7 +187,7 @@ RSpec.describe TripState do
     before do
       allow(user).to receive(:address_book).and_return(address_book)
       # Default: no saved contact matches — resolution falls through to geocode.
-      allow(address_book).to receive(:match_contact).and_return(nil)
+      allow(address_book).to receive_messages(match_contact: nil, address_in_phrase: nil)
     end
 
     # `street` is only a label here — the geofence reads lat/lng.
@@ -209,6 +209,14 @@ RSpec.describe TripState do
       expect(address_book).not_to receive(:geocode)
       user.caches.set(:car_data, { location: { lat: 40.5001, lng: -111.9001 } })
       expect(described_class.car_at?("Home", user: user)).to be(true)
+    end
+
+    it "resolves a phrase naming a saved place to that place's coordinates" do
+      address = instance_double(Address, loc: [40.4830, -111.7504])
+      allow(address_book).to receive(:address_in_phrase).with("Horsetail Falls, Alpine, UT").and_return(address)
+      expect(address_book).not_to receive(:geocode)
+      user.caches.set(:car_data, { location: { lat: 40.4831, lng: -111.7505 } })
+      expect(described_class.car_at?("Horsetail Falls, Alpine, UT", user: user)).to be(true)
     end
 
     it "matches a non-primary address, so a chain's other branch still counts" do
@@ -270,7 +278,7 @@ RSpec.describe TripState do
 
     before do
       allow(user).to receive(:address_book).and_return(address_book)
-      allow(address_book).to receive(:match_contact).and_return(nil)
+      allow(address_book).to receive_messages(match_contact: nil, address_in_phrase: nil)
     end
 
     it "is true when the active trip destination is within ~500m of the candidate" do

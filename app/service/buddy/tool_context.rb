@@ -687,11 +687,15 @@ module Buddy
       # 1. A known contact - its coordinates if it has them; still "known" by
       #    name if it doesn't (the arrival trigger resolves to the same contact
       #    name, so name-equality matching still fires).
+      #    A contact named inside a longer phrase ("Horsetail Falls, Alpine,
+      #    UT", "the plunge") is that contact too.
       contact = user.address_book.match_contact(name)
-      if contact
-        addr = contact.primary_address
-        return place_hash(contact.name, addr&.street, addr&.loc, known: true)
+      addr = contact&.primary_address
+      if contact.nil?
+        addr = user.address_book.address_in_phrase(name)
+        contact = addr&.contact
       end
+      return place_hash(contact.name, addr&.street, addr&.loc, known: true) if contact
 
       # 2. The person's calendar - an event with this name carries the address
       #    for the spot (this is the "TMS -> Serenity" bridge).

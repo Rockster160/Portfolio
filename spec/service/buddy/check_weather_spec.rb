@@ -41,6 +41,21 @@ RSpec.describe "check_weather tool" do
     expect(result[:reading]).to include("70°F")
   end
 
+  it "reads a saved place named with its town at that place's own point" do
+    falls = user.contacts.create!(name: "Horsetail Falls", nickname: "Plunge")
+    falls.addresses.create!(
+      user: user, street: "Horsetail Falls Trailhead, Alpine, UT  84004", lat: 40.4830, lng: -111.7504, primary: true,
+    )
+    allow(WeatherService).to receive(:summary).with(lat: 40.4830, lng: -111.7504, user: user).and_return("currently 60°F.")
+    expect_any_instance_of(AddressBook).not_to receive(:geocode)
+
+    ["Horsetail Falls, Alpine, UT", "the plunge"].each do |phrase|
+      result = read(location: phrase)
+      expect(result[:place]).to eq("Horsetail Falls"), phrase.inspect
+      expect(result[:reading]).to include("60°F")
+    end
+  end
+
   # A lookup that didn't come back is NOT an answer, so it has to reach the
   # model as a failure — otherwise the model reports weather it never got.
   it "fails outright when it honestly can't resolve the place" do
