@@ -17,6 +17,7 @@ class UserCache < ApplicationRecord
   belongs_to :user
 
   after_commit :broadcast_battery_change, on: [:create, :update], if: -> { key.to_s == "battery" }
+  after_commit -> { MiniDashboardChannel.changed(user) }, on: [:create, :update], if: -> { key.to_s == "claude_usage" }
 
   def to_param
     key || id

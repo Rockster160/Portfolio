@@ -63,6 +63,16 @@ module NeedsYou
     }
   end
 
+  # The plan's rate limits as the laptop's status line last reported them
+  # (~/.claude/hooks/usage-report.sh, kept by the claude_usage Jil task), or nil:
+  # { five_hour: { used:, resets_at:, observed_at: }, seven_day: { ... }, burn: { ... } }
+  # The task stores it as the JSON text it was posted.
+  def claude(user)
+    usage = user.caches.get(:claude_usage)
+    usage = JSON.parse(usage) if usage.is_a?(String)
+    usage.presence
+  end
+
   def item(kind:, title:, reason:, url:, since:)
     { kind: kind, title: title, reason: reason, url: url, since: since&.iso8601 }
   end
