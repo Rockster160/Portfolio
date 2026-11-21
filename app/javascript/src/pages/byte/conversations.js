@@ -38,6 +38,10 @@ function convoLabel(convo) {
 // Mirrors ByteConversation::MAC_MODES.
 const MAC_MODES = ["claude", "bash"];
 
+// A bell with a line through it, drawn in the row's own muted colour so it reads
+// as ambient state beside the name rather than as a warning.
+const MUTED_ICON = `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 13.5a1.6 1.6 0 0 0 3 0"/><path d="M4 11h8l-1-1.5V7a3 3 0 0 0-5.2-2"/><path d="M5 7v2.5L4 11"/><path d="M2.5 2.5l11 11"/></svg>`;
+
 // The pet table the server rendered onto `.byte-app` (ByteHelper#buddy_themes_json).
 // Read here as well as in index.js — same single attribute, so there's still one
 // source of truth; the drawer just needs it to show which pet a row belongs to.
@@ -122,6 +126,7 @@ export class ConversationManager {
     sendCommand,
     unreadFor,
     onConversations,
+    onMuteChange,
   }) {
     this.conversationsUrl   = conversationsUrl;
     this.claudeSessionsUrl  = claudeSessionsUrl;
@@ -137,6 +142,9 @@ export class ConversationManager {
     // (Map-backed in index.js). Rendered as a badge on each row.
     this.unreadFor          = unreadFor || (() => 0);
     this.onConversations    = onConversations || null;
+    // A thread muted or unmuted, here or on another device: its count goes to
+    // nothing and the badges repaint.
+    this.onMuteChange       = onMuteChange || (() => {});
     // A board stays IN this list — it is a real conversation the board page is
     // open ON, so its id has to resolve for lookups, config saves and the chore
     // fetch. It is kept out of the DRAWER in render() instead; filtering it from
@@ -219,6 +227,7 @@ export class ConversationManager {
     document.querySelector("[data-byte-menu-rename]")?.addEventListener("click", () => this.handleRename());
     document.querySelector("[data-byte-menu-primary]")?.addEventListener("click", () => this.handleMakePrimary());
     document.querySelector("[data-byte-menu-buddy]")?.addEventListener("click", () => this.handleBuddyOpen());
+    document.querySelector("[data-byte-menu-mute]")?.addEventListener("click", () => this.handleMute());
     document.querySelector("[data-byte-menu-archive]")?.addEventListener("click", () => this.handleArchive());
     document.querySelector("[data-byte-adopt-close]")?.addEventListener("click", () => this.adoptModal?.close());
     document.querySelector("[data-byte-buddy-close]")?.addEventListener("click", () => this.buddyModal?.close());
@@ -229,6 +238,10 @@ export class ConversationManager {
 
   currentConversation() {
     return this.conversations.find((c) => c.id === this.currentId) || null;
+  }
+
+  isMuted(id) {
+    return this.conversations.find((c) => c.id === id)?.metadata?.muted === true;
   }
 
   // Name + face for one conversation, for anything OUTSIDE the drawer that has
@@ -369,8 +382,10 @@ export class ConversationManager {
       }
     } else {
       const idx = this.conversations.findIndex((c) => c.id === convo.id);
+      const wasMuted = idx >= 0 && this.isMuted(convo.id);
       if (idx >= 0) this.conversations[idx] = convo;
       else this.conversations.unshift(convo);
+      if (idx >= 0 && wasMuted !== this.isMuted(convo.id)) this.onMuteChange(convo.id);
       // Keep sort roughly by last activity (server already does this on
       // fetch — this is a best-effort local reorder for freshness).
       this.conversations.sort((a, b) => {
@@ -537,13 +552,16 @@ export class ConversationManager {
     const primaryHtml = convo.id === this.primaryId
       ? `<span class="byte-convo-primary" title="Primary — self-initiated messages land here" aria-label="Primary"></span>`
       : "";
+    const mutedHtml = convo.metadata?.muted === true
+      ? `<span class="byte-convo-muted" title="Muted — no notifications, nothing counted as unread" aria-label="Muted">${MUTED_ICON}</span>`
+      : "";
 
     const pick = document.createElement("button");
     pick.type = "button";
     pick.className = "byte-convo-pick";
     pick.innerHTML = `
       ${convoBadge(convo)}
-      <span class="byte-convo-name">${escapeHtml(convoLabel(convo))}${primaryHtml}</span>
+      <span class="byte-convo-name">${escapeHtml(convoLabel(convo))}${primaryHtml}${mutedHtml}</span>
       <span class="byte-convo-time">${relativeTime(convo.last_message_at)}${unreadHtml}</span>
     `;
     pick.addEventListener("click", () => {
@@ -672,6 +690,9 @@ export class ConversationManager {
 
     const buddyBtn = document.querySelector("[data-byte-menu-buddy]");
     if (buddyBtn) buddyBtn.hidden = convo.mode !== "buddy";
+
+    const muteBtn = document.querySelector("[data-byte-menu-mute]");
+    if (muteBtn) muteBtn.textContent = this.isMuted(convo.id) ? "Unmute" : "Mute";
     if (typeof this.menuModal.showModal === "function") this.menuModal.showModal();
     else this.menuModal.setAttribute("open", "");
   }
@@ -741,6 +762,21 @@ export class ConversationManager {
       this.primaryId = previous;
       this.render();
       alert(`Couldn't set primary: ${err.message || err}`);
+    }
+  }
+
+  // Not a slash command, for the reason Make primary isn't: it's about how the
+  // thread reaches you, not something said in it, and it must not switch you.
+  async handleMute() {
+    if (this.menuTargetId == null) return;
+    const id = this.menuTargetId;
+    this.menuModal?.close();
+
+    try {
+      await this.updateConversation(id, { metadata: { muted: !this.isMuted(id) } });
+      this.onMuteChange(id);
+    } catch (err) {
+      alert(`Couldn't change mute: ${err.message || err}`);
     }
   }
 

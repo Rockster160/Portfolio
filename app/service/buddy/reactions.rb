@@ -178,7 +178,7 @@ module Buddy
       # The point of reacting to someone is that they see it. Same rule as the
       # relay itself: nothing goes to the wall.
       def notify(twin, user, emoji)
-        return if twin.byte_conversation&.kiosk?
+        return if twin.byte_conversation&.silent?
         return if twin.user_id == user.id
 
         WebPushNotifications.send_to_byte(

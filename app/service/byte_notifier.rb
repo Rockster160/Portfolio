@@ -17,6 +17,7 @@ module ByteNotifier
     return unless message.state == "delivered"
     return if kiosk?(message)
     return if plumbing?(message)
+    return if message.byte_conversation&.muted?
 
     meta = message.metadata.is_a?(Hash) ? message.metadata : {}
 

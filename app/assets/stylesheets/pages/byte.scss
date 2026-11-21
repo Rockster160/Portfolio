@@ -3179,6 +3179,16 @@ html.html-ctr-byte.html-act-board_index body {
     flex: none;
   }
 
+  // A muted thread: no push, nothing counted. Ambient for the same reason as
+  // the primary dot.
+  .byte-convo-muted {
+    display: inline-flex;
+    margin-left: 6px;
+    color: var(--bs-muted);
+    vertical-align: middle;
+    flex: none;
+  }
+
   .byte-convo-time {
     font-size: 11px;
     color: var(--bs-muted);

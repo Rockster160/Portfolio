@@ -92,6 +92,11 @@ class ByteConversation < ApplicationRecord
     self.machine = self.class.machine_for(mode) if will_save_change_to_mode? && !machine_changed?
   }
 
+  # Read at the moment a thread is muted or unmuted, either way: muting leaves
+  # nothing to count, and unmuting must not hand back everything that arrived
+  # while it was quiet as one pile.
+  after_update { mark_read! if mute_toggled? }
+
   def mac?
     MAC_MODES.include?(mode.to_s)
   end
@@ -186,6 +191,25 @@ class ByteConversation < ApplicationRecord
 
   def kiosk?
     metadata.is_a?(Hash) && metadata["kiosk"].to_s == "true"
+  end
+
+  # Still shown and still filled, but nothing in it asks for attention: no push,
+  # and nothing counted as unread. For a thread a job writes into on a schedule,
+  # the Daily Audit above all, which is read when it's read.
+  def muted?
+    metadata.is_a?(Hash) && metadata["muted"].to_s == "true"
+  end
+
+  # No push from this thread: the wall tablet, or one they muted.
+  def silent?
+    kiosk? || muted?
+  end
+
+  def mute_toggled?
+    before, after = saved_change_to_metadata
+    return false if after.nil?
+
+    (before.to_h["muted"].to_s == "true") != (after.to_h["muted"].to_s == "true")
   end
 
   def board?
@@ -490,7 +514,7 @@ class ByteConversation < ApplicationRecord
   # that arrived while the app was closed was never counted at all, since
   # counting only happened in response to a live broadcast.
   def unread_count
-    return 0 if last_read_at.nil?
+    return 0 if muted? || last_read_at.nil?
 
     byte_messages.readable.where("byte_messages.created_at > ?", last_read_at).count
   end

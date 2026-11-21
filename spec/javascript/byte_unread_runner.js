@@ -187,6 +187,24 @@ out.counts = {
   out.current_kept = t.countFor(37);
 }
 
+// ---- a muted thread ---------------------------------------------------------
+// Still listed, so its messages are known about, but none of them count and
+// none of them raise a notice. Unmuting starts it from nothing.
+{
+  const muted = new Set([37]);
+  let changes = 0;
+  const t = new UnreadTracker({ isMuted: (id) => muted.has(id), onChange: () => { changes += 1; } });
+  t.seedAll([{ id: 21, unread_count: 1 }, { id: 37, unread_count: 4 }]);
+  const noticed = t.add(37, msg({ id: 904 }));
+  t.add(21, msg({ id: 905 }));
+  out.muted = { count: t.countFor(37), noticed, total: t.total(), others: t.countFor(21) };
+
+  const before = changes;
+  muted.delete(37);
+  t.reset(37);
+  out.unmuted = { count: t.countFor(37), repainted: changes > before };
+}
+
 // ---- preview --------------------------------------------------------------
 out.preview = {
   markdown: previewOf(msg({ body: "Sent **game_tray-vase** to the printer" })),

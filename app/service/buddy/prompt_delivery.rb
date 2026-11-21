@@ -162,7 +162,7 @@ module Buddy
       return if message.nil?
       # A form on the wall is answered by tapping the wall. Same rule as
       # ByteNotifier: the kiosk never pushes.
-      return if message.byte_conversation&.kiosk?
+      return if message.byte_conversation&.silent?
 
       # The message body IS the question ("Who did: Puppy Down?"), and the OS
       # already shows Byte's name and icon around it, so nothing is added here.

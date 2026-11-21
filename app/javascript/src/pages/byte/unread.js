@@ -42,7 +42,7 @@ export function countsAsUnread(msg) {
 // (it streams, it settles, a late edit re-broadcasts it), and all of those are
 // one thing to read.
 export class UnreadTracker {
-  constructor({ onChange } = {}) {
+  constructor({ onChange, isMuted } = {}) {
     this.byConversation = new Map();
     this.base = new Map();
     // The conversations the drawer lists, learned from the server on every
@@ -55,6 +55,9 @@ export class UnreadTracker {
     // would be worse than counting too much.
     this.listed = null;
     this.onChange = onChange || (() => {});
+    // Asked rather than held, so a thread muted on another device or a moment
+    // ago is answered from the same list the drawer draws.
+    this.isMuted = isMuted || (() => false);
   }
 
   // Is this a thread the drawer can show?
@@ -132,6 +135,7 @@ export class UnreadTracker {
     if (convId == null || !this.knows(convId) || !countsAsUnread(msg) || msg.id == null) {
       return false;
     }
+    if (this.isMuted(convId)) return false;
 
     let ids = this.byConversation.get(convId);
     if (!ids) {
@@ -146,6 +150,8 @@ export class UnreadTracker {
   }
 
   countFor(convId) {
+    if (this.isMuted(convId)) return 0;
+
     return (this.base.get(convId) || 0) + (this.byConversation.get(convId)?.size || 0);
   }
 
@@ -175,6 +181,15 @@ export class UnreadTracker {
     this.byConversation.delete(convId);
     this.base.delete(convId);
     if (had) this.onChange();
+  }
+
+  // A thread muted or unmuted. The server marks it read at the same moment, so
+  // it starts from nothing either way, and the badge repaints even though
+  // nothing was counted - muting changes the total without a message moving.
+  reset(convId) {
+    this.byConversation.delete(convId);
+    this.base.delete(convId);
+    this.onChange();
   }
 }
 

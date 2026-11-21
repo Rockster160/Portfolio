@@ -720,7 +720,7 @@
     </form>
   </dialog>
 
-  <%# Per-conversation menu (rename/primary/pet/archive). %>
+  <%# Per-conversation menu (rename/primary/pet/mute/archive). %>
   <dialog class="byte-modal" data-byte-convo-menu>
     <div class="byte-modal-form basic">
       <h3 class="byte-modal-title" data-byte-menu-title>Conversation</h3>
@@ -732,6 +732,8 @@
         <button type="button" class="byte-menu-btn" data-byte-menu-primary hidden>Make primary</button>
         <%# Buddy threads only: a shell has no pet to swap. %>
         <button type="button" class="byte-menu-btn" data-byte-menu-buddy hidden>Change Buddy…</button>
+        <%# Labelled Mute or Unmute when the menu opens. %>
+        <button type="button" class="byte-menu-btn" data-byte-menu-mute>Mute</button>
         <button type="button" class="byte-menu-btn byte-menu-btn-danger" data-byte-menu-archive>Archive</button>
       </div>
       <div class="byte-modal-actions">

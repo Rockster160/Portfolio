@@ -224,7 +224,7 @@ module Buddy
     # question on the wall is answered by tapping the wall.
     def notify!(user, action, title:)
       message = action&.byte_message
-      return if message.nil? || message.byte_conversation&.kiosk?
+      return if message.nil? || message.byte_conversation&.silent?
 
       WebPushNotifications.send_to_byte(
         title: title.to_s.truncate(160),

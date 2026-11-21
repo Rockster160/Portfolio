@@ -392,12 +392,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Counts settled message IDS, not broadcasts: see unread.js for why a plain
   // tally ran away during a long Claude turn.
   const drawerBadge = document.querySelector("[data-byte-drawer-badge]");
+  // The conversation list answers this once it exists, below. The drawer can
+  // render while that list is still being built, so the tracker can't reach
+  // for it directly.
+  let isMutedConversation = () => false;
   const drawerUnread = new UnreadTracker({
     onChange: () => {
       const total = drawerUnread.total();
       paintDrawerBadge(drawerBadge, total);
       repaintAppBadge();
     },
+    isMuted: (id) => isMutedConversation(id),
   });
   // Byte is the only page that knows a real number, so it takes the icon over.
   // `ownAppBadge` also repaints on open and on every return to the foreground —
@@ -462,7 +467,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // from them is what catches a session up after it's been backgrounded.
     onConversations: (list) =>
       drawerUnread.seedAll(list, { except: currentConversationId }),
+    onMuteChange: (id) => drawerUnread.reset(id),
   });
+  isMutedConversation = (id) => convoManager.isMuted(id);
 
   // ConversationManager may pick a different currentId from localStorage
   // (user's last-viewed conversation) than the server-rendered bootstrap

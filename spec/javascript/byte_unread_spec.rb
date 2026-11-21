@@ -179,4 +179,14 @@ RSpec.describe "Byte unread counting" do
       expect(result["preview"]["long"]).to end_with("…")
     end
   end
+
+  describe "a muted thread" do
+    it "counts nothing and raises no notice, while other threads still count", :aggregate_failures do
+      expect(result["muted"]).to eq("count" => 0, "noticed" => false, "total" => 2, "others" => 2)
+    end
+
+    it "starts from nothing when unmuted, and repaints the badge" do
+      expect(result["unmuted"]).to eq("count" => 0, "repainted" => true)
+    end
+  end
 end

@@ -410,7 +410,7 @@ module Buddy
         # Same rule as ByteNotifier — a relay that landed on the wall stays on
         # the wall. Reachable even though `conversation_for` now avoids the
         # kiosk, because a caller can hand over an explicit `to_conversation`.
-        return if conversation&.kiosk?
+        return if conversation&.silent?
 
         # Icon references become their names. A push has no pixels, and
         # "<name>: [hicon:24] [hicon:22]" is the message arriving as its own

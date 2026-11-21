@@ -81,7 +81,7 @@ module Buddy
         # The wall tablet is a screen in a room, not a device that follows
         # anyone. It has the socket; a push here would only buzz a phone
         # elsewhere in the house. Same rule as ByteNotifier.
-        return if message.byte_conversation&.kiosk?
+        return if message.byte_conversation&.silent?
 
         # OS shows the app name (Byte) and its icon, so the title is whatever
         # the caller hands over, unchanged. This used to staple a ⏰ onto every
