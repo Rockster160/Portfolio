@@ -713,11 +713,16 @@ class WebhooksController < ApplicationController
     render json: { range: label[:name], count: items.length, body: body }
   end
 
-  # What the Feature Builder waits on the owner for, for the Mini's dashboard (NeedsYou).
+  # What the Feature Builder waits on the owner for, for the Mini's dashboard (NeedsYou),
+  # with the Claude plan's usage it draws beside it.
   def byte_needs_you
     return head :unauthorized unless byte_authorized?
 
-    render json: { needs_you: NeedsYou.call(User.me), upcoming: NeedsYou.upcoming(User.me) }
+    render json: {
+      needs_you: NeedsYou.call(User.me),
+      upcoming:  NeedsYou.upcoming(User.me),
+      claude:    NeedsYou.claude(User.me),
+    }
   end
 
   # For the laptop's git hook after a pull: the merge commits of `repo`

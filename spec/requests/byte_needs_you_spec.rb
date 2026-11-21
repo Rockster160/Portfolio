@@ -96,6 +96,17 @@ RSpec.describe "GET /webhooks/byte/needs_you", type: :request do
     ])
   end
 
+  it "carries the Claude plan's usage as the status line last reported it, and nil before any report" do
+    get "/webhooks/byte/needs_you", headers: { "X-Byte-Secret" => "shh" }
+    expect(response.parsed_body["claude"]).to be_nil
+
+    reported = { seven_day: { used: 83, resets_at: 1_795_266_000, observed_at: 1_795_216_725 } }
+    user.caches.set(:claude_usage, reported.to_json)
+
+    get "/webhooks/byte/needs_you", headers: { "X-Byte-Secret" => "shh" }
+    expect(response.parsed_body["claude"]).to eq(reported.deep_stringify_keys)
+  end
+
   it "turns away a request without the secret" do
     get "/webhooks/byte/needs_you", headers: { "X-Byte-Secret" => "guess" }
 

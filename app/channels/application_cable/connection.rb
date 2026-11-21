@@ -11,7 +11,7 @@ module ApplicationCable
     protected
 
     def find_verified_user # this checks whether a user is authenticated
-      user = user_from_headers
+      user = user_from_byte_secret || user_from_headers
       return user if user
       return reject_unauthorized_connection if cookies.nil? # Cookies are undefined in broadcasts
 
@@ -64,6 +64,13 @@ module ApplicationCable
     rescue StandardError
       # NoMethodError might get thrown if the raw_auth is not b64
       nil
+    end
+
+    # The Mac Mini dashboard (MiniDashboardChannel) comes with Byte's secret, as it does to
+    # GET /webhooks/byte/needs_you, and is the owner.
+    def user_from_byte_secret
+      secret = request.headers["HTTP_X_BYTE_SECRET"]
+      User.me if secret.present? && ByteLocal.valid_secret?(secret)
     end
 
     def user_from_basic(token)

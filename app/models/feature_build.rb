@@ -101,6 +101,8 @@ class FeatureBuild < ApplicationRecord
   # The card follows the build: any change that could move it repaints the
   # message, and the parent's when this one speaks on it.
   after_commit :repaint_card, on: :update
+  # NeedsYou reads builds: the Mini's dashboard fetches it again.
+  after_commit -> { MiniDashboardChannel.changed(user) }
 
   scope :newest,     -> { order(created_at: :desc) }
   scope :unfinished, -> { where(status: [:starting, :running, :stopped]) }

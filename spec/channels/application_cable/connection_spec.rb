@@ -59,6 +59,15 @@ RSpec.describe ApplicationCable::Connection do
     expect(conn.send(:find_verified_user)).to eq(user)
   end
 
+  it "connects the Mini's dashboard as the owner with Byte's secret, and nobody with a wrong one" do
+    allow(ByteLocal).to receive(:valid_secret?).and_return(false)
+    allow(ByteLocal).to receive(:valid_secret?).with("shh").and_return(true)
+
+    expect(build_conn(headers: { "HTTP_X_BYTE_SECRET" => "shh" }).send(:user_from_byte_secret)).to eq(User.me)
+    expect(build_conn(headers: { "HTTP_X_BYTE_SECRET" => "nope" }).send(:user_from_byte_secret)).to be_nil
+    expect(build_conn.send(:user_from_byte_secret)).to be_nil
+  end
+
   it "still accepts genuine basic auth" do
     user.update!(password: "correct-horse", password_confirmation: "correct-horse")
     token = Base64.encode64("#{user.username}:correct-horse")
