@@ -349,6 +349,8 @@ class List < ApplicationRecord
     rendered_message = ListsController.render template: "list_items/index", locals: { list: self }, layout: false
     ActionCable.server.broadcast "list_#{id}_html_channel", { list_html: rendered_message, timestamp: broadcast_stamp }
     ::Buddy::BoardList.broadcast!(self)
+    # A list widget on a phone isn't on the socket; it is told to ask again.
+    ::AppPush.reload_widgets_later(users.to_a)
   end
 
   # Stamped AFTER the read that produced the snapshot, never before. The stamp

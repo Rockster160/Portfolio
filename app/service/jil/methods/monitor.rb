@@ -1,4 +1,8 @@
 class Jil::Methods::Monitor < Jil::Methods::Base
+  def self.widget_key(user, channel)
+    "monitor:last:#{user.id}:#{channel}"
+  end
+
   def cast(value)
     @jil.cast(value, :Hash)
   end
@@ -67,6 +71,17 @@ class Jil::Methods::Monitor < Jil::Methods::Base
 
   private
 
+  # A socket only reaches screens that are open. A phone widget asks later, so
+  # the last frame of each feed is kept for it to read, and the widget is told.
+  def remember_for_widgets(users, data)
+    return if data[:loading]
+
+    users.each { |user|
+      ::Rails.cache.write(self.class.widget_key(user, data[:channel]), data, expires_in: 30.days)
+    }
+    ::AppPush.reload_widgets_later(users)
+  end
+
   def broadcast_to_all_users(data)
     task = @jil.broadcast_task
     users = task.present? ? task.broadcast_users.to_a : [@jil.user]
@@ -78,6 +93,7 @@ class Jil::Methods::Monitor < Jil::Methods::Base
     owner_id = task&.user_id || @jil.user&.id
     stamped = data.merge(owner_id: owner_id)
     users.each { |user| ::MonitorChannel.broadcast_to(user, stamped) }
+    remember_for_widgets(users, stamped)
     # A group a feed is aimed at becomes one a board can be pointed at.
     owner = task&.user || @jil.user
     ::Buddy::BoardFeedGroups.remember!(owner, data[:data][:groups]) if data[:data].is_a?(Hash)
