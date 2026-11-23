@@ -6,6 +6,15 @@ class IndexController < ApplicationController
     render layout: false
   end
 
+  # Ties the Buddy app to this site, so a password saved for ardesian.com is
+  # offered on the app's login page (the app's webcredentials entitlement is
+  # the other half). Apple fetches it from exactly this path, as JSON.
+  def apple_app_site_association
+    team = ENV.fetch("PORTFOLIO_APNS_TEAM_ID", nil)
+    apps = team.present? ? ["#{team}.#{Apns.topic}"] : []
+    render json: { webcredentials: { apps: apps } }
+  end
+
   def talk
     from_number = params["From"]
     body = params["Body"]

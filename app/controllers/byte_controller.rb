@@ -917,7 +917,7 @@ class ByteController < ApplicationController
     unread_total = ByteConversation.unread_total_for(current_user)
     # A native push CAN be silent, so the phone app is told: the badge drops to
     # the new total and this thread's notifications leave the tray.
-    AppPush.conversation_read(current_user, convo, unread_total)
+    AppConversationReadWorker.perform_async(current_user.id, convo.id) if AppPush.any_for?(current_user, :byte)
     render json: {
       id:           convo.id,
       unread_count: 0,

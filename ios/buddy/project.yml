@@ -51,6 +51,10 @@ targets:
         com.apple.developer.healthkit.background-delivery: true
         com.apple.developer.healthkit.access: []
         com.apple.developer.usernotifications.time-sensitive: true
+        # Passwords saved for the site are offered on the app's login page; the
+        # site's /.well-known/apple-app-site-association names this app back.
+        com.apple.developer.associated-domains:
+          - webcredentials:ardesian.com
     info:
       path: App/Info.plist
       properties:

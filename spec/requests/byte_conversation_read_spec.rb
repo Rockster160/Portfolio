@@ -39,6 +39,23 @@ RSpec.describe "Byte conversation read", type: :request do
     expect(response).to have_http_status(:not_found)
   end
 
+  # Each push to the phone app waits on Apple, so the read answers first and
+  # the phone hears from a job.
+  it "tells the phone app from a job, and only when there is one", :aggregate_failures do
+    allow(AppConversationReadWorker).to receive(:perform_async)
+    allow(Apns).to receive(:deliver)
+
+    post byte_read_conversation_path(id: conversation.id)
+    expect(AppConversationReadWorker).not_to have_received(:perform_async)
+
+    device, = AppDevice.issue!(user, name: "Phone", apns_token: "cafe")
+    device.update!(features: device.features + ["push"], permissions: { push: "granted" })
+    post byte_read_conversation_path(id: conversation.id)
+
+    expect(AppConversationReadWorker).to have_received(:perform_async).with(user.id, conversation.id)
+    expect(Apns).not_to have_received(:deliver)
+  end
+
   # A push that only clears the badge shows nothing, and iOS revokes a
   # subscription for those — so a read reaches closed devices not at all.
   it "sends no push to a device that isn't running" do

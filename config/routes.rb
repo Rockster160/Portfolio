@@ -7,6 +7,7 @@ Rails.application.routes.draw do
   get "/lorcana-glossary" => "index#lorcana_glossary"
   get "/privacy-policy" => "index#privacy_policy", as: :privacy_policy
   get "/support" => "index#support", as: :support
+  get "/.well-known/apple-app-site-association" => "index#apple_app_site_association", format: false
 
   constraints subdomain: "sub" do
     get "/sub" => "index#sub"

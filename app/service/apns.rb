@@ -18,6 +18,11 @@ class Apns
   # Apple rejects a provider token older than an hour and throttles one renewed
   # more often than every 20 minutes, so it is reused for most of that hour.
   TOKEN_TTL = 50.minutes
+  # How long Apple keeps trying a phone that is off or has no signal. An alert
+  # waits a day. A Live Activity or widget update is stale within the hour.
+  # A silent push is never stored: Apple holds only one undelivered push per
+  # app, and a stored silent one would take the place of a waiting alert.
+  KEEP_FOR = { alert: 1.day, liveactivity: 1.hour, widgets: 1.hour }.freeze
   TIMEOUT = 10
   # Statuses that mean the device token will never work again.
   DEAD_REASONS = [:BadDeviceToken, :Unregistered, :DeviceTokenNotForTopic, :ExpiredToken].freeze
@@ -61,7 +66,7 @@ class Apns
         "apns-topic"      => [topic, topic_suffix].compact.join("."),
         "apns-push-type"  => push_type.to_s,
         "apns-priority"   => (priority || default_priority(push_type)).to_s,
-        "apns-expiration" => (expiration || 0).to_i.to_s,
+        "apns-expiration" => (expiration || default_expiration(push_type)).to_i.to_s,
         "content-type"    => "application/json",
       }
       headers["apns-collapse-id"] = collapse_id.to_s.first(64) if collapse_id.present?
@@ -69,6 +74,11 @@ class Apns
     end
 
     private
+
+    def default_expiration(push_type)
+      keep = KEEP_FOR[push_type.to_sym]
+      keep ? keep.from_now : 0
+    end
 
     # Background pushes must be 5; Apple drops a 10 for content-available.
     def default_priority(push_type)

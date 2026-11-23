@@ -51,4 +51,26 @@ RSpec.describe Apns do
 
     expect(signed_with(sandbox, production_key)&.last).to include("kid" => "PRODKEY123")
   end
+
+  describe "how long Apple keeps trying an unreachable phone" do
+    def expiration_for(push_type, **options)
+      captured = nil
+      allow(Rails.env).to receive(:local?).and_return(false)
+      allow(described_class).to receive(:call) { |_env, _path, headers, _body|
+        captured = headers["apns-expiration"].to_i
+        Apns::Result.new(status: 200)
+      }
+      described_class.deliver(token: "cafe", payload: { aps: {} }, push_type: push_type, **options)
+      captured
+    end
+
+    it "keeps an alert for a day and never stores a silent push", :aggregate_failures do
+      freeze_time {
+        expect(expiration_for(:alert)).to eq(1.day.from_now.to_i)
+        expect(expiration_for(:liveactivity)).to eq(1.hour.from_now.to_i)
+        expect(expiration_for(:background)).to eq(0)
+        expect(expiration_for(:alert, expiration: 0)).to eq(0)
+      }
+    end
+  end
 end

@@ -89,7 +89,9 @@ module AppPush
         sent << deliver_to(device, background(remove_tags: [payload[:tag]]), push_type: :background)
       end
       if !count.nil? && device.preference?(:push_badges)
-        sent << deliver_to(device, { aps: { badge: count.to_i } })
+        # Not stored: Apple keeps one undelivered push per app, and a waiting
+        # alert is worth more than a count the next push will carry anyway.
+        sent << deliver_to(device, { aps: { badge: count.to_i } }, expiration: 0)
         sent << deliver_to(device, background(clear_all: true), push_type: :background) if count.to_i.zero?
       end
       sent
@@ -123,12 +125,13 @@ module AppPush
     { aps: { "content-available": 1 } }.merge(extra)
   end
 
-  def deliver_to(device, payload, push_type: :alert)
+  def deliver_to(device, payload, push_type: :alert, expiration: nil)
     result = Apns.deliver(
       token:       device.apns_token,
       payload:     payload,
       environment: device.apns_environment,
       push_type:   push_type,
+      expiration:  expiration,
     )
     device.update(apns_token: nil) if result.dead_token?
     result
