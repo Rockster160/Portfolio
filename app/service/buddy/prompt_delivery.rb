@@ -166,11 +166,12 @@ module Buddy
 
       # The message body IS the question ("Who did: Puppy Down?"), and the OS
       # already shows Byte's name and icon around it, so nothing is added here.
-      WebPushNotifications.send_to_byte(
-        title: message.body.to_s.truncate(160),
-        tag:   "byte-#{message.id}",
-        users: [user],
-      )
+      push = { title: message.body.to_s.truncate(160), tag: "byte-#{message.id}", users: [user] }
+      # Answer buttons for the phone app, when a tap is enough to answer it.
+      prompt = Prompt.find_by(id: action.tool_input.to_h.dig("payload", "id"))
+      actions = prompt ? ::AppDevices::NotificationActions.for_prompt(prompt) : {}
+      push[:data] = actions if actions.present?
+      WebPushNotifications.send_to_byte(**push)
     rescue StandardError => e
       Rails.logger.warn("[Buddy::PromptDelivery] notify failed: #{e.class}: #{e.message}")
     end

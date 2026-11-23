@@ -914,10 +914,14 @@ class ByteController < ApplicationController
     # a push that only clears it shows nothing, and iOS revokes a subscription
     # for those (see WebPushNotifications.send_to).
     broadcast_convo_read(convo)
+    unread_total = ByteConversation.unread_total_for(current_user)
+    # A native push CAN be silent, so the phone app is told: the badge drops to
+    # the new total and this thread's notifications leave the tray.
+    AppPush.conversation_read(current_user, convo, unread_total)
     render json: {
       id:           convo.id,
       unread_count: 0,
-      unread_total: ByteConversation.unread_total_for(current_user),
+      unread_total: unread_total,
     }
   end
 

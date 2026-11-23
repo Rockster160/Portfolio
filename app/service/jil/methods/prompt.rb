@@ -336,6 +336,7 @@ class Jil::Methods::Prompt < Jil::Methods::Base
       tag:   prompt.params&.symbolize_keys&.[](:tag),
       url:   Rails.application.routes.url_helpers.prompt_url(prompt),
       badge: @jil.user.prompts.unanswered.reload.count,
+      data:  ::AppDevices::NotificationActions.for_prompt(prompt).presence,
     }.compact)
   end
 

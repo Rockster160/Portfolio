@@ -56,6 +56,12 @@ class Timer < ApplicationRecord
   belongs_to :timer_page, optional: true
   has_many :share_tokens, class_name: "TimerShareToken", dependent: :destroy
 
+  # A deleted timer broadcasts nothing of its own, and a Live Activity showing it
+  # would otherwise run on to zero.
+  after_destroy_commit {
+    AppTimerPushWorker.perform_async(id, "destroyed") if AppDevice.active.exists?
+  }
+
   scope :live,    -> { where(archived_at: nil) }
   scope :running, -> { live.where.not(started_at: nil).where(paused_at: nil) }
   # Home's timers and those on the person's own pages — never Buddy's.
@@ -521,9 +527,10 @@ class Timer < ApplicationRecord
           title: t[:title].to_s.presence || name.presence || "Timer",
           body:  t[:body].to_s.presence  || "Time's up",
           tag:   "timer-#{id}",
+          sound: alert_sound,
           icon:  "/assets/favicon/android-chrome-192x192.png",
           data:  { url: notification_url, timer_id: id },
-        },
+        }.compact,
         channel: :timers,
       )
     when "sound"
@@ -580,6 +587,30 @@ class Timer < ApplicationRecord
     end
   end
 
+  # The chimes the Timers page can play (timers/audio.js CHIMES); the phone app
+  # carries a recording of each, rendered by ios/buddy/bin/sounds.
+  CHIMES = %i[soft bell ding beep chime].freeze
+  # How often the page repeats a chime, by the recording that matches it. A
+  # minute's gap can't repeat inside one notification, so it rings once.
+  CADENCE_SOUNDS = { "1s": :"1s", "10s": :"10s" }.freeze
+
+  # The sound file the phone app rings this timer with, so it sounds the way it
+  # does on the page: Buddy's cry for Buddy's timers, otherwise the chime and
+  # cadence of the timer's own sound callback. Nil when the page plays nothing.
+  def alert_sound
+    return :buddy_alarm if ::Buddy::Timers.buddy_timer?(user, self)
+
+    sound = Array(callbacks).filter_map { |raw| normalize_callback(raw) }.find { |cb|
+      cb.dig(:when, :type).to_s == "complete" && cb.dig(:then, :type).to_s == "sound"
+    }
+    return if sound.nil?
+
+    chime = sound.dig(:then, :chime).to_s.to_sym
+    chime = :soft unless CHIMES.include?(chime)
+    cadence = CADENCE_SOUNDS.fetch(sound.dig(:then, :cadence).to_s.to_sym, :once)
+    :"timer_#{chime}_#{cadence}"
+  end
+
   def notification_url
     timer_page&.slug && !timer_page.buddy? ? "/timers/page/#{timer_page.slug}" : "/timers"
   end
@@ -606,6 +637,7 @@ class Timer < ApplicationRecord
       }.merge(extra),
     }
     Buddy::Timers.audience(self).each { |member| MonitorChannel.broadcast_to(member, payload) }
+    AppTimerPushWorker.perform_async(id, reason.to_s) if countdown? && AppDevice.active.exists?
   end
 
   private

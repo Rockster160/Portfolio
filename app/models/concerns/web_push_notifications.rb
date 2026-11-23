@@ -41,10 +41,17 @@ module WebPushNotifications
   # which is the whole point of presence: mute the screen you're reading, not
   # the phone in your pocket.
   def send_to(user, payload={}, channel: :jarvis, subscriptions: nil)
-    return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
     return "Failed to push - user not found" if user.blank?
 
+    # The phone app first: it is the one surface that can take a silent count
+    # or a dismissal, which the web half below has to refuse.
+    native = native_push(user, payload, channel)
+    return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
+
     subs = (subscriptions || user.all_push_subs_for_channel(channel)).select(&:pushable?)
+    subs = [] if AppPush.replaces_web_push?(user, channel)
+    return "Push success" if subs.empty? && native.any? { |result| result&.ok? }
+
     # Every caller throws this return value away, so a channel with no usable
     # subscription goes silent and NOTHING says so. An expiry disables that
     # subscription below (registered_at: nil) and from then on it's a no-op
@@ -83,6 +90,14 @@ module WebPushNotifications
     results = subs.map { |sub| deliver_push(user, sub, message, channel) }
 
     results.include?("Push success") ? "Push success" : results.first
+  end
+
+  # Never lets the app half cost the web half its notification.
+  def native_push(user, payload, channel)
+    Array(AppPush.deliver(user, payload, channel: channel))
+  rescue StandardError => e
+    Rails.logger.warn("[APP_PUSH] #{channel} push for #{user.username}: #{e.class}: #{e.message}")
+    []
   end
 
   def deliver_push(user, push_sub, message, channel)
@@ -183,10 +198,14 @@ module WebPushNotifications
   end
 
   def all_whisper_subscribers
-    User.joins(:push_subs)
-      .where(user_push_subscriptions: { channel: :whisper })
-      .where.not(user_push_subscriptions: { registered_at: nil })
-      .distinct
+    web = User.joins(:push_subs).where(user_push_subscriptions: { channel: :whisper })
+    web = web.where.not(user_push_subscriptions: { registered_at: nil })
+    with_app_devices(web)
+  end
+
+  # A person reached only through the phone app is still a subscriber.
+  def with_app_devices(web)
+    User.where(id: web.select(:id)).or(User.where(id: AppDevice.pushable.select(:user_id)))
   end
 
   # Convenience method for Byte notifications — sends to all subscribers
@@ -203,9 +222,8 @@ module WebPushNotifications
   end
 
   def all_byte_subscribers
-    User.joins(:push_subs)
-      .where(user_push_subscriptions: { channel: :byte })
-      .where.not(user_push_subscriptions: { registered_at: nil })
-      .distinct
+    web = User.joins(:push_subs).where(user_push_subscriptions: { channel: :byte })
+    web = web.where.not(user_push_subscriptions: { registered_at: nil })
+    with_app_devices(web)
   end
 end

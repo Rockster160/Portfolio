@@ -88,11 +88,14 @@ module Buddy
         # one of them regardless of content - a glyph that leads EVERY
         # notification stops meaning anything by the second one. A caller whose
         # glyph says something (a deploy's outcome) still leads with it.
-        WebPushNotifications.send_to_byte(
+        # A fired timer rings with its own sound on the phone, as it does on the page.
+        timer_id = message.metadata.to_h["timer_id"]
+        WebPushNotifications.send_to_byte({
           title: push_title.to_s.truncate(160),
           tag:   "byte-#{message.id}",
+          sound: (Timer.find_by(id: timer_id)&.alert_sound if timer_id),
           users: [user],
-        )
+        }.compact)
       end
 
       private

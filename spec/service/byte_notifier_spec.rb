@@ -75,7 +75,7 @@ RSpec.describe ByteNotifier do
       deliver({ "kind" => "buddy" })
 
       expect(WebPushNotifications).to have_received(:send_to_byte)
-        .with(hash_including(data: { count: 1 }))
+        .with(hash_including(data: hash_including(count: 1)))
     end
 
     it "counts every thread, not just the one that fired" do
@@ -86,7 +86,7 @@ RSpec.describe ByteNotifier do
       deliver({ "kind" => "buddy" })
 
       expect(WebPushNotifications).to have_received(:send_to_byte)
-        .with(hash_including(data: { count: 2 }))
+        .with(hash_including(data: hash_including(count: 2)))
     end
   end
 

@@ -522,6 +522,12 @@
   #permitRelay?(Boolean)
   #phone(String)
   #data(content(Hash|Keyval))
+[Widget]
+  #set(String:"Key" content(Hash|Keyval [Keyval.new]))::Hash // What the phone's Buddy panel widget with this key shows: title, subtitle, icon, color, background, text, value, rows, buttons, chart, image_url, svg, url, action
+  #merge(String:"Key" content(Hash|Keyval [Keyval.new]))::Hash // Changes only the keys given
+  #get(String:"Key")::Hash
+  #clear(String:"Key")::Boolean
+  #reload::Boolean // Redraw every Buddy widget on the phone
 [PushNotification]
   #notify(content(PushNotificationData))
   #dismiss(String:Tag)
@@ -529,6 +535,9 @@
   #tag(String)
   #title(String)
   #body(Text)
+  #buttons(content(PushNotificationButton)) // Buttons on the notification in the Buddy phone app, up to 4
+*[PushNotificationButton]
+  #button(String:"Label" String:"Trigger" BR Hash?:"Data" Boolean?(false):"Ask for text") // Pressing it fires Trigger with Data, plus `text` when it asks for some
 [Monitor]
   #loading(String:Name Boolean(true))
   #broadcast(String:Name content(MonitorData) "Loading?" Boolean(false))
