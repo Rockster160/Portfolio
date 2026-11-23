@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.ardesian.buddy.refresh</string>
+		<string>com.ardesian.buddy.flush</string>
+	</array>
+	<key>BuddyAppGroup</key>
+	<string>$(BUDDY_APP_GROUP)</string>
+	<key>BuddyKeychainGroup</key>
+	<string>$(AppIdentifierPrefix)$(BUDDY_BUNDLE_ID)</string>
+	<key>BuddyServerURL</key>
+	<string>$(BUDDY_SERVER_URL)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Buddy</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.ardesian.buddy</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>buddy</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Buddy rings your timers and alarms like the Clock app, even on silent.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Buddy reads the battery level of connected Bluetooth accessories to report them to your server.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Buddy syncs your calendars to your server so your agenda and Jil tasks can see them.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Buddy can attach a photo to a message.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Buddy syncs your contacts to your server so Buddy and Jil tasks know who people are.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Buddy reads your workouts and activity so they log to your server automatically, with type, duration and calories.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Buddy does not write health data.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Buddy keeps your server up to date with where you are, even when the app is closed, so arrivals, departures and travel automations fire on time.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Buddy sends your location to your own server so Jil tasks and Buddy can act on where you are.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Buddy can listen when you dictate a message.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Buddy can attach a photo from your library to a message.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Buddy syncs your reminders to your server so Jil tasks and lists can see them.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Buddy turns your voice into a message.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>com.ardesian.buddy.command</string>
+	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>terminess-reg.ttf</string>
+	</array>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>location</string>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>WKAppBoundDomains</key>
+	<array>
+		<string>ardesian.com</string>
+		<string>byte.ardesian.com</string>
+		<string>localhost</string>
+		<string>byte.localhost</string>
+	</array>
+</dict>
+</plist>

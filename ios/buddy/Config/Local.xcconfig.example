@@ -1,0 +1,3 @@
+// Copy to Local.xcconfig (gitignored) to override per machine, e.g. pointing at a dev server.
+// DEVELOPMENT_TEAM = ABCDE12345
+// BUDDY_SERVER_URL = http:$(BUDDY_SLASH)/192.168.1.10:3141

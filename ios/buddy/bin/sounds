@@ -1,0 +1,119 @@
+#!/usr/bin/env ruby
+# Renders the timer sounds the site plays into the sound files the app rings
+# with (App/Resources/Sounds), so a timer sounds the same on the Lock Screen as
+# it does on the page. Run it again whenever a chime in the JS changes.
+#
+# The tones are read out of the JS itself (CHIMES in timers/audio.js, the grub
+# pulses in byte/buddy/alarm.js) and synthesized the way Web Audio plays them:
+# an oscillator per tone, a short linear attack, then an exponential fall.
+require "fileutils"
+require "tmpdir"
+
+ROOT = File.expand_path("../../..", __dir__)
+OUT = File.expand_path("../App/Resources/Sounds", __dir__)
+TIMERS_JS = File.join(ROOT, "app/javascript/src/pages/timers/audio.js")
+BUDDY_JS = File.join(ROOT, "app/javascript/src/pages/byte/buddy/alarm.js")
+
+RATE = 22_050
+# iOS plays a notification sound for at most 30 seconds; a whole number of
+# seconds also loops cleanly when AlarmKit repeats it.
+RING_LENGTH = 28
+PEAK = 0.85
+TONE = /\{\s*f:\s*([\d.]+),\s*t:\s*([\d.]+),\s*d:\s*([\d.]+),\s*g:\s*([\d.]+),\s*w:\s*"(\w+)"\s*\}/
+# The site's cadences, by how often the chime repeats; "60s" can't repeat inside
+# one notification, so it rings once like "once".
+CADENCES = { once: nil, "1s": 1, "10s": 10 }.freeze
+
+def tones(text)
+  text.scan(TONE).map { |f, t, d, g, w|
+    { f: f.to_f, t: t.to_f, d: d.to_f, g: g.to_f, w: w.to_sym }
+  }
+end
+
+def chimes
+  table = File.read(TIMERS_JS)[/const CHIMES = \{(.*?)\n\};/m, 1]
+  raise "No CHIMES table in #{TIMERS_JS}" if table.nil?
+
+  table.scan(/^\s*(\w+):\s*\[(.*?)\],?\s*$/).to_h { |name, list| [name.to_sym, tones(list)] }
+end
+
+def grub
+  list = File.read(BUDDY_JS)[/const GRUB_PULSES = \[(.*?)\];/m, 1]
+  raise "No GRUB_PULSES in #{BUDDY_JS}" if list.nil?
+
+  tones(list)
+end
+
+# One period of a Web Audio oscillator at phase (0...1), band-limited the way the
+# browser's are, so a square wave doesn't alias into a buzz.
+def wave(type, phase, frequency)
+  harmonics = ((RATE / 2.0) / frequency).floor
+  case type
+  when :square
+    (1..harmonics).step(2).sum { |n| Math.sin(2 * Math::PI * n * phase) / n } * 4 / Math::PI
+  when :triangle
+    (1..harmonics).step(2).sum { |n|
+      sign = ((n - 1) / 2).even? ? 1 : -1
+      sign * Math.sin(2 * Math::PI * n * phase) / (n * n)
+    } * 8 / (Math::PI**2)
+  else
+    Math.sin(2 * Math::PI * phase)
+  end
+end
+
+# attack: the linear rise before the fall (0.015 for timers, 0.02 for Buddy).
+# glide: what the pitch falls to by the end (Buddy's pulses drop to 0.85).
+def add_tone(samples, start, tone, attack:, glide: 1.0)
+  first = ((start + tone[:t]) * RATE).round
+  length = ((tone[:d] + 0.05) * RATE).round
+  phase = 0.0
+  length.times do |index|
+    at = index.to_f / RATE
+    break if first + index >= samples.size
+
+    progress = [at / tone[:d], 1.0].min
+    frequency = tone[:f] * (glide**progress)
+    level = (
+      if at < attack
+        tone[:g] * at / attack
+      elsif at < tone[:d]
+        tone[:g] * ((0.0001 / tone[:g])**((at - attack) / (tone[:d] - attack)))
+      else
+        0.0
+      end
+    )
+    samples[first + index] += level * wave(tone[:w], phase, frequency)
+    phase = (phase + (frequency / RATE)) % 1.0
+  end
+end
+
+def render(list, every:, attack:, glide: 1.0)
+  single = list.map { |tone| tone[:t] + tone[:d] + 0.05 }.max
+  length = every ? RING_LENGTH : single
+  samples = Array.new((length * RATE).ceil, 0.0)
+  starts = every ? (0...RING_LENGTH).step(every).to_a : [0]
+  starts.each { |start| list.each { |tone| add_tone(samples, start, tone, attack: attack, glide: glide) } }
+  loudest = samples.map(&:abs).max
+  samples.map { |sample| sample * PEAK / loudest }
+end
+
+def write(name, samples, scratch)
+  wav = File.join(scratch, "#{name}.wav")
+  data = samples.map { |sample| (sample.clamp(-1.0, 1.0) * 32_767).round }.pack("s<*")
+  header = ["RIFF", 36 + data.bytesize, "WAVE", "fmt ", 16, 1, 1, RATE, RATE * 2, 2, 16, "data", data.bytesize]
+  File.binwrite(wav, header.pack("a4Va4a4VvvVVvva4V") + data)
+  caf = File.join(OUT, "#{name}.caf")
+  # IMA4 keeps a 28-second ring around a quarter of its PCM size; notifications accept it.
+  system("afconvert", "-f", "caff", "-d", "ima4", wav, caf, exception: true)
+  puts("WROTE #{File.basename(caf)} (#{(File.size(caf) / 1024.0).round}KB)")
+end
+
+FileUtils.mkdir_p(OUT)
+Dir.mktmpdir("buddy-sounds") { |scratch|
+  chimes.each do |chime, list|
+    CADENCES.each do |cadence, every|
+      write("timer_#{chime}_#{cadence}", render(list, every: every, attack: 0.015), scratch)
+    end
+  end
+  write("buddy_alarm", render(grub, every: 1, attack: 0.02, glide: 0.85), scratch)
+}
