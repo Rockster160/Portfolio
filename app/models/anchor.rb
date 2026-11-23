@@ -49,7 +49,7 @@ class Anchor < ApplicationRecord
   before_validation { self.key = key.to_s.downcase.strip.presence }
 
   def self.for(user, key)
-    find_by(user_id: ::User.id(user), key: key.to_s.downcase.strip)
+    find_by(user_id: ::User.id_of(user), key: key.to_s.downcase.strip)
   end
 
   # Make an expression usable and hand back the moment it resolves to now.
@@ -123,7 +123,7 @@ class Anchor < ApplicationRecord
   end
 
   def self.keys_for(user)
-    where(user_id: ::User.id(user)).order(:key).pluck(:key)
+    where(user_id: ::User.id_of(user)).order(:key).pluck(:key)
   end
 
   # The next time `expression` comes due, strictly after `after`. nil when the

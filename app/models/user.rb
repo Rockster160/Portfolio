@@ -446,11 +446,11 @@ class User < ApplicationRecord
     user_scope.first || User.new(raw_params)
   end
 
-  def self.id(user_or_id)
+  def self.id_of(user_or_id)
     user_or_id.is_a?(::User) ? user_or_id.id : user_or_id.to_i
   end
 
-  def self.ids(user_or_ids)
+  def self.ids_of(user_or_ids)
     case user_or_ids
     when ::User then [user_or_ids.id]
     when ::ActiveRecord::Relation then user_or_ids.ids

@@ -108,7 +108,7 @@ class Execution < ApplicationRecord
 
     if user.present?
       conditions << "user_id IN (?)"
-      args << ::User.ids(user)
+      args << ::User.ids_of(user)
     end
 
     [conditions.join(" AND "), args]

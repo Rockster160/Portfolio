@@ -1,6 +1,11 @@
 # Apple Push Notification service over HTTP/2, authenticated with a .p8 signing
 # key (token-based auth), so there is no certificate to expire once a year.
 #
+# Apple issues a key per environment: PORTFOLIO_APNS_KEY / _KEY_ID sign pushes
+# to TestFlight and App Store builds, PORTFOLIO_APNS_SANDBOX_KEY / _KEY_ID to
+# builds run from Xcode. A sandbox left unset uses the production key, which is
+# right for a key Apple issued for both.
+#
 #   Apns.deliver(token: hex, payload: { aps: { alert: "Hi" } }, environment: "production")
 #
 # Returns an Apns::Result. The caller decides what a dead token means for its
@@ -25,8 +30,8 @@ class Apns
   MUTEX = Mutex.new
 
   class << self
-    def configured?
-      key_pem.present? && key_id.present? && team_id.present?
+    def configured?(env=:production)
+      key_pem(env).present? && key_id(env).present? && team_id.present?
     end
 
     def topic
@@ -45,8 +50,14 @@ class Apns
       topic_suffix: nil)
       return Result.new(status: 0, reason: :NoToken) if token.blank?
 
+      env = environment.to_s == "development" ? :development : :production
+      if Rails.env.local? || !configured?(env)
+        log_only(token, push_type, payload)
+        return Result.new(status: 200, reason: :Logged)
+      end
+
       headers = {
-        "authorization"   => "bearer #{provider_token}",
+        "authorization"   => "bearer #{provider_token(env)}",
         "apns-topic"      => [topic, topic_suffix].compact.join("."),
         "apns-push-type"  => push_type.to_s,
         "apns-priority"   => (priority || default_priority(push_type)).to_s,
@@ -54,14 +65,7 @@ class Apns
         "content-type"    => "application/json",
       }
       headers["apns-collapse-id"] = collapse_id.to_s.first(64) if collapse_id.present?
-      body = payload.to_json
-
-      if Rails.env.local? || !configured?
-        log_only(token, headers, body)
-        return Result.new(status: 200, reason: :Logged)
-      end
-
-      call(environment, "/3/device/#{token}", headers, body)
+      call(env, "/3/device/#{token}", headers, payload.to_json)
     end
 
     private
@@ -71,8 +75,7 @@ class Apns
       push_type.to_sym == :background ? 5 : 10
     end
 
-    def call(environment, path, headers, body)
-      env = environment.to_s == "development" ? :development : :production
+    def call(env, path, headers, body)
       response = MUTEX.synchronize {
         client(env).call(:post, path, body: body, headers: headers, timeout: TIMEOUT)
       }
@@ -110,35 +113,38 @@ class Apns
       nil
     end
 
-    def provider_token
+    # One per environment, each signed with that environment's key.
+    def provider_token(env)
       MUTEX.synchronize {
-        if @provider_token.nil? || @provider_token_at < TOKEN_TTL.ago
-          key = OpenSSL::PKey::EC.new(key_pem)
-          @provider_token = JWT.encode(
-            { iss: team_id, iat: Time.current.to_i },
-            key,
-            "ES256",
-            { kid: key_id },
-          )
-          @provider_token_at = Time.current
+        @provider_tokens ||= {}
+        token, issued_at = @provider_tokens[env]
+        if token.nil? || issued_at < TOKEN_TTL.ago
+          key = OpenSSL::PKey::EC.new(key_pem(env))
+          token = JWT.encode({ iss: team_id, iat: Time.current.to_i }, key, "ES256", { kid: key_id(env) })
+          @provider_tokens[env] = [token, Time.current]
         end
-        @provider_token
+        token
       }
     end
 
     # The key is stored as the .p8 file's text; an env var often carries its
     # newlines escaped.
-    def key_pem
-      ENV.fetch("PORTFOLIO_APNS_KEY", "").gsub("\\n", "\n").presence
+    def key_pem(env)
+      raw = env == :development ? ENV["PORTFOLIO_APNS_SANDBOX_KEY"].presence : nil
+      (raw || ENV.fetch("PORTFOLIO_APNS_KEY", "")).gsub("\\n", "\n").presence
     end
 
-    def key_id = ENV.fetch("PORTFOLIO_APNS_KEY_ID", nil)
+    def key_id(env)
+      sandbox = ENV["PORTFOLIO_APNS_SANDBOX_KEY_ID"].presence if env == :development
+      sandbox || ENV.fetch("PORTFOLIO_APNS_KEY_ID", nil)
+    end
+
     def team_id = ENV.fetch("PORTFOLIO_APNS_TEAM_ID", nil)
 
-    def log_only(token, headers, body)
+    def log_only(token, push_type, payload)
       return if Rails.env.test?
 
-      Rails.logger.info("[APNS][#{headers["apns-push-type"]}] #{token.to_s.first(8)}… #{body}")
+      Rails.logger.info("[APNS][#{push_type}] #{token.to_s.first(8)}… #{payload.to_json}")
     end
   end
 end

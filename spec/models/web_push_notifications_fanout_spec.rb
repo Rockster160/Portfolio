@@ -69,6 +69,22 @@ RSpec.describe WebPushNotifications do
     expect(sent).to eq(["https://push/desk"])
   end
 
+  # Sent with no `users:`, the list of everyone subscribed is a User relation
+  # handed to `where`, and the query has to build.
+  it "reaches every subscriber on a channel when nobody is named" do
+    UserPushSubscription.create!(
+      user: user, channel: :whisper, endpoint: "https://push/whisper",
+      p256dh: "k", auth: "a", registered_at: Time.current
+    )
+
+    sent = endpoints_pushed {
+      described_class.send_to_byte({ title: "hi" })
+      described_class.send_to_whisper({ title: "Fed!" })
+    }
+
+    expect(sent).to contain_exactly("https://push/phone", "https://push/desk", "https://push/whisper")
+  end
+
   # One dead endpoint used to be the whole notification. It has to cost only
   # itself.
   describe "when one device is gone" do

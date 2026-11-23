@@ -16,7 +16,7 @@ module Jil::Schedule
     return if trigger.blank?
 
     schedule = ::ScheduledTrigger.create!(
-      user_id:      ::User.id(user),
+      user_id:      ::User.id_of(user),
       trigger:      trigger,
       execute_at:   execute_at.presence || ::Time.current,
       data:         data,
