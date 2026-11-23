@@ -11,11 +11,13 @@ class AppHotLinksController < ApplicationController
     }
   end
 
+  # The page saves as it's edited, so the reply is the saved list, each link
+  # with the id a new one was given. A refusal leaves what was typed in place.
   def update
     links = params[:hot_links].respond_to?(:permit!) ? params[:hot_links].permit!.to_h.values : []
     AppDevices::HotLinks.save!(current_user, links)
-    redirect_to app_hot_links_path, notice: "Saved"
+    render json: { hot_links: current_user.hot_links }
   rescue ArgumentError => e
-    redirect_to app_hot_links_path, alert: e.message
+    render json: { message: e.message }, status: :unprocessable_entity
   end
 end

@@ -1,10 +1,9 @@
-<% content_for :title, "Commands" %>
+<% content_for :title, "Queue" %>
 <div class="panel-app" data-buddy-commands>
   <div class="panel-page">
     <header class="panel-topbar">
-      <a class="panel-icon-btn" href="/byte" aria-label="Buddy">‹</a>
-      <h1>Commands</h1>
-      <a class="panel-chip" href="<%= app_settings_path %>">Settings</a>
+      <a class="panel-icon-btn" data-back href="<%= app_settings_path %>" aria-label="Buddy for iPhone">‹</a>
+      <h1>Queue</h1>
     </header>
 
     <div class="buddy-app-only">
@@ -16,7 +15,7 @@
             <label><input type="radio" name="kind" value="buddy"><span>Buddy</span></label>
           </div>
           <label class="panel-setting">
-            <span class="panel-setting-text">Show the reply</span>
+            <span class="panel-setting-text">Wait for the reply<%= render "app_devices/info", label: "Wait for the reply", text: "Waits for the answer and shows it here. Off, it's sent, or queued when there's no signal." %></span>
             <input type="checkbox" name="inline" class="panel-switch" checked>
           </label>
           <button type="submit" class="panel-btn panel-btn-primary panel-btn-block">Send</button>

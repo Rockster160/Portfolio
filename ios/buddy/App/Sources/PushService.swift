@@ -40,8 +40,11 @@ final class PushService {
   /// The silent half of the server's push contract.
   func handleBackground(_ info: [AnyHashable: Any]) async {
     let preferences = Preferences.current
+    // Everything in Buddy was read: its notifications go, and a timer's, a chore's or a prompt's stay.
     if info["clear_all"] as? Bool == true, preferences.pushBadges {
-      UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+      let center = UNUserNotificationCenter.current()
+      let read = await center.deliveredNotifications().filter { ($0.request.content.userInfo["channel"] as? String) == "byte" }
+      center.removeDeliveredNotifications(withIdentifiers: read.map(\.request.identifier))
     }
     if let tags = info["remove_tags"] as? [String], !tags.isEmpty, preferences.pushBadges {
       await NotificationLedger.remove(tags: Set(tags))

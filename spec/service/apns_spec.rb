@@ -52,6 +52,19 @@ RSpec.describe Apns do
     expect(signed_with(sandbox, production_key)&.last).to include("kid" => "PRODKEY123")
   end
 
+  # A push with no key to sign it never reached Apple, so it isn't reported as sent.
+  it "reports a push it has no key for as not sent", :aggregate_failures do
+    allow(Rails.env).to receive(:local?).and_return(false)
+    allow(described_class).to receive(:call)
+    allow(ENV).to receive(:fetch).with("PORTFOLIO_APNS_TEAM_ID", anything).and_return(nil)
+
+    result = described_class.deliver(token: "cafe", payload: { aps: {} })
+
+    expect(result).not_to be_ok
+    expect(result.reason).to eq(:NotConfigured)
+    expect(described_class).not_to have_received(:call)
+  end
+
   describe "how long Apple keeps trying an unreachable phone" do
     def expiration_for(push_type, **options)
       captured = nil

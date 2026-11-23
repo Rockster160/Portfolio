@@ -21,7 +21,7 @@ enum ActionRunner {
       let kind: OutboxItem.Kind = action.kind == .command ? .command : .buddy
       if action.inline == true {
         do {
-          let reply = try await Outbox.sendInline(kind: kind, text: text, source: source)
+          let reply = try await Outbox.sendInline(kind: kind, text: text, data: action.data, source: source)
           return .replied(reply.response ?? "Sent.")
         } catch {
           return .replied(error.localizedDescription)
@@ -98,12 +98,11 @@ enum DeepLink {
       components?.queryItems?.first(where: { $0.name == name })?.value
     }
 
-    // Links to the site itself open in the app's web view.
+    // A link to the site keeps its host, so a Board or Kiosk link on Buddy's subdomain isn't read
+    // as the same path on the main site.
     if url.scheme == "https" || url.scheme == "http" {
-      guard url.host == BuddyConfig.serverURL.host || url.host?.hasSuffix(".\(BuddyConfig.serverURL.host ?? "")") == true else { return nil }
-      var path = url.path.isEmpty ? "/" : url.path
-      if let query = url.query { path += "?\(query)" }
-      return .web(path: path)
+      guard WebShell.isSite(url) else { return nil }
+      return .web(path: url.absoluteString)
     }
 
     guard url.scheme == BuddyConfig.urlScheme else { return nil }

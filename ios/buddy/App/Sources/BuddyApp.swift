@@ -35,17 +35,19 @@ final class AppModel: ObservableObject {
   static let shared = AppModel()
 
   let shell: WebShell
+  let progress: PageProgress
   @Published private(set) var signedIn = Session.isSignedIn
   var route: DeepLink.Route? {
     didSet { if let route { apply(route) } }
   }
 
   var isShowingBuddy: Bool {
-    shell.currentHost.hasPrefix("byte.") || Self.isBuddyPath(shell.currentPath)
+    shell.webView.url.map(WebShell.isBuddy) ?? false
   }
 
   init() {
     shell = WebShell { name, args in try await AppBridge.handle(name, args) }
+    progress = PageProgress(webView: shell.webView)
     shell.handleAppURL = { AppModel.shared.handle(url: $0) }
     shell.openExternally = { UIApplication.shared.open($0) }
     shell.sessionExpired = { AppModel.shared.reloadPage() }
@@ -71,6 +73,7 @@ final class AppModel: ObservableObject {
     Task {
       await QuickActions.performPending()
       _ = try? await Catalog.refresh()
+      BuddyShortcuts.updateAppShortcutParameters()
       await DeviceSync.push()
       await FeatureManager.shared.syncAll(reason: "foreground")
       WidgetCenter.shared.reloadAllTimelines()
@@ -144,8 +147,7 @@ final class AppModel: ObservableObject {
       shell.load(Self.buddyPath(conversationId: id))
     case .web(let path):
       // Another page opens where it lives, unless this phone is set to keep pages in the app.
-      if let url = URL(string: path, relativeTo: BuddyConfig.serverURL)?.absoluteURL,
-         !WebShell.isAppPage(url), !Preferences.current.openLinksInApp {
+      if let url = URL(string: path, relativeTo: BuddyConfig.serverURL)?.absoluteURL, !WebShell.opensInApp(url) {
         UIApplication.shared.open(url)
       } else {
         shell.load(path)
@@ -193,10 +195,6 @@ final class AppModel: ObservableObject {
     }
     components.queryItems = items
     return components.string ?? "/app/compose"
-  }
-
-  static func isBuddyPath(_ path: String) -> Bool {
-    path == "/byte" || path.hasPrefix("/byte?") || path.hasPrefix("/byte/")
   }
 
   /// A check-in opens the oldest unanswered prompt, or the mood check-in when nothing's waiting.

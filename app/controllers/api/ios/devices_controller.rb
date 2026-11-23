@@ -36,7 +36,7 @@ class Api::Ios::DevicesController < Api::Ios::BaseController
 
   def test_push
     kind = params[:kind].to_s.presence || "alert"
-    result = current_device.test_push!(kind, user: current_user)
+    result = current_device.test_push!(kind)
     render json: { kind: kind, result: result&.to_h }
   end
 

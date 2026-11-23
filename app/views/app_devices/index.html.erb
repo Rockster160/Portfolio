@@ -2,10 +2,13 @@
 <div class="panel-app">
   <div class="panel-page">
     <header class="panel-topbar">
-      <a class="panel-icon-btn" href="<%= account_path %>" aria-label="Account">‹</a>
+      <a class="panel-icon-btn" data-back href="<%= account_path %>" aria-label="Account">‹</a>
       <h1>Buddy for iPhone</h1>
-      <a class="panel-chip" href="<%= app_hot_links_path %>">Hot links</a>
     </header>
+
+    <nav class="panel-settings panel-nav">
+      <a class="panel-nav-row" href="<%= app_hot_links_path %>">Hot links</a>
+    </nav>
 
     <% if AppDevice.install_url %>
       <%= link_to "Install Buddy for iPhone", AppDevice.install_url,

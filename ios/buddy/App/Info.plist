@@ -45,36 +45,36 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAlarmKitUsageDescription</key>
-	<string>Buddy rings your timers and alarms like the Clock app, even on silent.</string>
+	<string>Timers and alarms ring full screen, even on silent, like the Clock app.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Buddy reads the battery level of connected Bluetooth accessories to report them to your server.</string>
+	<string>Shows the battery level of your headphones and other connected accessories.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Buddy syncs your calendars to your server so your agenda and Jil tasks can see them.</string>
+	<string>Shows your calendar in your agenda, and lets your Jil tasks use it.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Buddy can attach a photo to a message.</string>
+	<string>Take a photo to send in a message.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Buddy syncs your contacts to your server so Buddy and Jil tasks know who people are.</string>
+	<string>Lets Buddy and your Jil tasks know who people are.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Buddy reads your workouts and activity so they log to your server automatically, with type, duration and calories.</string>
+	<string>Logs your workouts with their type, duration and calories, and can send daily totals like steps and sleep.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Buddy does not write health data.</string>
+	<string>Buddy doesn't save anything to Health.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Buddy keeps your server up to date with where you are, even when the app is closed, so arrivals, departures and travel automations fire on time.</string>
+	<string>With Always, arriving and leaving places works even when the app is closed.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Buddy sends your location to your own server so Jil tasks and Buddy can act on where you are.</string>
+	<string>Lets your Jil tasks act on where you are, like when you get home.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Buddy can listen when you dictate a message.</string>
+	<string>Dictate a message.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Buddy can attach a photo from your library to a message.</string>
+	<string>Attach a photo from your library to a message.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>Buddy syncs your reminders to your server so Jil tasks and lists can see them.</string>
+	<string>Shows your reminders in your lists, and lets your Jil tasks use them.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Buddy turns your voice into a message.</string>
+	<string>Turns what you say into a message.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>

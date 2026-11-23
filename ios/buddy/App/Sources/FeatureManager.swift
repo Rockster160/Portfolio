@@ -30,6 +30,8 @@ final class FeatureManager {
     for feature in before.subtracting(features) { stop(feature) }
     if features.contains(.location), before.contains(.location) { LocationService.shared.start() }
     QuickActions.refresh()
+    // Siri learns hot link and routine names only when told the list changed.
+    BuddyShortcuts.updateAppShortcutParameters()
     WidgetCenter.shared.reloadAllTimelines()
   }
 
@@ -57,6 +59,7 @@ final class FeatureManager {
       NativeSync.shared.reset("contacts")
       await NativeSync.shared.syncContacts()
     case "refresh_widgets": WidgetCenter.shared.reloadAllTimelines()
+    case "test_live_activity": Task { await TimerSync.startTest() }
     default: ActivityLog.add("Unknown device task: \(task)")
     }
   }

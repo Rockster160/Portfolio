@@ -47,7 +47,13 @@ module AppDevices
       type = question["type"].to_s
 
       if %w[text textarea number].include?(type)
-        reply = { id: "reply", title: "Reply", input: true, placeholder: question["question"].to_s }
+        # Not "reply": that's the phone's own button for answering Buddy.
+        reply = {
+          id:          "prompt-reply",
+          title:       "Reply",
+          input:       true,
+          placeholder: question["question"].to_s,
+        }
         return { actions: [reply], answer: answer }
       end
       return {} unless SINGLE_TAP_PROMPT_TYPES.include?(type)
@@ -57,7 +63,9 @@ module AppDevices
 
       {
         actions: choices.map { |choice|
-          { id: "choice-#{choice}", title: choice.to_s, value: choice }
+          # The phone reads a button's value as text; a number or true in the
+          # list would leave the notification with no buttons at all.
+          { id: "choice-#{choice}", title: choice.to_s, value: choice.to_s }
         },
         answer:  answer,
       }

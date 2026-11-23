@@ -16,7 +16,12 @@ enum AppBridge {
       let state = await FeatureManager.shared.requestPermission(feature)
       return ["state": state.rawValue]
     case "outbox":
-      return WebShell.plain(Outbox.items)
+      // The summary is worked out from the item rather than stored, so it's added by hand.
+      return Outbox.items.map { item in
+        var row = WebShell.plain(item) as? [String: Any] ?? [:]
+        row["summary"] = item.summary
+        return row
+      }
     case "outboxRetry":
       Outbox.retry(try id(args))
       Task { await Outbox.flush() }
@@ -83,8 +88,8 @@ enum AppBridge {
     switch await ActionRunner.run(action, typed: text, source: "app") {
     case .replied(let reply):
       return ["status": "replied", "reply": reply]
-    case .queued:
-      return ["status": "queued"]
+    case .queued(let item):
+      return ["status": Outbox.items.contains(where: { $0.id == item.id }) ? "queued" : "sent"]
     case .open(let url):
       AppModel.shared.handle(url: url)
       return ["status": "opened"]

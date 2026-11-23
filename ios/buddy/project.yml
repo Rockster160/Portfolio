@@ -101,19 +101,19 @@ targets:
           - CFBundleURLName: com.ardesian.buddy
             CFBundleURLSchemes:
               - buddy
-        NSLocationWhenInUseUsageDescription: Buddy sends your location to your own server so Jil tasks and Buddy can act on where you are.
-        NSLocationAlwaysAndWhenInUseUsageDescription: Buddy keeps your server up to date with where you are, even when the app is closed, so arrivals, departures and travel automations fire on time.
-        NSHealthShareUsageDescription: Buddy reads your workouts and activity so they log to your server automatically, with type, duration and calories.
-        NSHealthUpdateUsageDescription: Buddy does not write health data.
-        NSCalendarsFullAccessUsageDescription: Buddy syncs your calendars to your server so your agenda and Jil tasks can see them.
-        NSRemindersFullAccessUsageDescription: Buddy syncs your reminders to your server so Jil tasks and lists can see them.
-        NSContactsUsageDescription: Buddy syncs your contacts to your server so Buddy and Jil tasks know who people are.
-        NSBluetoothAlwaysUsageDescription: Buddy reads the battery level of connected Bluetooth accessories to report them to your server.
-        NSAlarmKitUsageDescription: Buddy rings your timers and alarms like the Clock app, even on silent.
-        NSCameraUsageDescription: Buddy can attach a photo to a message.
-        NSPhotoLibraryUsageDescription: Buddy can attach a photo from your library to a message.
-        NSMicrophoneUsageDescription: Buddy can listen when you dictate a message.
-        NSSpeechRecognitionUsageDescription: Buddy turns your voice into a message.
+        NSLocationWhenInUseUsageDescription: Lets your Jil tasks act on where you are, like when you get home.
+        NSLocationAlwaysAndWhenInUseUsageDescription: With Always, arriving and leaving places works even when the app is closed.
+        NSHealthShareUsageDescription: Logs your workouts with their type, duration and calories, and can send daily totals like steps and sleep.
+        NSHealthUpdateUsageDescription: Buddy doesn't save anything to Health.
+        NSCalendarsFullAccessUsageDescription: Shows your calendar in your agenda, and lets your Jil tasks use it.
+        NSRemindersFullAccessUsageDescription: Shows your reminders in your lists, and lets your Jil tasks use them.
+        NSContactsUsageDescription: Lets Buddy and your Jil tasks know who people are.
+        NSBluetoothAlwaysUsageDescription: Shows the battery level of your headphones and other connected accessories.
+        NSAlarmKitUsageDescription: Timers and alarms ring full screen, even on silent, like the Clock app.
+        NSCameraUsageDescription: Take a photo to send in a message.
+        NSPhotoLibraryUsageDescription: Attach a photo from your library to a message.
+        NSMicrophoneUsageDescription: Dictate a message.
+        NSSpeechRecognitionUsageDescription: Turns what you say into a message.
         NSUserActivityTypes:
           - com.ardesian.buddy.command
     dependencies:

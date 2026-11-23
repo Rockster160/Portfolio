@@ -56,10 +56,11 @@ class Apns
       return Result.new(status: 0, reason: :NoToken) if token.blank?
 
       env = environment.to_s == "development" ? :development : :production
-      if Rails.env.local? || !configured?(env)
+      if Rails.env.local?
         log_only(token, push_type, payload)
         return Result.new(status: 200, reason: :Logged)
       end
+      return Result.new(status: 0, reason: :NotConfigured) unless configured?(env)
 
       headers = {
         "authorization"   => "bearer #{provider_token(env)}",

@@ -29,12 +29,37 @@ RSpec.describe "Buddy app hot links", type: :request do
     expect(AppDevicePushWorker).to have_received(:perform_async).with(second.id, { "settings" => true })
   end
 
-  it "refuses a hot link whose data isn't JSON", :aggregate_failures do
+  it "refuses a hot link whose data isn't JSON, saying why", :aggregate_failures do
     patch app_hot_links_path, params: {
       hot_links: { "0" => { title: "Run it", action: { kind: "task", value: "1", data: "{nope" } } },
     }, headers: headers
 
-    expect(flash[:alert]).to include("isn't valid JSON")
+    expect(response).to have_http_status(:unprocessable_entity)
+    expect(response.parsed_body["message"]).to include("isn't valid JSON")
     expect(user.reload.hot_links).to eq([])
+  end
+
+  it "lets a new link wait until it can run, but won't save a saved one broken", :aggregate_failures do
+    patch app_hot_links_path, params: {
+      hot_links: { "0" => { title: "Garage", action: { kind: "task", value: "" } } },
+    }, headers: headers
+    expect(response.parsed_body["hot_links"]).to eq([])
+
+    patch app_hot_links_path, params: {
+      hot_links: { "0" => { id: "abc", title: "Garage", action: { kind: "task", value: "" } } },
+    }, headers: headers
+    expect(response.parsed_body["message"]).to eq("Garage needs a task")
+  end
+
+  it "keeps the item a list toggle names" do
+    patch app_hot_links_path, params: {
+      hot_links: { "0" => { title: "Milk", action: { kind: "list_toggle", value: "7", item: " Milk " } } },
+    }, headers: headers
+
+    expect(user.reload.hot_links.first["action"]).to eq(
+      "kind"  => "list_toggle",
+      "value" => "7",
+      "data"  => { "item" => "Milk" },
+    )
   end
 end

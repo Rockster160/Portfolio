@@ -131,7 +131,8 @@ extension BatteryMonitor: CBCentralManagerDelegate, CBPeripheralDelegate {
 
 /// Location from iOS itself: significant moves, visits (arrived / left), and your saved places as
 /// monitored regions. Each lands as an `ios_location` trigger, timestamped when iOS saw it.
-final class LocationService: NSObject, CLLocationManagerDelegate {
+// Its state is only touched on the main thread, where the manager calls back.
+final class LocationService: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
   static let shared = LocationService()
 
   let manager = CLLocationManager()
@@ -145,17 +146,31 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     manager.activityType = .other
   }
 
+  /// iOS's first prompt never offers Always Allow. Asking for Always straight after "While Using"
+  /// brings up its second one, "Change to Always Allow", and both answers are waited for so the page
+  /// shows where it ended up. iOS shows that second prompt once per install and says nothing when it
+  /// doesn't, hence the cap on the wait.
   func requestAlways() async -> CLAuthorizationStatus {
     if manager.authorizationStatus == .notDetermined {
-      let status = await withCheckedContinuation { continuation in
-        authorizationContinuation = continuation
-        manager.requestWhenInUseAuthorization()
-      }
-      if status == .authorizedWhenInUse { manager.requestAlwaysAuthorization() }
-      return status
+      _ = await awaitAuthorization { self.manager.requestWhenInUseAuthorization() }
     }
-    if manager.authorizationStatus == .authorizedWhenInUse { manager.requestAlwaysAuthorization() }
+    if manager.authorizationStatus == .authorizedWhenInUse {
+      _ = await awaitAuthorization(timeout: 15) { self.manager.requestAlwaysAuthorization() }
+    }
     return manager.authorizationStatus
+  }
+
+  private func awaitAuthorization(timeout: TimeInterval? = nil, _ ask: @escaping () -> Void) async -> CLAuthorizationStatus {
+    await withCheckedContinuation { continuation in
+      authorizationContinuation = continuation
+      ask()
+      guard let timeout else { return }
+      DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+        guard let self, let waiting = self.authorizationContinuation else { return }
+        self.authorizationContinuation = nil
+        waiting.resume(returning: self.manager.authorizationStatus)
+      }
+    }
   }
 
   func start() {

@@ -26,7 +26,12 @@ RSpec.describe AppPush do
     )
 
     expect(sent.sole[:payload]).to include(
-      aps:             hash_including(alert: { title: "Byte", body: "Dinner's ready" }, badge: 3, "thread-id": "byte"),
+      aps:             hash_including(
+        alert:       { title: "Byte", body: "Dinner's ready" },
+        badge:       3,
+        "thread-id": "byte",
+        category:    "buddy.reply",
+      ),
       tag:             "byte-9",
       url:             "/byte",
       conversation_id: 4,
@@ -118,11 +123,20 @@ RSpec.describe AppPush do
       )
     end
 
+    # The phone reads each value as text, and one that isn't drops every button.
+    it "sends a yes/no or scale question's values as text" do
+      prompt = user.prompts.create!(question: "Done?", options: [{ type: "checkbox", question: "Done" }])
+
+      expect(described_class.for_prompt(prompt)[:actions].pluck(:value)).to eq(["true", "false"])
+    end
+
     it "gives a text question a reply field and leaves a multi-question prompt to the app", :aggregate_failures do
       text = user.prompts.create!(question: "Note?", options: [{ type: "text", question: "Note" }])
       many = user.prompts.create!(question: "Two", options: [{ type: "text", question: "A" }, { type: "text", question: "B" }])
 
-      expect(described_class.for_prompt(text)[:actions]).to eq([{ id: "reply", title: "Reply", input: true, placeholder: "Note" }])
+      expect(described_class.for_prompt(text)[:actions]).to eq(
+        [{ id: "prompt-reply", title: "Reply", input: true, placeholder: "Note" }],
+      )
       expect(described_class.for_prompt(many)).to eq({})
     end
   end

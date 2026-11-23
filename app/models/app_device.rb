@@ -174,18 +174,10 @@ class AppDevice < ApplicationRecord
     AppDevicePushWorker.perform_async(id, data.deep_stringify_keys)
   end
 
-  def test_push!(kind, user: self.user)
+  def test_push!(kind)
     case kind.to_s
     when "badge"
       AppPush.deliver_to(self, { aps: { badge: 1 } })
-    when "silent"
-      AppPush.deliver_to(self, AppPush.background(test: true), push_type: :background)
-    when "widgets"
-      AppPush.reload_widgets(user).first
-    when "live_activity"
-      # The timer's own broadcast starts the Live Activity, as any other would.
-      Buddy::Timers.create!(user: user, seconds: 60, label: "Test timer")
-      Apns::Result.new(status: 200, reason: :TimerStarted)
     else
       test = { title: "Buddy", body: "Native push is working.", tag: "test-push" }
       AppPush.deliver_to(self, AppPush.alert_payload(self, test, channel: :jarvis))

@@ -14,6 +14,7 @@ final class ShareViewController: UIViewController {
     let shell = WebShell { name, args in try await model.handle(name, args) }
     shell.openExternally = { _ in }
     shell.loadFailed = { model.sendToBuddy() }
+    shell.sessionExpired = { [weak shell] in shell?.load("/app/share") }
     model.shell = shell
     self.shell = shell
     shell.webView.frame = view.bounds

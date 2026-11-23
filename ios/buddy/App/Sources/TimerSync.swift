@@ -21,6 +21,12 @@ enum TimerSync {
     }
     Task {
       for await activity in Activity<TimerActivityAttributes>.activityUpdates {
+        // The server's push-to-start and the app's own start can both land for one timer; the
+        // newest stays and the other goes, so a timer never shows twice.
+        let older = Activity<TimerActivityAttributes>.activities.filter {
+          $0.id != activity.id && $0.attributes.timerId == activity.attributes.timerId
+        }
+        for duplicate in older { await duplicate.end(nil, dismissalPolicy: .immediate) }
         observe(activity)
       }
     }
@@ -28,6 +34,8 @@ enum TimerSync {
   }
 
   private static func observe(_ activity: Activity<TimerActivityAttributes>) {
+    // The settings page's test has no timer on the server to update it.
+    guard activity.attributes.timerId > 0 else { return }
     Task {
       for await token in activity.pushTokenUpdates {
         let hex = token.map { String(format: "%02x", $0) }.joined()
@@ -65,6 +73,18 @@ enum TimerSync {
     }
     if Feature.alarms.isEnabled, timer.kind != "wait", isAlarm ? preferences.alarmsRingAlarms : preferences.alarmsRingTimers {
       await AlarmBridge.sync(timer)
+    }
+  }
+
+  /// A minute counting down on the Lock Screen, for the settings page's test. It's made here rather
+  /// than on the server, so it rings nowhere and no other screen shows it.
+  static func startTest() async {
+    let now = Date()
+    let timer = TimerData(id: -1, name: "Test", kind: "timer", endsAt: now.addingTimeInterval(60), startedAt: now, state: "running")
+    await updateActivity(timer)
+    try? await Task.sleep(nanoseconds: 60_000_000_000)
+    for activity in Activity<TimerActivityAttributes>.activities where activity.attributes.timerId == timer.id {
+      await activity.end(nil, dismissalPolicy: .immediate)
     }
   }
 

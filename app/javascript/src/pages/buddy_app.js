@@ -90,35 +90,168 @@ $(document).ready(function() {
     addFlashAlert((error && error.message) || String(error))
   }
 
+  const csrfToken = (document.querySelector("meta[name=csrf-token]") || {}).content
+
+  // A save from a page that stays put: JSON both ways, and the server's
+  // message as the error when it refuses.
+  function request(url, method, body) {
+    const form = body instanceof FormData
+    return fetch(url, {
+      method: method,
+      headers: Object.assign(
+        { "Accept": "application/json", "X-CSRF-Token": csrfToken },
+        form ? {} : { "Content-Type": "application/json" },
+      ),
+      body: form ? body : (body ? JSON.stringify(body) : undefined),
+    }).then(function(response) {
+      return response.json().catch(function() { return {} }).then(function(reply) {
+        if (!response.ok) throw new Error(reply.message || "Not saved")
+        return reply
+      })
+    })
+  }
+
   // Login: hand the new device token to the app.
   const signedIn = document.querySelector("[data-buddy-signed-in]")
   if (signedIn && BuddyApp.native()) {
     BuddyApp.call("signedIn", JSON.parse(signedIn.dataset.buddySignedIn)).catch(failed)
   }
 
-  // Permission features: asking happens on the phone, then the page reloads to
-  // show what iOS said.
-  $(document).on("click", "[data-buddy-allow]", function() {
-    const button = this
-    button.disabled = true
-    BuddyApp.call("requestPermission", { feature: button.dataset.buddyAllow }).then(function() {
-      window.location.reload()
-    }).catch(function(error) {
-      button.disabled = false
-      failed(error)
-    })
-  })
+  // Inside the app, ‹ goes back to the app screen it came from: Buddy, or the
+  // settings a page was opened from. A page opened straight from a widget or a
+  // notification came from nowhere, so ‹ opens its parent in its place.
+  function cameFromAppPage() {
+    if (!document.referrer) return false
+    try {
+      const from = new URL(document.referrer)
+      const site = location.hostname.replace(/^byte\./, "")
+      if (from.hostname !== site && from.hostname !== "byte." + site) return false
 
-  // A device task on the phone this page is open on runs straight away
-  // instead of going through a push.
-  $(document).on("click", "[data-buddy-task]", function(evt) {
-    if (!html.classList.contains("buddy-this-device")) return
+      if (from.hostname === "byte." + site && from.pathname === "/") return true
+
+      return /^\/(app\/|account\/app_devices)/.test(from.pathname)
+    } catch (error) {
+      return false
+    }
+  }
+
+  $(document).on("click", "[data-back]", function(evt) {
+    if (!BuddyApp.native()) return
 
     evt.preventDefault()
-    BuddyApp.call("runTask", { task: this.dataset.buddyTask }).then(function() {
-      addFlashNotice("Done")
-    }).catch(failed)
+    if (cameFromAppPage() && window.history.length > 1) {
+      window.history.back()
+    } else {
+      window.location.replace(this.href)
+    }
   })
+
+  // A phone's settings save as they change. The control greys out until the
+  // server answers with what it saved, and then shows that; a save that fails
+  // puts the control back the way it was.
+  const settings = document.querySelector("[data-buddy-settings]")
+  if (settings) {
+    // Every input of one option: a switch, a row of choices, or a set of pills.
+    function inputsFor(name) {
+      return Array.from(settings.querySelectorAll("[name]")).filter(function(input) { return input.name === name })
+    }
+
+    function read(inputs) {
+      const first = inputs[0]
+      if (first.name.endsWith("[]")) return inputs.filter(function(input) { return input.checked }).map(function(input) { return input.value })
+      if (first.type === "radio") return (inputs.find(function(input) { return input.checked }) || {}).value
+      if (first.type === "checkbox") return first.checked
+      return first.value
+    }
+
+    function write(inputs, value) {
+      const first = inputs[0]
+      if (first.name.endsWith("[]")) {
+        const picked = (value || []).map(String)
+        inputs.forEach(function(input) { input.checked = picked.includes(input.value) })
+      } else if (first.type === "radio") {
+        inputs.forEach(function(input) { input.checked = input.value === String(value) })
+      } else if (first.type === "checkbox") {
+        first.checked = value === true || value === "true"
+      } else {
+        first.value = value
+      }
+    }
+
+    const saved = {}
+    function remember(root) {
+      root.querySelectorAll("[name^='preferences[']").forEach(function(input) {
+        saved[input.name] = read(inputsFor(input.name))
+      })
+    }
+    remember(settings)
+
+    // Asking happens on the phone, which has told the server iOS's answer by
+    // the time it replies. The feature's panel is then fetched again and put
+    // in place of the old one, so nothing else on the page moves.
+    $(settings).on("click", "[data-buddy-allow]", function() {
+      const button = this
+      const key = button.dataset.buddyAllow
+      button.disabled = true
+      BuddyApp.call("requestPermission", { feature: key }).then(function() {
+        return fetch(window.location.href, { headers: { "Accept": "text/html" } })
+      }).then(function(response) {
+        return response.text()
+      }).then(function(page) {
+        const fresh = new DOMParser().parseFromString(page, "text/html").getElementById("feature-" + key)
+        const current = document.getElementById("feature-" + key)
+        if (!fresh || !current) return
+
+        current.replaceWith(fresh)
+        remember(fresh)
+      }).catch(function(error) {
+        button.disabled = false
+        failed(error)
+      })
+    })
+
+    settings.addEventListener("change", function(evt) {
+      const input = evt.target
+      let inputs, body, savedValue
+      if (input.name === "features[]") {
+        inputs = [input]
+        body = { feature: input.value, on: input.checked }
+        savedValue = function(reply) { return reply.features.includes(input.value) }
+      } else {
+        const key = (input.name.match(/^preferences\[(\w+)\]/) || [])[1]
+        if (!key) return
+
+        inputs = inputsFor(input.name)
+        body = { preferences: { [key]: read(inputs) } }
+        savedValue = function(reply) { return reply.preferences[key] }
+      }
+      const before = input.name === "features[]" ? !input.checked : saved[input.name]
+      inputs.forEach(function(each) { each.disabled = true })
+      request(settings.dataset.buddySettings, "PATCH", body).then(function(reply) {
+        saved[input.name] = savedValue(reply)
+        write(inputs, saved[input.name])
+      }).catch(function(error) {
+        write(inputs, before)
+        failed(error)
+      }).finally(function() {
+        inputs.forEach(function(each) { each.disabled = false })
+      })
+    })
+
+    // A task on the phone this page is open on runs straight away; anything
+    // else goes to the phone through a push.
+    $(settings).on("click", "[data-buddy-post]", function() {
+      const button = this
+      const task = button.dataset.buddyTask
+      button.disabled = true
+      const sent = task && html.classList.contains("buddy-this-device")
+        ? BuddyApp.call("runTask", { task: task }).then(function() { return { message: "Done" } })
+        : request(button.dataset.buddyPost, "POST")
+      sent.then(function(reply) { addFlashNotice(reply.message) }).catch(failed).finally(function() {
+        button.disabled = false
+      })
+    })
+  }
 
   function exchange(list, kind, text, reply) {
     const row = element("div", "panel-row")
@@ -132,7 +265,8 @@ $(document).ready(function() {
   function send(args, list) {
     const answer = exchange(list, args.kind, (args.prefix || "") + args.text, args.inline ? "Sending…" : "Queued")
     return BuddyApp.call("send", args).then(function(result) {
-      answer.textContent = result.status === "replied" ? (result.reply || "Sent.") : "Queued, sends when it can"
+      const shown = { replied: result.reply || "Sent", sent: "Sent", opened: "Opened" }
+      answer.textContent = shown[result.status] || "Queued, sends when it can"
     }).catch(function(error) {
       answer.textContent = (error && error.message) || String(error)
     })
@@ -357,7 +491,9 @@ $(document).ready(function() {
       modal.on("click", "[data-pick]", function(evt) {
         evt.stopPropagation()
         const name = this.dataset.pick
-        field.parentNode.querySelector("[data-hot-link-icon]").value = name
+        const input = field.parentNode.querySelector("[data-hot-link-icon]")
+        input.value = name
+        input.dispatchEvent(new Event("change", { bubbles: true }))
         field.querySelector("[data-symbol]").dataset.symbol = name
         field.querySelector("[data-symbol-name]").textContent = symbols[name] || name
         paint(field)
@@ -405,15 +541,93 @@ $(document).ready(function() {
     }
 
     hotLinks.querySelectorAll("[data-hot-link]").forEach(showFields)
-    $(hotLinks).on("change", "[data-hot-link-kind]", function() {
-      showFields(this.closest("[data-hot-link]"))
+
+    // The list saves as it's edited, all of it each time since its order is
+    // part of it. A row with no title is still being filled in and waits. A
+    // change made while a save is out goes in the next one.
+    const form = hotLinks.closest("form")
+    const blankRow = hotLinks.querySelector("[data-hot-link-new]")
+    const template = blankRow && blankRow.cloneNode(true)
+    let saving = false
+    let again = false
+
+    function rowButtons() {
+      const buttons = element("div", "panel-buttons")
+      const up = element("button", "panel-btn", "Move up")
+      up.type = "button"
+      up.dataset.hotLinkUp = ""
+      const remove = element("button", "panel-btn panel-btn-danger", "Remove")
+      remove.type = "button"
+      remove.dataset.hotLinkRemove = ""
+      buttons.append(up, remove)
+      return buttons
+    }
+
+    // A new row that saved becomes an ordinary one, and a fresh blank row
+    // takes its place at the end while there's room.
+    function settle(links) {
+      const titled = Array.from(hotLinks.querySelectorAll("[data-hot-link]")).filter(function(row) {
+        return row.querySelector("[name$='[title]']").value.trim() !== ""
+      })
+      titled.forEach(function(row, index) {
+        if (!links[index]) return
+
+        row.querySelector("[name$='[id]']").value = links[index].id
+        if (!row.hasAttribute("data-hot-link-new")) return
+
+        row.removeAttribute("data-hot-link-new")
+        const heading = row.querySelector(".panel-setting-title")
+        if (heading) heading.remove()
+        row.appendChild(rowButtons())
+        if (template && links.length < Number(hotLinks.dataset.hotLinksMax)) {
+          const fresh = template.cloneNode(true)
+          const index = "hot_links[" + Date.now() + "]"
+          fresh.querySelectorAll("[name]").forEach(function(input) {
+            input.name = input.name.replace(/^hot_links\[\d+\]/, index)
+          })
+          hotLinks.appendChild(fresh)
+          showFields(fresh)
+        }
+      })
+    }
+
+    function save(changed) {
+      if (saving) {
+        again = true
+        return
+      }
+      saving = true
+      if (changed) changed.classList.add("is-saving")
+      request(form.action, "POST", new FormData(form)).then(function(reply) {
+        settle(reply.hot_links || [])
+      }).catch(failed).finally(function() {
+        if (changed) changed.classList.remove("is-saving")
+        saving = false
+        if (again) {
+          again = false
+          save()
+        }
+      })
+    }
+
+    form.addEventListener("submit", function(evt) {
+      evt.preventDefault()
+      save()
+    })
+    $(hotLinks).on("change", "input, select, textarea", function() {
+      if (this.matches("[data-hot-link-kind]")) showFields(this.closest("[data-hot-link]"))
+      save(this)
     })
     $(hotLinks).on("click", "[data-hot-link-remove]", function() {
       this.closest("[data-hot-link]").remove()
+      save()
     })
     $(hotLinks).on("click", "[data-hot-link-up]", function() {
       const row = this.closest("[data-hot-link]")
-      if (row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling)
+      if (!row.previousElementSibling) return
+
+      row.parentNode.insertBefore(row, row.previousElementSibling)
+      save()
     })
   }
 })

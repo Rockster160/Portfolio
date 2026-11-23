@@ -82,8 +82,13 @@ struct RunTaskIntent: AppIntent {
     return .result(dialog: "Running \(task.name).")
   }
 
+  /// JSON when it's an object; anything else, a bare number or true included, arrives as text, since
+  /// a task's input is always an object.
   static func parse(_ raw: String) -> JSONValue {
-    if let data = raw.data(using: .utf8), let json = try? JSONDecoder().decode(JSONValue.self, from: data) { return json }
+    if let data = raw.data(using: .utf8), let json = try? JSONDecoder().decode(JSONValue.self, from: data),
+       case .object = json {
+      return json
+    }
     return .object(["text": .string(raw)])
   }
 }
@@ -153,10 +158,14 @@ struct RunHotLinkIntent: AppIntent {
       let reply = try await AskAndSendIntent.send(action, answer: answer)
       return .result(value: reply, dialog: IntentDialog(stringLiteral: reply))
     }
-    if case .open(let url) = await ActionRunner.run(action, source: "intent") {
+    switch await ActionRunner.run(action, source: "intent") {
+    case .open(let url):
       return .result(value: "", opensIntent: OpenURLIntent(url), dialog: "")
+    case .replied(let reply):
+      return .result(value: reply, dialog: IntentDialog(stringLiteral: reply))
+    case .queued:
+      return .result(value: "", dialog: "")
     }
-    return .result(value: "", dialog: "")
   }
 }
 

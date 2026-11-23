@@ -124,6 +124,34 @@ RSpec.describe "Buddy app submissions", type: :request do
       submit(kind: "list_toggle", key: list.id.to_s, text: "Eggs")
       expect(ListItem.where(list_id: list.id).pluck(:name)).to include("Eggs")
     end
+
+    it "toggles the item a hot link names, adding it when the list doesn't have it", :aggregate_failures do
+      item = list.list_items.create!(name: "Milk")
+
+      submit(kind: "list_toggle", key: list.id.to_s, data: { item: "milk" })
+      expect(item.reload).to be_deleted
+
+      submit(kind: "list_toggle", key: list.id.to_s, data: { item: "Milk" })
+      expect(item.reload).not_to be_deleted
+
+      submit(kind: "list_toggle", key: list.id.to_s, data: { item: "Bread" })
+      expect(ListItem.where(list_id: list.id).pluck(:name)).to include("Bread")
+    end
+  end
+
+  describe "a Live Activity button pressed with no signal" do
+    around { |example| Sidekiq::Testing.fake! { example.run } }
+    before { allow(AppTimerPushWorker).to receive(:perform_async) }
+
+    it "pauses and cancels the timer once it lands", :aggregate_failures do
+      timer = Buddy::Timers.create!(user: user, seconds: 600, label: "Pasta")
+
+      submit(kind: "timer", key: timer.id.to_s, text: "pause")
+      expect(timer.reload).to be_paused
+
+      submit(kind: "timer", key: timer.id.to_s, text: "cancel")
+      expect(timer.reload.archived_at).to be_present
+    end
   end
 
   describe "an answer" do

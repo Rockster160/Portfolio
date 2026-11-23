@@ -19,6 +19,8 @@ struct OutboxItem: Codable, Identifiable, Equatable {
     case listToggle = "list_toggle"
     /// An answer to a prompt or a notification button (in `data`).
     case answer
+    /// A Live Activity's button (timer id in `key`, the button in `text`), pressed with no signal.
+    case timer
   }
 
   enum State: String, Codable {
@@ -50,7 +52,13 @@ struct OutboxItem: Codable, Identifiable, Equatable {
     case .routine: return "Run routine \(text ?? key ?? "")"
     case .listToggle: return "Toggle \(text ?? "item")"
     case .answer: return "Answer \(text ?? "")"
+    case .timer: return "\((text ?? "").capitalized) timer"
     }
+  }
+
+  var hasLocalFiles: Bool {
+    guard case .object(let data)? = data, let files = data["local_files"]?.array else { return false }
+    return !files.isEmpty
   }
 
   var wire: SubmissionBody {
@@ -144,6 +152,14 @@ enum Outbox {
     var body: String?
     var clientTs: Double?
     var attachmentSignedIds: [String]?
+    var metadata: JSONValue?
+
+    /// The message this one answers, if it was sent as a reply.
+    var replyTo: JSONValue? {
+      guard case .object(let metadata)? = metadata, let replyTo = metadata["reply_to"] else { return nil }
+      if case .object(let quoted) = replyTo { return quoted["id"] }
+      return replyTo
+    }
   }
 
   static let byteSource = "byte"
@@ -161,6 +177,7 @@ enum Outbox {
         if let signed = entry.attachmentSignedIds, !signed.isEmpty {
           data["attachment_signed_ids"] = .array(signed.map(JSONValue.string))
         }
+        if let replyTo = entry.replyTo { data["reply_to"] = replyTo }
         var item = OutboxItem(kind: .buddy, text: entry.body ?? "", data: .object(data), source: byteSource)
         item.id = id
         item.state = .held
@@ -193,6 +210,16 @@ enum Outbox {
     notifyChanged()
   }
 
+  /// The server answered but couldn't carry it out: kept, with its reason, so nothing goes quietly.
+  static func reject(_ id: UUID, _ reason: String) {
+    update(id) {
+      $0.attempts += 1
+      $0.lastAttemptAt = Date()
+      $0.lastError = reason
+      $0.state = .rejected
+    }
+  }
+
   static func retry(_ id: UUID) {
     update(id) {
       $0.state = .pending
@@ -218,9 +245,13 @@ enum Outbox {
     let queue = items.filter { $0.state == .pending }.sorted { $0.pressedAt < $1.pressedAt }
     for (index, item) in queue.enumerated() {
       do {
-        _ = try await send(item)
-        remove(item.id)
-        sent += 1
+        let reply = try await send(item)
+        if reply.status == "failed" {
+          reject(item.id, reply.error ?? "The server couldn't carry that out.")
+        } else {
+          remove(item.id)
+          sent += 1
+        }
       } catch let error as APIError where error.isRetryable {
         update(item.id) {
           $0.attempts += 1
@@ -228,8 +259,11 @@ enum Outbox {
           $0.lastError = error.localizedDescription
         }
         // Everything left goes to the system's background session, which keeps retrying until
-        // the network is back, whether or not this process is still alive.
-        queue[index...].forEach(BackgroundUploader.shared.schedule)
+        // the network is back, whether or not this process is still alive. Each is read back from
+        // disk, since a photo upload may have rewritten it; one still holding a photo waits for
+        // the next pass here, as the background session can only send the item itself.
+        let waiting = Set(queue[index...].map(\.id))
+        items.filter { waiting.contains($0.id) && !$0.hasLocalFiles }.forEach(BackgroundUploader.shared.schedule)
         break
       } catch {
         update(item.id) {
@@ -254,8 +288,8 @@ enum Outbox {
   /// Sends now and waits for the server's answer, for the times a reply should be shown. The item
   /// is still written to the queue first, so a dropped connection leaves it to go out later rather
   /// than losing it.
-  static func sendInline(kind: OutboxItem.Kind, text: String, source: String) async throws -> SubmissionReply {
-    let item = enqueue(kind: kind, text: text, source: source)
+  static func sendInline(kind: OutboxItem.Kind, text: String, data: JSONValue? = nil, source: String) async throws -> SubmissionReply {
+    let item = enqueue(kind: kind, text: text, data: data, source: source)
     do {
       var reply = try await send(item, wait: true)
       remove(item.id)
@@ -278,23 +312,31 @@ enum Outbox {
   private static func uploadingLocalFiles(_ item: OutboxItem) async throws -> OutboxItem {
     guard case .object(var data)? = item.data, let files = data["local_files"]?.array, !files.isEmpty else { return item }
     var signedIds = data["attachment_signed_ids"]?.array ?? []
-    for file in files.compactMap(\.string) {
+    var remaining = files.compactMap(\.string)
+    // Saved after each photo and before its file goes, so a later photo failing never loses the
+    // ones already uploaded.
+    func save() {
+      data["local_files"] = remaining.isEmpty ? nil : .array(remaining.map(JSONValue.string))
+      data["attachment_signed_ids"] = .array(signedIds)
+      update(item.id) { [data] in $0.data = .object(data) }
+    }
+    for file in remaining {
       let url = SharedStore.fileURL(file)
-      guard let bytes = try? Data(contentsOf: url) else { continue }
-      let reply = try await APIClient.shared.upload(
-        "api/ios/uploads",
-        fields: [:],
-        file: (name: "files[]", filename: file, mimeType: file.hasSuffix(".png") ? "image/png" : "image/jpeg", data: bytes),
-        as: UploadReply.self,
-      )
-      signedIds += reply.attachments.map { .string($0.signedId) }
+      if let bytes = try? Data(contentsOf: url) {
+        let reply = try await APIClient.shared.upload(
+          "api/ios/uploads",
+          fields: [:],
+          file: (name: "files[]", filename: file, mimeType: file.hasSuffix(".png") ? "image/png" : "image/jpeg", data: bytes),
+          as: UploadReply.self,
+        )
+        signedIds += reply.attachments.map { .string($0.signedId) }
+      }
+      remaining.removeAll { $0 == file }
+      save()
       try? FileManager.default.removeItem(at: url)
     }
-    data["local_files"] = nil
-    data["attachment_signed_ids"] = .array(signedIds)
     var updated = item
     updated.data = .object(data)
-    update(item.id) { $0.data = .object(data) }
     return updated
   }
 
@@ -328,6 +370,7 @@ final class BackgroundUploader: NSObject, URLSessionDataDelegate {
 
   var completionHandler: (() -> Void)?
   private var responses: [Int: Int] = [:]
+  private var bodies: [Int: Data] = [:]
 
   private lazy var session: URLSession = makeSession(identifier: Self.identifier)
 
@@ -377,11 +420,19 @@ final class BackgroundUploader: NSObject, URLSessionDataDelegate {
     completionHandler(.allow)
   }
 
+  func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+    bodies[dataTask.taskIdentifier, default: Data()].append(data)
+  }
+
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    let body = bodies.removeValue(forKey: task.taskIdentifier)
     guard let description = task.taskDescription, let id = UUID(uuidString: description) else { return }
     let status = (task.response as? HTTPURLResponse)?.statusCode ?? responses[task.taskIdentifier]
     try? FileManager.default.removeItem(at: SharedStore.fileURL("upload-\(description).json"))
-    if error == nil, let status, (200..<300).contains(status) {
+    let reply = body.flatMap { try? SharedStore.decoder.decode(SubmissionReply.self, from: $0) }
+    if error == nil, let status, (200..<300).contains(status), reply?.status == "failed" {
+      Outbox.reject(id, reply?.error ?? "The server couldn't carry that out.")
+    } else if error == nil, let status, (200..<300).contains(status) {
       Outbox.remove(id)
       ActivityLog.add("Background send delivered \(description.prefix(8))")
     } else if let status, (400..<500).contains(status), status != 408, status != 429, status != 401 {

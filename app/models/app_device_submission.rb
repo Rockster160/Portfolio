@@ -21,7 +21,7 @@
 #  user_id       :bigint           not null
 #
 class AppDeviceSubmission < ApplicationRecord
-  KINDS = [:command, :buddy, :trigger, :task, :routine, :list_toggle, :answer].freeze
+  KINDS = [:command, :buddy, :trigger, :task, :routine, :list_toggle, :answer, :timer].freeze
 
   belongs_to :app_device
   belongs_to :user

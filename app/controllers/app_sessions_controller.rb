@@ -5,6 +5,7 @@
 class AppSessionsController < ApplicationController
   DEVICE_FIELDS = [:name, :model, :os_version, :app_version, :timezone].freeze
 
+  before_action :from_the_app
   before_action :set_device_params
 
   def new
@@ -36,6 +37,12 @@ class AppSessionsController < ApplicationController
   end
 
   private
+
+  # Signing in here makes a device, so a browser that wanders in is sent to the
+  # site's own login instead of adding a phone that doesn't exist.
+  def from_the_app
+    redirect_to login_path unless request.user_agent.to_s.include?("BuddyiOS")
+  end
 
   def set_device_params
     @device_params = params.fetch(:device, {}).permit(*DEVICE_FIELDS).to_h.symbolize_keys

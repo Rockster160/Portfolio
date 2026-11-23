@@ -19,6 +19,17 @@ module AppDevices
     # iOS shows the first four on the app icon; the rest still reach widgets,
     # Control Center and Shortcuts.
     MAX = 12
+    # What each kind has to name before it can run, and what to call it when it's missing.
+    NEEDS_VALUE = {
+      task:        "a task",
+      routine:     "a routine",
+      list_toggle: "a list",
+      command:     "a command",
+      buddy:       "a message",
+      trigger:     "a trigger",
+      open:        "a path",
+      url:         "a link",
+    }.freeze
     # The app icon's long-press menu draws SF Symbols only, so a hot link's icon
     # is one of these, named for searching.
     SYMBOLS = {
@@ -155,33 +166,55 @@ module AppDevices
       user.app_devices.active.find_each { |device| device.nudge!(settings: true) }
     end
 
+    # A new row without a title, or without what its kind runs, is one still
+    # being filled in, and waits. A saved link losing either is refused.
     def clean(list)
-      Array(list).first(MAX).filter_map { |link|
-        link = link.to_h.deep_stringify_keys
+      links = Array(list).map { |link| link.to_h.deep_stringify_keys }
+      links = links.reject { |link| link["title"].to_s.strip.blank? }
+      raise ArgumentError, "Hot links are limited to #{MAX}" if links.size > MAX
+
+      links.filter_map { |link|
         action = link["action"].to_h
-        next if link["title"].to_s.strip.blank?
         next unless KINDS.include?(action["kind"].to_s.to_sym)
+
+        title = link["title"].to_s.strip
+        next if link["id"].blank? && missing(action)
 
         {
           id:       link["id"].presence || SecureRandom.uuid,
-          title:    link["title"].to_s.strip,
+          title:    title,
           subtitle: link["subtitle"].to_s.strip.presence,
           icon:     link["icon"].to_s.strip.presence || "bolt.fill",
-          action:   clean_action(action),
+          action:   clean_action(action, title),
         }.compact
       }
     end
 
-    def clean_action(action)
+    def clean_action(action, title)
+      lacking = missing(action)
+      raise ArgumentError, "#{title} needs #{lacking}" if lacking
+
+      kind = action["kind"].to_s
+      data = json_data(action["data"])
+      data = { "item" => action["item"].to_s.strip } if kind == "list_toggle"
+      send_as = [:buddy, :command].find { |choice| choice.to_s == action["send_as"].to_s }
       {
-        kind:        action["kind"].to_s,
+        kind:        kind,
         value:       action["value"].to_s.strip.presence,
-        send_as:     [:buddy, :command].find { |kind| kind.to_s == action["send_as"].to_s }&.to_s,
+        send_as:     send_as&.to_s,
         prefix:      action["prefix"].to_s.presence,
         placeholder: action["placeholder"].to_s.strip.presence,
-        data:        json_data(action["data"]),
+        data:        data,
         inline:      ActiveModel::Type::Boolean.new.cast(action["inline"]),
       }.compact
+    end
+
+    # What a link of this kind still needs before it can run, or nil.
+    def missing(action)
+      kind = action["kind"].to_s.to_sym
+      return NEEDS_VALUE[kind] if NEEDS_VALUE.key?(kind) && action["value"].to_s.strip.blank?
+
+      "an item" if kind == :list_toggle && action["item"].to_s.strip.blank?
     end
 
     def json_data(raw)

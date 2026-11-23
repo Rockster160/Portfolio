@@ -93,6 +93,12 @@ enum WidgetOverrides {
       }
       return item
     }
+    // A checked item leaves the list, and one added back later returns under the same id unchecked,
+    // so a tick for an item the list no longer has is let go rather than hiding it for good.
+    let present = Set(data.items.map { "\(data.id):\($0.id)" })
+    for overrideKey in all.keys where overrideKey.hasPrefix("\(data.id):") && !present.contains(overrideKey) {
+      all.removeValue(forKey: overrideKey)
+    }
     SharedStore.save(all, key: key)
     return copy
   }

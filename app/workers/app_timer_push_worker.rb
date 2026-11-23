@@ -3,9 +3,9 @@ class AppTimerPushWorker
 
   sidekiq_options retry: 1, queue: :default
 
-  def perform(timer_id, reason)
+  def perform(timer_id, reason, user_id=nil)
     timer = Timer.unscoped.find_by(id: timer_id)
-    return AppPush::Timers.gone(timer_id) if timer.nil?
+    return AppPush::Timers.gone(timer_id, user_id) if timer.nil?
 
     AppPush::Timers.sync(timer, reason)
   end

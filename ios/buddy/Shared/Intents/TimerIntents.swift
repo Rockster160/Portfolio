@@ -34,11 +34,13 @@ struct TimerControlIntent: LiveActivityIntent {
   }
 
   func perform() async throws -> some IntentResult {
-    let reply = try? await APIClient.shared.post(
-      "api/ios/timers/\(timerId)/\(command.rawValue)",
-      body: [String: String](),
-      as: TimerData.self,
-    )
+    var reply: TimerData?
+    do {
+      reply = try await APIClient.shared.post("api/ios/timers/\(timerId)/\(command.rawValue)", body: [String: String](), as: TimerData.self)
+    } catch let error as APIError where error.isRetryable {
+      // No signal: the press waits in the queue, so the timer still stops when it gets through.
+      Outbox.enqueue(OutboxItem(kind: .timer, text: command.rawValue, key: String(timerId), source: "live_activity"))
+    } catch {}
     for activity in Activity<TimerActivityAttributes>.activities where activity.attributes.timerId == timerId {
       if command == .cancel || command == .confirm {
         await activity.end(nil, dismissalPolicy: .immediate)

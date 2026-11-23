@@ -65,6 +65,10 @@ module AppPush
       aps[:category] = "buddy.dynamic"
     else
       actions = []
+      # A Buddy message with nothing to ask gets the phone's own Reply and
+      # Mark Read buttons.
+      buttons = channel.to_sym == :byte && device.feature?(:actionable_notifications)
+      aps[:category] = "buddy.reply" if buttons
     end
 
     {

@@ -39,9 +39,17 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
   /// Whether the web view already holds the site's login cookie. Remembered across launches, so a
   /// cold start (even after a force close, even with no signal) opens the page straight from the
   /// Buddy page's service worker rather than through a sign-in request that can't load offline.
+  ///
+  /// Kept per process: the share sheet has a web view and cookies of its own, so the app being
+  /// signed in says nothing about it.
   private var hasSession: Bool {
-    get { SharedStore.defaults.bool(forKey: SharedStore.Key.webSession) }
-    set { SharedStore.defaults.set(newValue, forKey: SharedStore.Key.webSession) }
+    get { SharedStore.defaults.bool(forKey: Self.sessionKey) }
+    set { SharedStore.defaults.set(newValue, forKey: Self.sessionKey) }
+  }
+
+  private static var sessionKey: String {
+    let bundle = Bundle.main.bundleIdentifier ?? ""
+    return bundle.hasSuffix(".share") ? "\(SharedStore.Key.webSession).share" : SharedStore.Key.webSession
   }
   private var retriedFromCache: Set<URL> = []
 
@@ -130,8 +138,6 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
     return domains.contains(host)
   }
 
-  var currentPath: String { webView.url?.path ?? "" }
-  var currentHost: String { webView.url?.host ?? "" }
 
   @objc private func refresh(_ control: UIRefreshControl) {
     webView.reload()
@@ -161,6 +167,9 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
 
   // MARK: Navigation
 
+  /// Every page change in the web view, whether a tap, a form, a page's own script or a redirect:
+  /// the app's own pages load here, and anything else opens where it lives. A redirect is checked
+  /// too, so an app page that forwards to another part of the site still leaves the app.
   func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
     guard let url = action.request.url else { return .allow }
     if url.scheme == BuddyConfig.urlScheme {
@@ -171,30 +180,56 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
       openExternally(url)
       return .cancel
     }
-    if ["http", "https"].contains(url.scheme ?? ""), !Self.isAppPage(url), action.navigationType == .linkActivated {
-      openExternally(url)
+    guard ["http", "https"].contains(url.scheme ?? ""), action.targetFrame?.isMainFrame != false else { return .allow }
+    if Self.isSiteLogin(url) {
+      // The site's own login means the web session ran out; the device token mints a new one.
+      if Session.isSignedIn {
+        hasSession = false
+        sessionExpired()
+      }
       return .cancel
     }
-    return .allow
+    if Self.opensInApp(url) || [.backForward, .reload].contains(action.navigationType) { return .allow }
+    openExternally(url)
+    return .cancel
   }
 
-  /// The app's own screens: Buddy itself and the app's settings and tools. Every other page, on
-  /// this site or any other, opens where it lives (its own web app, or Safari), so the app never
-  /// holds someone in it.
-  static func isAppPage(_ url: URL) -> Bool {
-    let serverHost = BuddyConfig.serverURL.host ?? ""
-    guard let host = url.host else { return false }
-    if host == "byte.\(serverHost)" { return url.path == "/" || url.path.isEmpty }
-    guard host == serverHost else { return false }
-    return ["/byte", "/app/", "/account/app_devices", "/api/ios/"].contains { url.path.hasPrefix($0) }
+  /// This site, on its own domain or one of its subdomains (Buddy, Board, Kiosk and the rest).
+  nonisolated static func isSite(_ url: URL) -> Bool {
+    guard let host = url.host, let serverHost = BuddyConfig.serverURL.host else { return false }
+    return host == serverHost || host.hasSuffix(".\(serverHost)")
+  }
+
+  /// Buddy itself: the chat at the root of its subdomain, or `/byte`, which redirects there. Board,
+  /// Kiosk and every other path on that subdomain are apps of their own.
+  nonisolated static func isBuddy(_ url: URL) -> Bool {
+    guard isSite(url), let host = url.host else { return false }
+    if host == "byte.\(BuddyConfig.serverURL.host ?? "")", url.path.isEmpty || url.path == "/" { return true }
+    return url.path == "/byte"
+  }
+
+  /// The app's own screens: Buddy, and the app's login, settings, hot links and queue. They're
+  /// served on either host, since a link on the Buddy page resolves against its subdomain.
+  nonisolated static func isAppPage(_ url: URL) -> Bool {
+    guard isSite(url) else { return false }
+    if isBuddy(url) { return true }
+    let path = url.path
+    return path.hasPrefix("/app/") || path == "/account/app_devices" || path.hasPrefix("/account/app_devices/")
+      || path.hasPrefix("/api/ios/")
+  }
+
+  /// Whether a page loads in this web view: an app page always, the rest of the site only when the
+  /// phone is set to open links in the app. Every other page opens in its own app, or Safari.
+  nonisolated static func opensInApp(_ url: URL) -> Bool {
+    isAppPage(url) || (isSite(url) && Preferences.current.openLinksInApp)
+  }
+
+  nonisolated static func isSiteLogin(_ url: URL) -> Bool {
+    isSite(url) && url.path == "/login"
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     if let url = webView.url { retriedFromCache.remove(url) }
-    if webView.url?.path == "/login", Session.isSignedIn {
-      hasSession = false
-      sessionExpired()
-    }
   }
 
   /// No connection: show the copy the web view kept from last time, once, before giving up.
@@ -224,7 +259,7 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
   /// for every link): one of the app's own screens opens here, anything else where it lives.
   func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
     guard let url = navigationAction.request.url else { return nil }
-    if Self.isAppPage(url) {
+    if Self.opensInApp(url) {
       webView.load(navigationAction.request)
     } else {
       openExternally(url)

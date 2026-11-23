@@ -37,6 +37,30 @@ RSpec.describe "Buddy app device settings", type: :request do
     expect(AppDevicePushWorker).to have_received(:perform_async).with(device.id, { "settings" => true })
   end
 
+  it "saves one switch at a time and answers with what it saved", :aggregate_failures do
+    json = headers.merge("Accept" => "application/json")
+
+    patch app_device_path(device), params: { feature: :location, on: true }, headers: json, as: :json
+    expect(response.parsed_body["features"]).not_to include("location")
+
+    patch app_device_path(device), params: { feature: :battery, on: false }, headers: json, as: :json
+    expect(device.reload.features).not_to include("battery")
+    expect(device.features).to include("widgets")
+
+    patch app_device_path(device), params: { preferences: { push_channels: [] } }, headers: json, as: :json
+    expect(response.parsed_body.dig("preferences", "push_channels")).to eq([])
+  end
+
+  it "answers a test in place, saying why one wasn't sent", :aggregate_failures do
+    json = headers.merge("Accept" => "application/json")
+    allow(Apns).to receive(:deliver).and_return(Apns::Result.new(status: 0, reason: :NotConfigured))
+
+    post test_push_app_device_path(device, kind: :alert), headers: json
+
+    expect(response).to have_http_status(:unprocessable_entity)
+    expect(response.parsed_body["message"]).to eq("Not sent: the server has no APNs key for this build")
+  end
+
   it "keeps a select to its own choices" do
     patch app_device_path(device), params: { preferences: { location_mode: "teleport" } }, headers: headers
 

@@ -17,26 +17,40 @@ class AppDevicesController < ApplicationController
     @this_device = @device.id == cookies.signed[:app_device_id]
   end
 
+  # The settings page saves each switch as it's flipped: one feature, or the
+  # options that changed. The reply is what was saved, which is what the page
+  # shows, so a switch iOS won't allow yet flips back.
   def update
-    @device.configure!(
-      features:    params.key?(:features) ? Array(params[:features]).compact_blank : nil,
-      preferences: params[:preferences].respond_to?(:permit!) ? params[:preferences].permit!.to_h : nil,
-    )
-    redirect_to app_device_path(@device), notice: "Saved"
+    features = params.key?(:features) ? Array(params[:features]).compact_blank : nil
+    if params.key?(:feature)
+      key = params[:feature].to_s
+      on = ActiveModel::Type::Boolean.new.cast(params[:on])
+      features = on ? @device.features | [key] : @device.features - [key]
+    end
+    preferences = params[:preferences]
+    preferences = preferences.respond_to?(:permit!) ? preferences.permit!.to_h : nil
+    @device.configure!(features: features, preferences: preferences)
+    respond_to do |format|
+      format.json {
+        render json: { features: @device.features, preferences: @device.all_preferences }
+      }
+      format.html { redirect_to app_device_path(@device), notice: "Saved" }
+    end
   end
 
   # One of the phone's own tasks (a sync, a battery send), run from here.
   def run
     @device.run!(params[:task])
-    redirect_to app_device_path(@device), notice: "Sent to #{@device.name}"
+    reply("Sent to #{@device.name}")
   rescue ArgumentError => e
-    redirect_to app_device_path(@device), alert: e.message
+    reply(e.message, ok: false)
   end
 
   def test_push
-    result = @device.test_push!(params[:kind], user: current_user)
-    message = result&.ok? ? "Test sent to #{@device.name}" : "Apple refused it: #{result&.reason || "no push token"}"
-    redirect_to app_device_path(@device), (result&.ok? ? :notice : :alert) => message
+    result = @device.test_push!(params[:kind])
+    return reply("Sent to #{@device.name}") if result&.ok?
+
+    reply("Not sent: #{refusal(result&.reason)}", ok: false)
   end
 
   # The one link the household is sent to install the app from.
@@ -56,5 +70,20 @@ class AppDevicesController < ApplicationController
 
   def set_device
     @device = current_user.app_devices.find(params[:id])
+  end
+
+  def reply(message, ok: true)
+    respond_to do |format|
+      format.json { render json: { message: message }, status: ok ? :ok : :unprocessable_entity }
+      format.html { redirect_to app_device_path(@device), (ok ? :notice : :alert) => message }
+    end
+  end
+
+  def refusal(reason)
+    case reason&.to_sym
+    when nil, :NoToken then "#{@device.name} hasn't registered for push yet"
+    when :NotConfigured then "the server has no APNs key for this build"
+    else "Apple refused it (#{reason})"
+    end
   end
 end

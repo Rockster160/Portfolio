@@ -56,10 +56,10 @@ class Timer < ApplicationRecord
   belongs_to :timer_page, optional: true
   has_many :share_tokens, class_name: "TimerShareToken", dependent: :destroy
 
-  # A deleted timer broadcasts nothing of its own, and a Live Activity showing it
-  # would otherwise run on to zero.
+  # A deleted timer broadcasts nothing of its own, and a Live Activity or an
+  # alarm on a phone would otherwise run on to zero and ring.
   after_destroy_commit {
-    AppTimerPushWorker.perform_async(id, "destroyed") if AppDevice.active.exists?
+    AppTimerPushWorker.perform_async(id, "destroyed", user_id) if AppDevice.active.exists?
   }
 
   scope :live,    -> { where(archived_at: nil) }

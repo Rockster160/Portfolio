@@ -183,6 +183,34 @@ html.html-ctr-app_devices {
   .panel-setting-title { font-weight: 650; }
   .panel-setting-sub { display: block; font-size: 13px; color: var(--panel-text-3); margin-top: 2px; }
 
+  // An ⓘ after a label, its note shown under the row on a tap:
+  // <button class="panel-info" data-panel-info>i</button><span class="panel-info-tip" hidden>…</span>
+  // The note spans the nearest positioned row, so it never runs off a phone's edge.
+  .panel-setting, .panel-setting-label, .panel-buttons { position: relative; }
+  .panel-info {
+    width: 20px; height: 20px; margin-left: 6px; padding: 0; flex: none; vertical-align: 1px;
+    display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;
+    border: 1px solid var(--panel-line); background: var(--panel-surface-2); color: var(--panel-text-3);
+    font: italic 700 12px/1 Georgia, serif; cursor: pointer;
+    &[aria-expanded="true"] { background: var(--panel-accent); border-color: var(--panel-accent); color: var(--panel-accent-fg); }
+  }
+  .panel-info-tip {
+    position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30;
+    padding: 10px 12px; border-radius: 12px; background: var(--panel-text); color: var(--panel-surface);
+    font-size: 14px; font-weight: 450; font-style: normal; line-height: 1.4; text-transform: none; letter-spacing: 0;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  }
+  .panel-info-anchor { display: inline-flex; align-items: center; }
+
+  // Rows that open another page, a chevron on each so they read as links rather than switches.
+  .panel-nav { gap: 0; padding: 0 14px; }
+  .panel-nav-row {
+    display: flex; align-items: center; min-height: 50px; font-weight: 650; color: var(--panel-text); text-decoration: none;
+    & + .panel-nav-row { border-top: 1px solid var(--panel-line); }
+    &::after { content: "›"; margin-left: auto; font-size: 22px; color: var(--panel-text-3); }
+    &:active { opacity: 0.6; }
+  }
+
   input[type="checkbox"].panel-switch {
     appearance: none; -webkit-appearance: none; margin: 0; position: relative; width: 50px; height: 30px; flex: none;
     border-radius: 999px; background: var(--panel-surface-3); cursor: pointer; transition: background 0.15s; border: 0;
@@ -205,6 +233,7 @@ html.html-ctr-app_devices {
     }
     input:checked + span { background: var(--panel-surface); color: var(--panel-text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
     input:focus-visible + span { outline: 2px solid var(--panel-accent); outline-offset: 1px; }
+    input:disabled + span { opacity: 0.4; cursor: default; }
   }
 
   // Checkbox-backed toggles for picking several: <label><input type=checkbox><span>…</span></label>.
@@ -217,6 +246,7 @@ html.html-ctr-app_devices {
     }
     input:checked + span { background: var(--panel-accent); border-color: var(--panel-accent); color: var(--panel-accent-fg); }
     input:focus-visible + span { outline: 2px solid var(--panel-accent); outline-offset: 1px; }
+    input:disabled + span { opacity: 0.4; cursor: default; }
   }
   .panel-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-block; }
 

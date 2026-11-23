@@ -29,7 +29,16 @@ module AppPush
       }
     end
 
-    def gone(timer_id)
+    # The timer is deleted, so who could see it is no longer known: every phone
+    # in its owner's household that rings alarms checks its list again.
+    def gone(timer_id, user_id=nil)
+      household = User.find_by(id: user_id)&.chore_household_user_ids
+      User.where(id: household.to_a).find_each { |user|
+        AppPush.devices(user, feature: :alarms).each { |device|
+          changed = AppPush.background(timers_changed: true)
+          AppPush.deliver_to(device, changed, push_type: :background)
+        }
+      }
       AppLiveActivity.for_ref(:timer, timer_id).includes(:app_device).find_each { |activity|
         if activity.push_token.present?
           Apns.deliver(
@@ -133,7 +142,7 @@ module AppPush
       {
         timer_id: timer.id,
         name:     timer.name.presence || "Timer",
-        icon:     timer.metadata.to_h["icon"].presence || (alarm?(timer) ? "alarm" : "timer"),
+        icon:     timer.metadata.to_h["icon"].presence,
         color:    timer.color,
         kind:     kind(timer),
       }.compact

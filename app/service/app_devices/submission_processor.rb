@@ -75,6 +75,7 @@ module AppDevices
         when :routine then run_routine
         when :list_toggle then toggle_list
         when :answer then answer
+        when :timer then control_timer
         end
       }
       submission.update!(
@@ -115,6 +116,11 @@ module AppDevices
 
       conversation = conversation_for_buddy
       raise ArgumentError, "there is no Buddy conversation to send to" if conversation.nil?
+      # A slash command held from the Buddy page's queue is the page's to carry
+      # out, and its copy there sends it the next time Buddy opens.
+      if params[:source].to_s == "byte" && ::ByteMessageIntake.slash_command?(text.to_s)
+        return "Left for Buddy to send"
+      end
 
       created = pressed_at > MESSAGE_BACKDATE_LIMIT.ago ? pressed_at : Time.current
       message = ::ByteMessageIntake.call(
@@ -124,6 +130,7 @@ module AppDevices
         metadata:              { source: params[:source].presence || :ios, local_id: uuid },
         created_at:            created,
         attachment_signed_ids: signed_ids,
+        reply_to:              data[:reply_to].presence,
       )
       raise ArgumentError, "the message was refused" if message.nil?
 
@@ -186,18 +193,27 @@ module AppDevices
       "Ran #{routine.name}"
     end
 
+    # A widget's tick names the item by id. A hot link names it, and an item
+    # the list doesn't have yet is added, the same as typed text is.
     def toggle_list
       list = user.lists.find_by(id: key) || user.lists.by_param(key).take
       raise ArgumentError, "no list #{key}" if list.nil?
 
-      if data[:item_id].blank?
-        raise ArgumentError, "nothing to add" if text.blank?
+      items = list.list_items.with_deleted
+      return toggle_item(items.find(data[:item_id])) if data[:item_id].present?
 
-        list.list_items.add(text)
-        return "Added #{text} to #{list.name}"
-      end
+      named = data[:item].to_s.strip.presence
+      found = named && items.find_by("LOWER(name) = ?", named.downcase)
+      return toggle_item(found) if found
 
-      item = list.list_items.with_deleted.find(data[:item_id])
+      adding = named || text
+      raise ArgumentError, "nothing to add" if adding.blank?
+
+      list.list_items.add(adding)
+      "Added #{adding} to #{list.name}"
+    end
+
+    def toggle_item(item)
       was_deleted = item.deleted?
       checked = !was_deleted
       checked = ::ActiveModel::Type::Boolean.new.cast(data[:checked]) if data.key?(:checked)
@@ -206,6 +222,33 @@ module AppDevices
         item.notify_jil(item.deleted? ? :removed : :added)
       end
       "#{item.deleted? ? "Checked" : "Unchecked"} #{item.name}"
+    end
+
+    TIMER_DONE = {
+      pause:   "Paused",
+      resume:  "Resumed",
+      confirm: "Done with",
+      cancel:  "Cancelled",
+    }.freeze
+
+    # A Live Activity's button, pressed with no signal and carried out once it
+    # lands, the same as the button does online.
+    def control_timer
+      timer = user.timers.live.find_by(id: key) || ::Buddy::Timers.reachable(user, key)
+      raise ArgumentError, "that timer is gone" if timer.nil?
+
+      case text.to_s.to_sym
+      when :pause
+        timer.pause!
+        timer.broadcast(reason: :paused)
+      when :resume
+        timer.resume!
+        timer.broadcast(reason: :resumed)
+      when :confirm then timer.confirm!
+      when :cancel then ::Buddy::Timers.stop!(timer)
+      else raise ArgumentError, "unknown timer button #{text}"
+      end
+      "#{TIMER_DONE[text.to_sym]} #{timer.name.presence || "the timer"}"
     end
 
     def answer
