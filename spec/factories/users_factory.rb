@@ -8,6 +8,7 @@
 #  chore_notify_prefs :jsonb            not null
 #  dark_mode          :boolean
 #  email              :string
+#  hot_links          :jsonb            not null
 #  invitation_token   :string
 #  password_digest    :string
 #  phone              :string

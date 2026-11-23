@@ -608,8 +608,6 @@ Rails.application.routes.draw do
   get "account/device_login" => "users/device_logins#show", as: :device_login
   resources :app_devices, only: [:index, :show, :update, :destroy], path: "account/app_devices" do
     patch :install_link, on: :collection
-    get :hot_links, on: :member
-    patch :hot_links, on: :member, action: :update_hot_links
     # Buttons inside the settings form post through it, so they carry its
     # PATCH method along with them.
     match :run, on: :member, via: [:post, :patch]
@@ -623,6 +621,8 @@ Rails.application.routes.draw do
     get :compose, to: "app_pages#compose"
     get :share, to: "app_pages#share"
     get :settings, to: "app_pages#settings"
+    get :hot_links, to: "app_hot_links#show"
+    patch :hot_links, to: "app_hot_links#update"
   end
   # /scan/:token — public, single-use sign-in link carried by the QR code.
   get "/scan/:token" => "users/device_logins#claim", as: :device_login_claim

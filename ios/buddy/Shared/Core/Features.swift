@@ -57,7 +57,7 @@ struct Preferences: Codable, Equatable {
   /// Show the server's unread count on the app icon.
   var pushBadges = true
   /// Open links from notifications in the app rather than Safari.
-  var openLinksInApp = true
+  var openLinksInApp = false
 
   var liveActivitiesForTimers = true
   var liveActivitiesForAlarms = true

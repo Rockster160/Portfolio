@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_11_23_202121) do
+ActiveRecord::Schema[8.0].define(version: 2026_11_23_223811) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
@@ -289,7 +289,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_23_202121) do
     t.datetime "updated_at", null: false
     t.jsonb "permissions", default: {}, null: false
     t.jsonb "sources", default: {}, null: false
-    t.jsonb "hot_links", default: [], null: false
     t.index ["apns_token"], name: "index_app_devices_on_apns_token"
     t.index ["token_digest"], name: "index_app_devices_on_token_digest", unique: true
     t.index ["user_id"], name: "index_app_devices_on_user_id"
@@ -2315,6 +2314,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_23_202121) do
     t.jsonb "chore_notify_prefs", default: {}, null: false
     t.jsonb "buddy_features", default: [], null: false
     t.jsonb "byte_prefs", default: {}, null: false
+    t.jsonb "hot_links", default: [], null: false
     t.index ["chore_household_id"], name: "index_users_on_chore_household_id"
   end
 

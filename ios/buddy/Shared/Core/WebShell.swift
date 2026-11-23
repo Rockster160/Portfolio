@@ -79,7 +79,10 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
     let json = (try? JSONSerialization.data(withJSONObject: info)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
     let controller = webView.configuration.userContentController
     controller.removeAllUserScripts()
-    controller.addUserScript(WKUserScript(source: "window.BuddyNative = \(json);", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    // The class is set before the page draws, so what a page shows only outside the app never
+    // flashes up inside it.
+    let source = "window.BuddyNative = \(json); document.documentElement.classList.add('buddy-native');"
+    controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
   }
 
   /// A page on the site, signed in with the device token the first time so every page after that
@@ -168,13 +171,22 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
       openExternally(url)
       return .cancel
     }
-    let serverHost = BuddyConfig.serverURL.host ?? ""
-    let isOurs = url.host == serverHost || url.host?.hasSuffix(".\(serverHost)") == true
-    if ["http", "https"].contains(url.scheme ?? ""), !isOurs, action.navigationType == .linkActivated {
+    if ["http", "https"].contains(url.scheme ?? ""), !Self.isAppPage(url), action.navigationType == .linkActivated {
       openExternally(url)
       return .cancel
     }
     return .allow
+  }
+
+  /// The app's own screens: Buddy itself and the app's settings and tools. Every other page, on
+  /// this site or any other, opens where it lives (its own web app, or Safari), so the app never
+  /// holds someone in it.
+  static func isAppPage(_ url: URL) -> Bool {
+    let serverHost = BuddyConfig.serverURL.host ?? ""
+    guard let host = url.host else { return false }
+    if host == "byte.\(serverHost)" { return url.path == "/" || url.path.isEmpty }
+    guard host == serverHost else { return false }
+    return ["/byte", "/app/", "/account/app_devices", "/api/ios/"].contains { url.path.hasPrefix($0) }
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -208,10 +220,15 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
     flash(message)
   }
 
-  /// A link meant for a new window (target="_blank") leaves the app, which keeps signing up for an
-  /// account on the website rather than inside the app.
+  /// A link meant for a new window (target="_blank", or the Buddy page's window.open, which it uses
+  /// for every link): one of the app's own screens opens here, anything else where it lives.
   func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-    if let url = navigationAction.request.url { openExternally(url) }
+    guard let url = navigationAction.request.url else { return nil }
+    if Self.isAppPage(url) {
+      webView.load(navigationAction.request)
+    } else {
+      openExternally(url)
+    }
     return nil
   }
 }

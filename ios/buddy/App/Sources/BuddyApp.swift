@@ -143,7 +143,13 @@ final class AppModel: ObservableObject {
     case .buddy(let id):
       shell.load(Self.buddyPath(conversationId: id))
     case .web(let path):
-      shell.load(path)
+      // Another page opens where it lives, unless this phone is set to keep pages in the app.
+      if let url = URL(string: path, relativeTo: BuddyConfig.serverURL)?.absoluteURL,
+         !WebShell.isAppPage(url), !Preferences.current.openLinksInApp {
+        UIApplication.shared.open(url)
+      } else {
+        shell.load(path)
+      }
     case .checkIn(let id):
       Task { await openCheckIn(id: id) }
     case .compose(let action):

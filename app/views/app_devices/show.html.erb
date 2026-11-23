@@ -5,7 +5,7 @@
       <a class="panel-icon-btn" href="<%= app_devices_path %>" aria-label="All devices">‹</a>
       <h1><%= @device.name %></h1>
       <a class="panel-chip buddy-app-this-device-only" href="<%= app_commands_path %>">Queue</a>
-      <a class="panel-chip" href="<%= hot_links_app_device_path(@device) %>">Hot links</a>
+      <a class="panel-chip" href="<%= app_hot_links_path %>">Hot links</a>
     </header>
 
     <% detail = [@device.model, @device.os_version && "iOS #{@device.os_version}"] %>

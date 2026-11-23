@@ -11,15 +11,15 @@
   open:        "Open a page",
   url:         "Open a link",
 } %>
-<div class="panel-app" data-hot-link-symbols="<%= AppDevice::HOT_LINK_SYMBOLS.to_json %>">
-  <%= form_with url: hot_links_app_device_path(@device), method: :patch, class: "panel-page panel-page-with-bar" do |f| %>
+<div class="panel-app" data-hot-link-symbols="<%= AppDevices::HotLinks::SYMBOLS.to_json %>">
+  <%= form_with url: app_hot_links_path, method: :patch, class: "panel-page panel-page-with-bar" do |f| %>
     <header class="panel-topbar">
-      <a class="panel-icon-btn" href="<%= app_device_path(@device) %>" aria-label="<%= @device.name %>">‹</a>
+      <a class="panel-icon-btn" href="<%= app_settings_path %>" aria-label="Buddy for iPhone">‹</a>
       <h1>Hot links</h1>
     </header>
 
     <div data-hot-links>
-      <% (Array(@device.hot_links) + [{}]).each_with_index do |link, index| %>
+      <% (@hot_links + [{}]).each_with_index do |link, index| %>
         <% action = link["action"].to_h %>
         <% name = "hot_links[#{index}]" %>
         <% icon = link["icon"].presence || "bolt.fill" %>
@@ -41,7 +41,7 @@
             <%= hidden_field_tag "#{name}[icon]", icon, id: nil, data: { hot_link_icon: true } %>
             <button type="button" class="panel-btn panel-symbol-field" data-hot-link-icon-pick>
               <span class="panel-symbol" data-symbol="<%= icon %>"></span>
-              <span data-symbol-name><%= AppDevice::HOT_LINK_SYMBOLS[icon] || icon %></span>
+              <span data-symbol-name><%= AppDevices::HotLinks::SYMBOLS[icon] || icon %></span>
             </button>
           </div>
           <div>

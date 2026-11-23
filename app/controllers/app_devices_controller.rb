@@ -1,6 +1,6 @@
 # The phones signed in to the Buddy app, and each one's settings: which
-# features are on, their options and its hot links, all set here so nothing
-# has to be configured on the phone. Revoking one locks it out of every
+# features are on and their options, all set here so nothing has to be
+# configured on the phone. Revoking one locks it out of every
 # /api/ios endpoint at once.
 class AppDevicesController < ApplicationController
   before_action :authorize_user
@@ -23,22 +23,6 @@ class AppDevicesController < ApplicationController
       preferences: params[:preferences].respond_to?(:permit!) ? params[:preferences].permit!.to_h : nil,
     )
     redirect_to app_device_path(@device), notice: "Saved"
-  end
-
-  def hot_links
-    @catalog = {
-      tasks:    current_user.accessible_tasks.active.enabled.order(:name).reject(&:function?),
-      routines: current_user.buddy_routines.where(enabled: true).order(:position),
-      lists:    current_user.lists.order(:name),
-    }
-  end
-
-  def update_hot_links
-    links = params[:hot_links].respond_to?(:permit!) ? params[:hot_links].permit!.to_h.values : []
-    @device.configure!(hot_links: links)
-    redirect_to hot_links_app_device_path(@device), notice: "Saved"
-  rescue ArgumentError => e
-    redirect_to hot_links_app_device_path(@device), alert: e.message
   end
 
   # One of the phone's own tasks (a sync, a battery send), run from here.

@@ -4,6 +4,7 @@
     <header class="panel-topbar">
       <a class="panel-icon-btn" href="<%= account_path %>" aria-label="Account">‹</a>
       <h1>Buddy for iPhone</h1>
+      <a class="panel-chip" href="<%= app_hot_links_path %>">Hot links</a>
     </header>
 
     <% if AppDevice.install_url %>
@@ -14,7 +15,7 @@
     <h2 class="panel-section-title">Devices</h2>
     <div class="panel-card">
       <% if @app_devices.none? %>
-        <p class="panel-empty">Log in from the Buddy app on a phone and it shows here.</p>
+        <p class="panel-empty">No phones yet</p>
       <% end %>
       <div class="panel-rows">
         <% @app_devices.each do |device| %>

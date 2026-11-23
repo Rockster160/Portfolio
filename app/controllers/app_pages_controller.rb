@@ -27,8 +27,11 @@ class AppPagesController < ApplicationController
 
   private
 
-  # The phone this web view belongs to, remembered when the app signed it in.
+  # The phone this web view belongs to, remembered when the app signed it in,
+  # or the only phone there is.
   def set_device
-    @device = current_user.app_devices.active.find_by(id: cookies.signed[:app_device_id])
+    devices = current_user.app_devices.active
+    @device = devices.find_by(id: cookies.signed[:app_device_id])
+    @device ||= devices.first if devices.one?
   end
 end

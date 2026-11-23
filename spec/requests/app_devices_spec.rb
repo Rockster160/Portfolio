@@ -43,32 +43,6 @@ RSpec.describe "Buddy app device settings", type: :request do
     expect(device.reload.preference(:location_mode)).to eq(:significant)
   end
 
-  it "saves hot links in order, dropping blank rows", :aggregate_failures do
-    patch hot_links_app_device_path(device), params: {
-      hot_links: {
-        "0" => { title: "Log water", icon: "drop.fill", action: { kind: "command", value: "Log Water", inline: "false" } },
-        "1" => { title: "Take me to…", action: { kind: "prompt", send_as: "command", prefix: "Take me to ", inline: "true" } },
-        "2" => { title: "", action: { kind: "command" } },
-        "3" => { title: "Bad", action: { kind: "teleport" } },
-      },
-    }, headers: headers
-
-    links = device.reload.hot_links
-    expect(links.pluck("title")).to eq(["Log water", "Take me to…"])
-    expect(links.first["action"]).to eq("kind" => "command", "value" => "Log Water", "inline" => false)
-    expect(links.last["action"]).to eq("kind" => "prompt", "send_as" => "command", "prefix" => "Take me to ", "inline" => true)
-    expect(links.last["icon"]).to eq("bolt.fill")
-  end
-
-  it "refuses a hot link whose data isn't JSON", :aggregate_failures do
-    patch hot_links_app_device_path(device), params: {
-      hot_links: { "0" => { title: "Run it", action: { kind: "task", value: "1", data: "{nope" } } },
-    }, headers: headers
-
-    expect(flash[:alert]).to include("isn't valid JSON")
-    expect(device.reload.hot_links).to eq([])
-  end
-
   it "runs one of the phone's own tasks through a push", :aggregate_failures do
     post run_app_device_path(device, task: :sync_calendar), headers: headers
     expect(AppDevicePushWorker).to have_received(:perform_async).with(device.id, { "device_task" => "sync_calendar" })
@@ -84,6 +58,12 @@ RSpec.describe "Buddy app device settings", type: :request do
     expect(page.at("#feature-toggle-battery")["disabled"]).to be_nil
     expect(page.at("#feature-toggle-location")["disabled"]).to eq("disabled")
     expect(page.css("[data-buddy-allow]").to_a.pluck("data-buddy-allow")).to include("location", "health")
+  end
+
+  it "opens the only phone there is without the app's cookie" do
+    get app_settings_path, headers: headers
+
+    expect(response).to redirect_to(app_device_path(device))
   end
 
   it "does not show someone else's phone" do

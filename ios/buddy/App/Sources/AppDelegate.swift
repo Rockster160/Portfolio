@@ -80,11 +80,6 @@ enum NotificationResponder {
 
     if actionId == UNNotificationDefaultActionIdentifier {
       if let raw = info["url"] as? String {
-        if !Preferences.current.openLinksInApp,
-           let url = URL(string: raw, relativeTo: BuddyConfig.serverURL)?.absoluteURL {
-          await UIApplication.shared.open(url)
-          return
-        }
         AppModel.shared.open(urlString: raw)
       } else if (info["channel"] as? String) == "byte" {
         AppModel.shared.route = .buddy(conversationId: info["conversation_id"] as? Int)
