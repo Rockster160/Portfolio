@@ -269,6 +269,11 @@ Three obligations, and none of them is optional:
    | `seed:` | a precondition that's only true for one turn (an open relay question) |
    | `expect_reply:` | the words are the point — a term taught last turn coming back understood |
    | `tool: :none` | the honest answer is a question, and any call is the failure |
+   | `theme:` | it went wrong in one companion's voice (`"suki"`), so the persona is part of the setup |
+
+   A `seed:` reply has to be `direction: :inbound, state: :delivered`. History
+   replays only delivered replies, so one seeded as `:sent` is silently dropped
+   and the probe runs without the history it was written for.
 
    **`run:`/`steps:`/`seed:`/`effect:` run inside a transaction that is always
    rolled back**, so nothing they write survives. Only tools on

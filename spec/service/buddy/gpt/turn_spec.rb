@@ -4805,13 +4805,25 @@ RSpec.describe Buddy::GPT::Turn do
     end
 
     it "sends a go with a place named to the call that goes there" do
-      ["Take me to Lucky One's", "navigate to Costco", "directions to the park"].each { |text|
+      [
+        "Take me to Lucky One's",
+        "navigate to Costco",
+        "directions to the park",
+        "Can you navigate me there?",
+        "could you please take me to 5121 W Black Twig Drive",
+      ].each { |text|
         expect(described_class.go_directive(text)).to eq(described_class::GO_TO_DIRECTIVE), text
       }
     end
 
     it "leaves anything else alone" do
-      ["let's go to the park later?", "take me home", "how far is Costco"].each { |text|
+      [
+        "let's go to the park later?",
+        "take me home",
+        "how far is Costco",
+        "can you get there by bike?",
+        "Can you take me back to the pick up Julie address from this morning?",
+      ].each { |text|
         expect(described_class.go_directive(text)).to be_nil, text
       }
     end

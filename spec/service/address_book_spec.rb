@@ -66,6 +66,13 @@ RSpec.describe AddressBook do
       end
     end
 
+    it "still reads a phrase when one of their saved places has no name" do
+      contact_with(nil, [[nil, "9 Nameless Ln", true]])
+
+      expect(book.address_in_phrase("the DMV in Riverton")&.street).to eq("12830 S Redwood Rd")
+      expect(book.address_in_phrase("The Neurodiversity Clinic Utah")).to be_nil
+    end
+
     it "leaves a bare name, a bare branch, an unknown branch, or a nearby-place phrase alone" do
       ["Trader Joe's near home", "DMV", "Herriman", "the DMV in Draper"].each do |phrase|
         expect(book.address_in_phrase(phrase)).to be_nil, phrase.inspect

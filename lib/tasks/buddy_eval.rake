@@ -500,6 +500,10 @@ BUDDY_TOOL_PROBES = {
   skip_prompt:            { say: "skip that check-in for now", needs: :pending_prompt },
   set_font_size:          "this text is too small, bump it up",
   check_weather:          "how's the weather right now? I may take the bike",
+  count_days:             {
+    say:   "how many days until Christmas?",
+    avoid: %i[search_agenda add_agenda_item],
+  },
   # A link, and a question only the page can answer. The pull is towards
   # answering off the URL - which reads as an answer and is a guess - or
   # towards filing the whole thing as something Buddy can't do.
@@ -895,7 +899,7 @@ BUDDY_EDGE_PROBES = [
     seed:  ->(user, convo) {
       convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Rescued Gulliver")
       convo.byte_messages.create!(
-        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" },
         body: "That sounds like a side quest that got away from you. What happened?",
       )
     },
@@ -931,7 +935,7 @@ BUDDY_EDGE_PROBES = [
       )
       convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Rescued Gulliver")
       convo.byte_messages.create!(
-        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" },
         body: "Another one for the count!",
       )
     },
@@ -959,21 +963,66 @@ BUDDY_EDGE_PROBES = [
         user: user, direction: :outbound, state: :sent, body: "Can you keep a daily count to Memorial day?",
       )
       convo.byte_messages.create!(
-        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" },
         body: "I can do that! What time each day would you like the Memorial Day count to pop up?",
       )
     },
   },
+  # The dates are worked out when the file loads, so every count in history is
+  # right for its own day and today's answer is a different, also right,
+  # number. The setup day is plain chat, undated, saying "right now".
+  Date.today.then { |today|
+    memorial = Date.new(today.year + (today > Date.new(today.year, 5, 31) ? 1 : 0), 5, 31)
+    memorial -= 1 until memorial.monday?
+    left  = ->(date) { (memorial - date).to_i }
+    fired = ->(date) {
+      "[nothing was said to you - this fired on its own at 9am, " \
+        "and your reply is the notification] Tell them how many days are left until Memorial " \
+        "Day, #{memorial.strftime("%A %-d %B %Y")}."
+    }
+    {
+      case:        "prod 12015",
+      theme:       "suki",
+      say:         fired.call(today),
+      tool:        :count_days,
+      never_reply: /got (?:that|it) wrong|off by|I said \d+|sorry|stand behind|correct(?:ed|ion)/i,
+      note:        "a daily countdown read the setup day's \"192 days away right now\" as still " \
+                   "true, and apologized inside the notification for each later, correct count, " \
+                   "three mornings running (prod 11956, 12009, 12015)",
+      seed:        ->(user, convo) {
+        said = ->(direction, body, metadata={}) {
+          state = direction == :inbound ? :delivered : :sent
+          convo.byte_messages.create!(
+            user: user, direction: direction, state: state, body: body, metadata: metadata,
+          )
+        }
+        reply = ->(body) { said.call(:inbound, body, { "kind" => "buddy" }) }
+        said.call(:outbound, "Can you please tell me how many days to Memorial day?")
+        reply.call("Memorial Day is **#{left.call(today - 3)} days away** from today!")
+        said.call(:outbound, "Everyday at 9am. But can you update me now?")
+        reply.call("Memorial Day is **#{left.call(today - 3)} days away** right now!")
+        [2, 1].each { |back|
+          said.call(:outbound, fired.call(today - back), { "hidden" => true, "kind" => "buddy_trigger" })
+          reply.call("Memorial Day is **#{left.call(today - back)} days away**!")
+        }
+      },
+    }
+  },
   {
     case:         "prod 11814, firing",
+    theme:        "suki",
     # Buddy::CompanionDelivery::SEED_FRAME, as the fired reminder sends it.
-    say:          "[nothing was said to you - this fired on its own at 9:00pm, and your reply is " \
-                  "the notification] Look up the forecast for the coming days and tell them what " \
-                  "each day's weather will be.",
+    say:          "[nothing was said to you - this fired on its own at 9pm, and your reply is " \
+                  "the notification] Look up the forecast for the coming days and tell them " \
+                  "each day's weather.",
     tool:         :check_weather,
     expect_reply: /\b(?:mon|tue|wed|thu|fri|sat|sun|tomorrow)/i,
+    never_reply:  /\b(?!to)\w+day,? (?:to|through|and|-|–) \w+day\b/i,
     note:         "the 9pm reminder fires a turn with its text as the instruction, and that turn " \
-                  "has to look the forecast up rather than tell them to check it",
+                  "has to look the forecast up rather than tell them to check it. Three nights " \
+                  "running it then folded days together - \"Monday to Wednesday\", \"Friday and " \
+                  "Saturday\" - which hid Monday's snow and Friday's 100% rain (prod 11905, " \
+                  "11994, 12059)",
   },
 
   # --- an interview booked out loud, with no mail behind it -----------------
@@ -1065,7 +1114,7 @@ BUDDY_EDGE_PROBES = [
               "Email id: #{mail.id}",
       )
       convo.byte_messages.create!(
-        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy_reply" },
+        user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy_reply" },
         body: "Halloway Systems sent the phone interview invite.",
       )
     },
@@ -1098,7 +1147,7 @@ BUDDY_EDGE_PROBES = [
         },
       )
       convo.byte_messages.create!(
-        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" },
         body: "How's the Halloway take-home coming along? It's due Monday morning.",
       )
     },
@@ -1959,7 +2008,7 @@ BUDDY_EDGE_PROBES = [
         body: "Add Family Party and TG Point on Sat at 10am for Nyjah's Gifts to Ours",
       )
       convo.byte_messages.create!(
-        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" },
         body: "Done. Family Party and TG Point is on Ours for Saturday at 10:00 AM " \
               "at Nyjah's Gifts, and I set it for about 2 hours.",
       )
@@ -2744,7 +2793,7 @@ BUDDY_EDGE_PROBES = [
         body: "Check on my headache, cough, and throat everyday at 9am and 9pm",
       )
       convo.byte_messages.create!(
-        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" },
         body: "I'll check on your headache, cough and throat every day at 9am and 9pm.",
       )
     },
@@ -2777,7 +2826,7 @@ BUDDY_EDGE_PROBES = [
         body: "Things I keep forgetting at night: brush teeth, take vitamins, plug in my phone",
       )
       convo.byte_messages.create!(
-        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" },
         body: "Those three are easy to lose track of at the end of the day.",
       )
     },
@@ -2804,7 +2853,7 @@ BUDDY_EDGE_PROBES = [
         body: "Add batteries to the Costco section on the groceries list at 5",
       )
       convo.byte_messages.create!(
-        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" },
         body: "What do you want `at 5` to mean here - 5pm, or five of them?",
       )
     },
@@ -3142,7 +3191,7 @@ BUDDY_EDGE_PROBES = [
             user: user, direction: :outbound, state: :sent, body: "Tot Siens! It means see you later",
           )
           convo.byte_messages.create!(
-            user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+            user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" },
             body: "Lekker - tot siens, Dutch for see you later. Got it in the glossary.",
           )
         },
@@ -3397,6 +3446,27 @@ BUDDY_EDGE_PROBES = [
     needs:      :navigate_fn,
     note:       "seven rounds and nothing ran, so the reply was swapped for \"This one hasn't " \
                 "actually happened\" with no word of what went wrong",
+  },
+  {
+    case:       "prod 11966",
+    say:        "Can you navigate me there?",
+    tool:       :run_jil_task,
+    avoid:      :request_feature,
+    args:       { run_jil_task: { name: /navigate/i, destination: /black twig/i } },
+    needs:      :navigate_fn,
+    note:       "the address had just been looked up, and the reply was \"I can't start " \
+                "navigation from here\" with a feature request filed for the task that does it",
+    seed:       ->(user, convo) {
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent,
+        body: "Can you take me back to the pick up Julie address from this morning?",
+      )
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" },
+        body: "Found it. This morning's pick up Julie is on Ours at 8:15am, 5121 W Black Twig " \
+              "Drive, and it runs until 8:20am.",
+      )
+    },
   },
   # A watch whose text fills itself in off the trigger. The `{{ location }}`
   # in it was read as a step reference nothing had collected, and the watch
@@ -3722,7 +3792,7 @@ BUDDY_EDGE_PROBES = [
       said = ->(body) { convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: body) }
       replied = ->(body) {
         convo.byte_messages.create!(
-          user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" }, body: body,
+          user: user, direction: :inbound, state: :delivered, metadata: { "kind" => "buddy" }, body: body,
         )
       }
       asked = "Any time either my phone or the car departs or arrives, send me a message like " \
@@ -3730,7 +3800,7 @@ BUDDY_EDGE_PROBES = [
       said.call(asked)
       replied.call("Hmm, I don't quite follow - can you give me a little more to go on?")
       convo.byte_messages.create!(
-        user: user, direction: :inbound, state: :sent,
+        user: user, direction: :inbound, state: :delivered,
         metadata: { "kind" => "buddy_reply", "source" => "deferred_skipped" },
         body: "I skipped remind when — it needed `location`, and nothing earlier in that sequence collected it.",
       )
@@ -4178,7 +4248,8 @@ namespace :buddy do
   def run_isolated(user, probe)
     # Outside the transaction: created in it, it would roll back and take the
     # deferred usage rows with it.
-    convo = eval_conversation(user, "byte")
+    theme = probe[:theme] || "byte"
+    convo = eval_conversation(user, theme)
     steps = probe[:steps].presence || [probe]
 
     defer_usage {
@@ -4199,7 +4270,7 @@ namespace :buddy do
           # the model hears it the way production replays it.
           prior = convo.byte_messages.where("id > ?", mark).order(:id).to_a
           @baseline = step[:baseline]&.call(user)
-          evaluate(step[:say], user: user, probe: merged, prior: prior)
+          evaluate(step[:say], user: user, theme: theme, probe: merged, prior: prior)
         }
         raise ActiveRecord::Rollback
       }
@@ -4722,11 +4793,15 @@ namespace :buddy do
 
     @eval_conversations ||= {}
     @eval_conversations[[user.id, theme.to_s]] ||= (
-      name = "Eval · #{theme.to_s == "moss" ? "Moss" : "Byte"}"
-      user.byte_conversations.evals.find_by(name: name) ||
-        user.byte_conversations.create!(
-          name: name, mode: :buddy, buddy_theme: theme, metadata: { "eval" => true },
-        )
+      # `theme_chosen`, or the new thread takes the account's default pet and
+      # the run talks in that voice whatever theme it asked for. The update puts
+      # right a thread made before that.
+      name = "Eval · #{theme.to_s.capitalize}"
+      found = user.byte_conversations.evals.find_by(name: name)
+      found&.update!(buddy_theme: theme) unless found&.buddy_theme == theme.to_s
+      found || user.byte_conversations.create!(
+        name: name, mode: :buddy, buddy_theme: theme, theme_chosen: true, metadata: { "eval" => true },
+      )
     )
   end
 

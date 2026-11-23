@@ -1317,11 +1317,16 @@ module Buddy
       TXT
 
       # "Take me to Costco" names the place, and the trip is still the call.
-      # Looking the place up answers where it is, which they didn't ask.
-      GO_TO_RX = /\A\s*(?:ok(?:ay)?,?\s+)?(?:take\s+me|navigate(?:\s+me)?|(?:get\s+)?directions)\s+to\s+\S/i
+      # Looking the place up answers where it is, which they didn't ask. Asked
+      # politely, or "there" for a place just talked about, it is the same trip.
+      GO_TO_RX = /
+        \A\s*(?:ok(?:ay)?,?\s+)?(?:(?:can|could|would|will)\s+you\s+)?(?:please\s+)?
+        (?:take\s+me|navigate(?:\s+me)?|(?:get\s+)?directions)
+        \s+(?:to\s+\S|(?:back\s+)?there\b)
+      /ix
 
       GO_TO_DIRECTIVE = <<~TXT.freeze
-        They want to be taken there. Read `jil_functions`: one that sends them somewhere takes the place as they said it, so call it with that. Looking the place up first is not the trip.
+        They want to be taken there. Read `jil_functions`: one that sends them somewhere takes the place as they said it - or, for "there", the place or address just talked about - so call it with that. Looking the place up first is not the trip.
       TXT
 
       def self.go_directive(body)

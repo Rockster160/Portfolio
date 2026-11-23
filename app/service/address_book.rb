@@ -611,7 +611,7 @@ class AddressBook
   end
 
   def contact_names(contact)
-    [contact.name, *contact.nickname.to_s.split(",")].map(&:strip).compact_blank
+    [contact.name, *contact.nickname.to_s.split(",")].filter_map { |name| name.to_s.strip.presence }
   end
 
   # The address a phrase means once the contact's name is taken out of it: the

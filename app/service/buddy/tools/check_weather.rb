@@ -76,8 +76,11 @@ Buddy::Tools.register(
           day.slice(:high, :low, :rain, :sky, :notable).compact,
         )
       },
-      how:     "Tell them in your own words - warm and brief - factoring in whatever they were " \
-               "asking about. Don't recite the raw numbers as a list.",
+      how:     "Tell them in your own words - warm and brief - answering what they asked. Asked " \
+               "about now or today: lead with the reading. Asked about the coming days: start " \
+               "from tomorrow once today is mostly over, give each day in `days` its own " \
+               "mention by name, never two days folded into one, and name the rain or snow " \
+               "on any day that has it. Don't recite the raw numbers as a list.",
     }
   },
 )
