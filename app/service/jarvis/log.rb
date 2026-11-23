@@ -19,7 +19,7 @@ class Jarvis::Log < Jarvis::Action
     time_str, extracted_time = Jarvis::Times.extract_time(@msg.downcase.squish, context: :past)
     new_words = @msg.sub(Regexp.new("(?:\b(?:at)\b)? ?#{time_str}", :i), "") if extracted_time
     new_words = (new_words || @msg).gsub(/^log ?/i, "")
-    @evt[:timestamp] = extracted_time
+    @evt[:timestamp] = extracted_time || Jarvis.pressed_at
     @evt[:data] = extract_data(new_words)
     new_words = new_words.gsub(/\s*\{.*\}\s*/, " ").squish if @evt[:data].present?
     @evt[:name], @evt[:notes] = new_words.gsub(/[.?!]$/i, "").squish.split(" ", 2)

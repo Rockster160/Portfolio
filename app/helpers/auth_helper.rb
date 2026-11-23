@@ -213,6 +213,16 @@ module AuthHelper
     # Just made this work for whatever prefix
     type, auth_string = raw_auth.split(" ", 2)
 
+    # A phone app's device token carries its own prefix, so a revoked one stops
+    # here instead of being decoded as a base64 user:pass.
+    if AppDevice.token?(auth_string)
+      return AppDevice.authenticate(auth_string)&.tap { |device|
+        @current_device = device
+        @auth_type = :app_device
+        @auth_type_id = device.id
+      }&.user
+    end
+
     # Try API key first -  Base64-decoding hex keys can produce false
     # colons, causing them to be misidentified as basic auth
     api_user = ApiKey.authenticate(auth_string)&.tap { |key|

@@ -77,11 +77,15 @@ class Jarvis
   # they ran. Byte draws a receipt chip per task so a spoken command leaves the
   # same visible trail a Buddy tool call does — everywhere else ignores it, and
   # a caller that passes no block costs nothing.
-  def self.command(user, words, &on_tasks)
+  #
+  # `at:` is when the command was given, for words that were queued on a phone
+  # and arrive later. It stands in for "now" wherever the words name no time of
+  # their own, so a log pressed at 7:02 offline is filed at 7:02.
+  def self.command(user, words, at: nil, &on_tasks)
     return if words.blank?
 
     jarvis = new(user, words)
-    res, res_data = jarvis.command
+    res, res_data = given_at(at) { jarvis.command }
     on_tasks&.call(jarvis.ran_tasks)
 
     if user.persisted? && res.present?
@@ -93,6 +97,20 @@ class Jarvis
     return res if res_data.blank?
 
     [res, res_data]
+  end
+
+  # The press time of the command being run on this thread, or nil when it is
+  # happening now.
+  def self.given_at(time)
+    previous = Thread.current[:jarvis_given_at]
+    Thread.current[:jarvis_given_at] = time || previous
+    yield
+  ensure
+    Thread.current[:jarvis_given_at] = previous
+  end
+
+  def self.pressed_at
+    Thread.current[:jarvis_given_at]
   end
 
   def self.broadcast(user, msg, channel=:ws)
@@ -185,7 +203,8 @@ class Jarvis
     time_str, scheduled_time = ::Jarvis::Times.extract_time(@words.downcase.squish)
     remaining_words = @words
     remaining_words = @words.sub(Regexp.new("(?:\b(?:at|on)\b )?#{time_str}", :i), "").squish if scheduled_time
-    timestamp = (scheduled_time || Time.current).in_time_zone(@user.timezone).iso8601
+    command_time = scheduled_time || Jarvis.pressed_at || Time.current
+    timestamp = command_time.in_time_zone(@user.timezone).iso8601
     tell_words = Jarvis.strip_quoted_spans(remaining_words)
     tell_full = Jarvis.strip_quoted_spans(@words)
     tasks = ::Jil.trigger(

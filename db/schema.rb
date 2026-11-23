@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_11_20_192806) do
+ActiveRecord::Schema[8.0].define(version: 2026_11_23_202121) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
@@ -242,6 +242,81 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_20_192806) do
     t.datetime "last_used_at", precision: nil
     t.boolean "enabled", default: true
     t.index ["user_id"], name: "index_api_keys_on_user_id"
+  end
+
+  create_table "app_device_submissions", force: :cascade do |t|
+    t.bigint "app_device_id", null: false
+    t.bigint "user_id", null: false
+    t.text "uuid", null: false
+    t.text "kind", null: false
+    t.text "key"
+    t.text "text"
+    t.jsonb "data", default: {}, null: false
+    t.datetime "pressed_at"
+    t.text "source"
+    t.text "status", default: "received", null: false
+    t.text "response"
+    t.bigint "message_id"
+    t.text "error"
+    t.datetime "processed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["app_device_id"], name: "index_app_device_submissions_on_app_device_id"
+    t.index ["user_id", "kind", "created_at"], name: "idx_on_user_id_kind_created_at_215ae8d0f1"
+    t.index ["user_id"], name: "index_app_device_submissions_on_user_id"
+    t.index ["uuid"], name: "index_app_device_submissions_on_uuid", unique: true
+  end
+
+  create_table "app_devices", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "app", default: "buddy", null: false
+    t.text "name"
+    t.text "token_digest", null: false
+    t.text "platform"
+    t.text "model"
+    t.text "os_version"
+    t.text "app_version"
+    t.text "timezone"
+    t.text "apns_token"
+    t.text "apns_environment"
+    t.jsonb "push_to_start_tokens", default: {}, null: false
+    t.text "widget_push_token"
+    t.jsonb "features", default: [], null: false
+    t.jsonb "preferences", default: {}, null: false
+    t.datetime "last_seen_at"
+    t.datetime "revoked_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.jsonb "permissions", default: {}, null: false
+    t.jsonb "sources", default: {}, null: false
+    t.jsonb "hot_links", default: [], null: false
+    t.index ["apns_token"], name: "index_app_devices_on_apns_token"
+    t.index ["token_digest"], name: "index_app_devices_on_token_digest", unique: true
+    t.index ["user_id"], name: "index_app_devices_on_user_id"
+  end
+
+  create_table "app_live_activities", force: :cascade do |t|
+    t.bigint "app_device_id", null: false
+    t.text "activity_id", null: false
+    t.text "kind", default: "timer", null: false
+    t.text "ref_id"
+    t.text "push_token"
+    t.datetime "ended_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["activity_id"], name: "index_app_live_activities_on_activity_id", unique: true
+    t.index ["app_device_id"], name: "index_app_live_activities_on_app_device_id"
+    t.index ["kind", "ref_id"], name: "index_app_live_activities_on_kind_and_ref_id"
+  end
+
+  create_table "app_panels", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "key", null: false
+    t.jsonb "content", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "key"], name: "index_app_panels_on_user_id_and_key", unique: true
+    t.index ["user_id"], name: "index_app_panels_on_user_id"
   end
 
   create_table "avatar_clothes", id: :serial, force: :cascade do |t|
@@ -2258,6 +2333,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_20_192806) do
   add_foreign_key "agendas", "users"
   add_foreign_key "anchor_occurrences", "anchors"
   add_foreign_key "anchors", "users"
+  add_foreign_key "app_device_submissions", "app_devices"
+  add_foreign_key "app_device_submissions", "users"
+  add_foreign_key "app_devices", "users"
+  add_foreign_key "app_live_activities", "app_devices"
+  add_foreign_key "app_panels", "users"
   add_foreign_key "background_processes", "users"
   add_foreign_key "bank_balance_snapshots", "bank_accounts"
   add_foreign_key "bank_transactions", "action_events", on_delete: :nullify
