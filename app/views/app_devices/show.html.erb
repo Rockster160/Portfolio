@@ -1,0 +1,142 @@
+<% content_for :title, @device.name %>
+<div class="panel-app" data-buddy-device="<%= @device.id %>">
+  <%= form_with url: app_device_path(@device), method: :patch, class: "panel-page panel-page-with-bar" do |f| %>
+    <header class="panel-topbar">
+      <a class="panel-icon-btn" href="<%= app_devices_path %>" aria-label="All devices">‹</a>
+      <h1><%= @device.name %></h1>
+      <a class="panel-chip buddy-app-this-device-only" href="<%= app_commands_path %>">Queue</a>
+      <a class="panel-chip" href="<%= hot_links_app_device_path(@device) %>">Hot links</a>
+    </header>
+
+    <% detail = [@device.model, @device.os_version && "iOS #{@device.os_version}"] %>
+    <% detail << (@device.app_version && "v#{@device.app_version}") %>
+    <% if @device.revoked? %>
+      <% detail << "Signed out" %>
+    <% elsif @device.last_seen_at.present? %>
+      <% detail << "Seen #{relative_time_in_words(@device.last_seen_at)}" %>
+    <% end %>
+    <p class="panel-hint"><%= detail.compact.join(" · ") %></p>
+
+    <h2 class="panel-section-title">Features</h2>
+    <%= hidden_field_tag "features[]", "", id: nil %>
+
+    <% AppDevices::Features::ALL.each do |feature| %>
+      <% permitted = @device.permitted?(feature.key) %>
+      <div class="panel-settings" id="feature-<%= feature.key %>">
+        <label class="panel-setting">
+          <span class="panel-setting-text">
+            <span class="panel-setting-title"><%= feature.title %></span>
+            <% unless permitted %>
+              <% if @device.permission(feature.key) == :denied %>
+                <span class="panel-setting-sub">Denied in iOS Settings</span>
+              <% else %>
+                <span class="panel-setting-sub buddy-app-elsewhere-device">Allow in the app first</span>
+              <% end %>
+            <% end %>
+          </span>
+          <%= check_box_tag "features[]", feature.key, @device.feature?(feature.key),
+            id: "feature-toggle-#{feature.key}", class: "panel-switch", disabled: !permitted %>
+        </label>
+
+        <% if !permitted && @device.permission(feature.key) != :denied %>
+          <button type="button" class="panel-btn panel-btn-primary panel-btn-block buddy-app-this-device-only"
+            data-buddy-allow="<%= feature.key %>">Allow</button>
+        <% end %>
+
+        <% if permitted %>
+          <% feature.options.each do |option| %>
+            <% value = @device.preference(option.key) %>
+            <% name = "preferences[#{option.key}]" %>
+            <% case option.type %>
+            <% when :boolean %>
+              <label class="panel-setting">
+                <span class="panel-setting-text"><%= option.label %></span>
+                <%= hidden_field_tag name, false, id: nil %>
+                <%= check_box_tag name, true, value.to_s == "true", id: "preference-#{option.key}", class: "panel-switch" %>
+              </label>
+            <% when :select %>
+              <div>
+                <div class="panel-setting-label"><%= option.label %></div>
+                <div class="panel-segmented">
+                  <% option.choices.each do |key, text| %>
+                    <label><%= radio_button_tag name, key, value.to_s == key.to_s, id: nil %><span><%= text %></span></label>
+                  <% end %>
+                </div>
+              </div>
+            <% when :number %>
+              <div>
+                <%= label_tag "preference-#{option.key}", option.label, class: "panel-setting-label" %>
+                <%= number_field_tag name, value, min: option.minimum, max: option.maximum, step: option.step,
+                  id: "preference-#{option.key}", inputmode: "numeric" %>
+              </div>
+            <% when :channels %>
+              <div>
+                <div class="panel-setting-label"><%= option.label %></div>
+                <%= hidden_field_tag "#{name}[]", "", id: nil %>
+                <div class="panel-pills">
+                  <% option.choices.each do |key, text| %>
+                    <label>
+                      <%= check_box_tag "#{name}[]", key, Array(value).map(&:to_s).include?(key.to_s), id: nil %>
+                      <span><%= text %></span>
+                    </label>
+                  <% end %>
+                </div>
+              </div>
+            <% when :sources %>
+              <% sources = Array(@device.sources.to_h[option.source.to_s]) %>
+              <div>
+                <div class="panel-setting-label"><%= option.label %></div>
+                <%= hidden_field_tag "#{name}[]", "", id: nil %>
+                <div class="panel-pills">
+                  <% sources.each do |source| %>
+                    <label>
+                      <%= check_box_tag "#{name}[]", source["id"], Array(value).include?(source["id"]), id: nil %>
+                      <span><span class="panel-dot" style="background: <%= source["color"] %>"></span><%= source["title"] %></span>
+                    </label>
+                  <% end %>
+                </div>
+                <p class="panel-hint">None picked: all</p>
+              </div>
+            <% end %>
+          <% end %>
+
+          <% if feature.tasks.any? || feature.tests.any? %>
+            <div class="panel-buttons">
+              <% feature.tasks.each do |task| %>
+                <button type="submit" class="panel-btn" formmethod="post"
+                  formaction="<%= run_app_device_path(@device, task: task.key) %>" data-buddy-task="<%= task.key %>"><%= task.label %></button>
+              <% end %>
+              <% feature.tests.each do |kind| %>
+                <button type="submit" class="panel-btn" formmethod="post"
+                  formaction="<%= test_push_app_device_path(@device, kind: kind) %>">Test <%= kind.to_s.humanize(capitalize: false) %></button>
+              <% end %>
+            </div>
+          <% end %>
+        <% end %>
+
+        <% if feature.triggers.any? %>
+          <details class="panel-advanced">
+            <summary>Jil triggers</summary>
+            <% feature.triggers.each do |trigger| %>
+              <code class="panel-code"><%= trigger.example %></code>
+              <p class="panel-hint"><%= trigger.summary %></p>
+            <% end %>
+          </details>
+        <% end %>
+      </div>
+    <% end %>
+
+
+    <% unless @device.revoked? %>
+      <h2 class="panel-section-title">This device</h2>
+      <%= link_to "Sign #{@device.name} out", app_device_path(@device),
+        method: :delete,
+        class:  "panel-btn panel-btn-danger panel-btn-block",
+        data:   { confirm: "Sign #{@device.name} out of Buddy?" } %>
+    <% end %>
+
+    <div class="panel-actionbar">
+      <button type="submit" class="panel-btn panel-btn-primary panel-btn-block panel-btn-lg">Save</button>
+    </div>
+  <% end %>
+</div>

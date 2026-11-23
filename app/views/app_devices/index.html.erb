@@ -1,0 +1,48 @@
+<% content_for :title, "Buddy App Devices" %>
+<div class="panel-app">
+  <div class="panel-page">
+    <header class="panel-topbar">
+      <a class="panel-icon-btn" href="<%= account_path %>" aria-label="Account">‹</a>
+      <h1>Buddy for iPhone</h1>
+    </header>
+
+    <% if AppDevice.install_url %>
+      <%= link_to "Install Buddy for iPhone", AppDevice.install_url,
+        class: "panel-btn panel-btn-primary panel-btn-block", target: "_blank", rel: "noopener" %>
+    <% end %>
+
+    <h2 class="panel-section-title">Devices</h2>
+    <div class="panel-card">
+      <% if @app_devices.none? %>
+        <p class="panel-empty">Log in from the Buddy app on a phone and it shows here.</p>
+      <% end %>
+      <div class="panel-rows">
+        <% @app_devices.each do |device| %>
+          <% detail = [device.model, device.os_version && "iOS #{device.os_version}"] %>
+          <% if device.revoked? %>
+            <% detail << "Signed out" %>
+          <% elsif device.last_seen_at.present? %>
+            <% detail << "Seen #{relative_time_in_words(device.last_seen_at)}" %>
+          <% end %>
+          <%= link_to app_device_path(device), class: "panel-row" do %>
+            <span class="panel-row-title"><%= device.name %><%= " (this iPhone)" if device.id == @this_device_id %></span>
+            <span class="panel-row-detail"><%= detail.compact.join(" · ") %></span>
+          <% end %>
+        <% end %>
+      </div>
+    </div>
+
+    <% if current_user.admin? %>
+      <h2 class="panel-section-title">Install link</h2>
+      <%= form_with url: install_link_app_devices_path, method: :patch do |f| %>
+        <div class="panel-settings">
+          <div>
+            <%= f.label :install_url, "TestFlight or App Store link", class: "panel-setting-label" %>
+            <%= f.url_field :install_url, value: AppDevice.install_url, placeholder: "https://testflight.apple.com/join/..." %>
+          </div>
+          <button type="submit" class="panel-btn panel-btn-primary">Save link</button>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+</div>

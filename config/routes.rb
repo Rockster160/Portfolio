@@ -5,7 +5,8 @@ Rails.application.routes.draw do
   get "/icons" => "index#icons"
   get "/mtg-glossary" => "index#mtg_glossary"
   get "/lorcana-glossary" => "index#lorcana_glossary"
-  get "/privacy-policy" => "index#privacy_policy"
+  get "/privacy-policy" => "index#privacy_policy", as: :privacy_policy
+  get "/support" => "index#support", as: :support
 
   constraints subdomain: "sub" do
     get "/sub" => "index#sub"
@@ -172,6 +173,45 @@ Rails.application.routes.draw do
   end
 
   namespace :api do
+    # The Buddy phone app. Bearer device token on everything; signing in is
+    # the /app/login page.
+    namespace :ios do
+      delete :session, to: "sessions#destroy"
+      get :web_session, to: "sessions#web_session"
+
+      get :device, to: "devices#show"
+      patch :device, to: "devices#update"
+      post "device/test_push", to: "devices#test_push"
+
+      get :catalog, to: "catalog#show"
+      get :check_ins, to: "check_ins#index"
+
+      resources :submissions, only: [:create, :show]
+      post :uploads, to: "submissions#uploads"
+
+      scope :widgets, controller: :widgets, as: :widgets do
+        get "list/:id", action: :list
+        get :agenda
+        get "board/:id", action: :board
+        get :buttons
+        get :panels
+        get "panels/:key/svg.png", action: :panel_svg, format: false, constraints: { key: %r{[^/]+} }
+        get "panels/:key", action: :panel, constraints: { key: %r{[^/]+} }
+        get "faces/:theme/:expression.png", action: :face, format: false
+      end
+
+      resources :timers, only: [:index] do
+        member {
+          post :pause
+          post :resume
+          post :confirm
+          post :cancel
+        }
+      end
+
+      resources :live_activities, only: [:create, :destroy], constraints: { id: %r{[^/]+} }
+    end
+
     namespace :v1 do
       post :alexa, controller: :alexa
 
@@ -565,6 +605,24 @@ Rails.application.routes.draw do
 
   get :account, controller: :users
   get "account/device_login" => "users/device_logins#show", as: :device_login
+  resources :app_devices, only: [:index, :show, :update, :destroy], path: "account/app_devices" do
+    patch :install_link, on: :collection
+    get :hot_links, on: :member
+    patch :hot_links, on: :member, action: :update_hot_links
+    # Buttons inside the settings form post through it, so they carry its
+    # PATCH method along with them.
+    match :run, on: :member, via: [:post, :patch]
+    match :test_push, on: :member, via: [:post, :patch]
+  end
+  # The Buddy app's own pages, opened in its web view.
+  scope :app, as: :app do
+    get :login, to: "app_sessions#new"
+    post :login, to: "app_sessions#create"
+    get :commands, to: "app_pages#commands"
+    get :compose, to: "app_pages#compose"
+    get :share, to: "app_pages#share"
+    get :settings, to: "app_pages#settings"
+  end
   # /scan/:token — public, single-use sign-in link carried by the QR code.
   get "/scan/:token" => "users/device_logins#claim", as: :device_login_claim
   resources :api_keys, except: :show

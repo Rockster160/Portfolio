@@ -1,0 +1,49 @@
+<% content_for :title, "Commands" %>
+<div class="panel-app" data-buddy-commands>
+  <div class="panel-page">
+    <header class="panel-topbar">
+      <a class="panel-icon-btn" href="/byte" aria-label="Buddy">‹</a>
+      <h1>Commands</h1>
+      <a class="panel-chip" href="<%= app_settings_path %>">Settings</a>
+    </header>
+
+    <div class="buddy-app-only">
+      <form data-buddy-console>
+        <div class="panel-settings">
+          <%= text_field_tag :text, nil, id: "buddy-console-text", autocomplete: "off", autocapitalize: "sentences" %>
+          <div class="panel-segmented">
+            <label><input type="radio" name="kind" value="command" checked><span>Command</span></label>
+            <label><input type="radio" name="kind" value="buddy"><span>Buddy</span></label>
+          </div>
+          <label class="panel-setting">
+            <span class="panel-setting-text">Show the reply</span>
+            <input type="checkbox" name="inline" class="panel-switch" checked>
+          </label>
+          <button type="submit" class="panel-btn panel-btn-primary panel-btn-block">Send</button>
+          <div class="panel-rows" data-buddy-exchanges></div>
+        </div>
+      </form>
+
+      <h2 class="panel-section-title">Waiting to send</h2>
+      <div class="panel-card">
+        <div class="panel-rows" data-buddy-outbox></div>
+        <div class="panel-buttons panel-gap">
+          <button type="button" class="panel-btn" data-buddy-outbox-flush>Send now</button>
+        </div>
+      </div>
+
+      <h2 class="panel-section-title">Activity</h2>
+      <div class="panel-card">
+        <details class="panel-advanced" data-buddy-activity-details>
+          <summary>Show</summary>
+          <div class="panel-rows" data-buddy-activity></div>
+          <div class="panel-buttons panel-gap">
+            <button type="button" class="panel-btn panel-btn-danger" data-buddy-activity-clear>Clear</button>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <p class="panel-empty buddy-app-elsewhere">Open this from the Buddy app.</p>
+  </div>
+</div>

@@ -1,0 +1,24 @@
+<% content_for :title, "Share to Buddy" %>
+<div class="panel-app" data-buddy-share>
+  <div class="panel-page">
+    <header class="panel-topbar">
+      <h1>Share to Buddy</h1>
+      <button type="button" class="panel-chip" data-buddy-share-cancel>Cancel</button>
+    </header>
+
+    <div class="panel-card buddy-app-shared-items" data-buddy-share-items></div>
+
+    <div class="panel-field panel-gap">
+      <label class="panel-field-label" for="buddy-share-caption">Add a note</label>
+      <textarea id="buddy-share-caption" rows="2" data-buddy-share-caption></textarea>
+    </div>
+
+    <div class="panel-buttons-stack">
+      <button type="button" class="panel-btn panel-btn-primary panel-btn-block panel-btn-lg" data-buddy-share-to="buddy">Send to Buddy</button>
+      <button type="button" class="panel-btn panel-btn-block" data-buddy-share-to="command" data-buddy-share-needs="text">Run as a command</button>
+      <button type="button" class="panel-btn panel-btn-block" data-buddy-share-to="car" data-buddy-share-needs="place">Send to the car</button>
+      <button type="button" class="panel-btn panel-btn-block" data-buddy-share-to="contact" data-buddy-share-needs="place">Save as a contact</button>
+      <button type="button" class="panel-btn panel-btn-block" data-buddy-share-to="jil">Send to Jil (ios_share)</button>
+    </div>
+  </div>
+</div>

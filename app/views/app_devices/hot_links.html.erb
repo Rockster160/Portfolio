@@ -1,0 +1,116 @@
+<% content_for :title, "Hot links" %>
+<% kinds = {
+  command:     "Run a command",
+  buddy:       "Message Buddy",
+  prompt:      "Ask, then send",
+  task:        "Run a Jil task",
+  routine:     "Run a routine",
+  trigger:     "Fire a Jil trigger",
+  check_in:    "Open a check-in",
+  list_toggle: "Toggle a list item",
+  open:        "Open a page",
+  url:         "Open a link",
+} %>
+<div class="panel-app" data-hot-link-symbols="<%= AppDevice::HOT_LINK_SYMBOLS.to_json %>">
+  <%= form_with url: hot_links_app_device_path(@device), method: :patch, class: "panel-page panel-page-with-bar" do |f| %>
+    <header class="panel-topbar">
+      <a class="panel-icon-btn" href="<%= app_device_path(@device) %>" aria-label="<%= @device.name %>">‹</a>
+      <h1>Hot links</h1>
+    </header>
+
+    <div data-hot-links>
+      <% (Array(@device.hot_links) + [{}]).each_with_index do |link, index| %>
+        <% action = link["action"].to_h %>
+        <% name = "hot_links[#{index}]" %>
+        <% icon = link["icon"].presence || "bolt.fill" %>
+        <div class="panel-settings" data-hot-link>
+          <% if link.empty? %>
+            <div class="panel-setting-title">New hot link</div>
+          <% end %>
+          <%= hidden_field_tag "#{name}[id]", link["id"], id: nil %>
+          <div>
+            <div class="panel-setting-label">Title</div>
+            <%= text_field_tag "#{name}[title]", link["title"], id: nil %>
+          </div>
+          <div>
+            <div class="panel-setting-label">Subtitle</div>
+            <%= text_field_tag "#{name}[subtitle]", link["subtitle"], id: nil %>
+          </div>
+          <div>
+            <div class="panel-setting-label">Icon</div>
+            <%= hidden_field_tag "#{name}[icon]", icon, id: nil, data: { hot_link_icon: true } %>
+            <button type="button" class="panel-btn panel-symbol-field" data-hot-link-icon-pick>
+              <span class="panel-symbol" data-symbol="<%= icon %>"></span>
+              <span data-symbol-name><%= AppDevice::HOT_LINK_SYMBOLS[icon] || icon %></span>
+            </button>
+          </div>
+          <div>
+            <div class="panel-setting-label">When pressed</div>
+            <%= select_tag "#{name}[action][kind]",
+              options_for_select(kinds.map { |key, text| [text, key] }, action["kind"] || "command"),
+              id: nil, data: { hot_link_kind: true } %>
+          </div>
+
+          <div data-hot-link-for="command buddy trigger check_in open url">
+            <div class="panel-setting-label" data-hot-link-label></div>
+            <%= text_field_tag "#{name}[action][value]", action["value"], id: nil, autocapitalize: "none" %>
+          </div>
+          <div data-hot-link-for="task">
+            <div class="panel-setting-label">Task</div>
+            <%= select_tag "#{name}[action][value]",
+              options_for_select(@catalog[:tasks].map { |task| [task.name, task.id.to_s] }, action["value"]),
+              id: nil, include_blank: "Choose…" %>
+          </div>
+          <div data-hot-link-for="routine">
+            <div class="panel-setting-label">Routine</div>
+            <%= select_tag "#{name}[action][value]",
+              options_for_select(@catalog[:routines].map { |routine| [routine.name, routine.id.to_s] }, action["value"]),
+              id: nil, include_blank: "Choose…" %>
+          </div>
+          <div data-hot-link-for="list_toggle">
+            <div class="panel-setting-label">List</div>
+            <%= select_tag "#{name}[action][value]",
+              options_for_select(@catalog[:lists].map { |list| [list.name, list.id.to_s] }, action["value"]),
+              id: nil, include_blank: "Choose…" %>
+          </div>
+          <div data-hot-link-for="prompt">
+            <div class="panel-setting-label">Send to</div>
+            <div class="panel-segmented">
+              <% [["buddy", "Buddy"], ["command", "Command"]].each do |value, text| %>
+                <label><%= radio_button_tag "#{name}[action][send_as]", value, (action["send_as"] || "buddy") == value, id: nil %><span><%= text %></span></label>
+              <% end %>
+            </div>
+          </div>
+          <div data-hot-link-for="prompt">
+            <div class="panel-setting-label">Question</div>
+            <%= text_field_tag "#{name}[action][placeholder]", action["placeholder"], id: nil %>
+          </div>
+          <div data-hot-link-for="prompt">
+            <div class="panel-setting-label">Prefix</div>
+            <%= text_field_tag "#{name}[action][prefix]", action["prefix"], id: nil %>
+          </div>
+          <div data-hot-link-for="task trigger">
+            <div class="panel-setting-label">Data (JSON)</div>
+            <%= text_area_tag "#{name}[action][data]", action["data"].presence&.to_json, id: nil, rows: 2 %>
+          </div>
+          <label class="panel-setting" data-hot-link-for="command buddy prompt">
+            <span class="panel-setting-text">Show the reply</span>
+            <%= hidden_field_tag "#{name}[action][inline]", false, id: nil %>
+            <%= check_box_tag "#{name}[action][inline]", true, action["inline"].to_s == "true", id: nil, class: "panel-switch" %>
+          </label>
+
+          <% unless link.empty? %>
+            <div class="panel-buttons">
+              <button type="button" class="panel-btn" data-hot-link-up>Move up</button>
+              <button type="button" class="panel-btn panel-btn-danger" data-hot-link-remove>Remove</button>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="panel-actionbar">
+      <button type="submit" class="panel-btn panel-btn-primary panel-btn-block panel-btn-lg">Save</button>
+    </div>
+  <% end %>
+</div>
