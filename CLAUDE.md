@@ -38,7 +38,14 @@ RAILS_ENV=test bundle exec annotaterb models   # Update model annotations
 
 # Deployment (auto-deploys on master push via GitHub Actions)
 bundle exec cap production deploy
+
+# Buddy iOS app: regenerate the Xcode project from project.yml (works from any directory)
+ios/buddy/bin/xcode            # and open it in Xcode, unless Xcode is already running
+ios/buddy/bin/xcode --build    # and compile for the simulator, printing only errors and warnings
 ```
+
+After any Swift change, or adding, moving or renaming a file under `ios/buddy`, run
+`ios/buddy/bin/xcode --build` and fix what it prints before handing the work back.
 
 ## Architecture
 

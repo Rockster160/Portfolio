@@ -1,0 +1,36 @@
+#!/bin/bash
+# Regenerates Buddy.xcodeproj from project.yml, from whichever directory it's
+# run in. The project is generated, so a pull or a change that adds, moves or
+# renames a file, or edits project.yml, needs this before Xcode sees it.
+#
+# Xcode already open reloads the project by itself and is left where it is;
+# otherwise the project opens. --build also compiles it for the simulator and
+# prints only the errors and warnings.
+set -euo pipefail
+
+app="$(cd "$(dirname "$0")/.." && pwd)"
+
+if ! command -v xcodegen >/dev/null; then
+  echo "xcodegen isn't installed: brew install xcodegen"
+  exit 1
+fi
+
+xcodegen generate --quiet --spec "$app/project.yml" --project "$app"
+echo "Generated $app/Buddy.xcodeproj"
+
+if [[ "${1:-}" == "--build" ]]; then
+  set +e
+  output="$(xcodebuild -project "$app/Buddy.xcodeproj" -scheme Buddy \
+    -destination 'generic/platform=iOS Simulator' -quiet build 2>&1)"
+  status=$?
+  set -e
+  grep -E "error:|warning:" <<<"$output" | grep -v appintentsmetadataprocessor | sort -u || true
+  if [[ $status -eq 0 ]]; then
+    echo "Build succeeded"
+  else
+    echo "Build failed"
+  fi
+  exit $status
+fi
+
+pgrep -xq Xcode || open "$app/Buddy.xcodeproj"

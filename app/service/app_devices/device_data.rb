@@ -74,9 +74,35 @@ module AppDevices
       )
     end
 
+    # A workout logged by hand (through Buddy, a Shortcut or the app) has no
+    # Health id, and is the same workout when it was logged while it ran or
+    # within this long either side of it.
+    WORKOUT_SLACK = 30.minutes
+
+    # The hand-logged Workout this Health workout already is, if any. The
+    # nearest one wins, so back-to-back sessions each keep their own, and a log
+    # that has taken a Health id is no longer a candidate for another.
+    def self.logged_workout(user, started:, ended:)
+      ended = [ended, started].max
+      events = user.action_events.where(name: "Workout")
+      events = events.where(timestamp: (started - WORKOUT_SLACK)..(ended + WORKOUT_SLACK))
+      events = events.where("data IS NULL OR NOT (data ? 'workout_uuid')")
+      events.min_by { |event|
+        outside = [started - event.timestamp, event.timestamp - ended, 0].max
+        [outside, (event.timestamp - started).abs]
+      }
+    end
+
+    # What the person wrote stays; Health fills in only what they left out.
+    def self.adopt_workout!(event, health)
+      event.update!(data: event.data.to_h.merge(health) { |_key, mine, theirs| mine.presence || theirs })
+      event
+    end
+
     # The same event a Workout log has always been, so FitnessBroadcast and the
-    # charts that read `data.Calories` see it. A workout saved twice — HealthKit
-    # re-delivers after a restore — is still one event.
+    # charts that read `data.Calories` see it. A workout saved twice (HealthKit
+    # re-delivers after a restore) is still one event, and so is one that was
+    # already logged by hand.
     def workout
       return unless device.preference?(:health_logs_workout_event)
 
@@ -85,22 +111,34 @@ module AppDevices
       return if workout_id && events.exists?(["data->>'workout_uuid' = ?", workout_id])
 
       started = (Time.zone.parse(data[:started_at].to_s) rescue nil) || pressed_at
+      ended = (Time.zone.parse(data[:ended_at].to_s) rescue nil)
+      ended ||= started + data[:duration_minutes].to_f.minutes
+      health = {
+        "Type"         => data[:type],
+        "Duration"     => data[:duration_minutes]&.to_f&.round(1),
+        "Calories"     => data[:calories]&.to_f&.round,
+        "Distance"     => data[:distance_miles]&.to_f&.round(2),
+        "AvgHeartRate" => data[:avg_heart_rate]&.to_f&.round,
+        "MaxHeartRate" => data[:max_heart_rate]&.to_f&.round,
+        "Indoor"       => data[:indoor],
+        "Source"       => data[:source],
+        "workout_uuid" => workout_id,
+      }.compact
+
+      logged = workout_id && self.class.logged_workout(user, started: started, ended: ended)
+      if logged
+        self.class.adopt_workout!(logged, health)
+        ::ActionEventNotifier.notify(user, logged, :changed, auth: :trigger, auth_id: user.id)
+        data[:event_id] = logged.id
+        return
+      end
+
       event = ::ActionEvent.create!(
         user:      user,
         name:      "Workout",
         notes:     data[:name].presence || data[:type].to_s.titleize.presence,
         timestamp: started,
-        data:      {
-          "Type"         => data[:type],
-          "Duration"     => data[:duration_minutes]&.to_f&.round(1),
-          "Calories"     => data[:calories]&.to_f&.round,
-          "Distance"     => data[:distance_miles]&.to_f&.round(2),
-          "AvgHeartRate" => data[:avg_heart_rate]&.to_f&.round,
-          "MaxHeartRate" => data[:max_heart_rate]&.to_f&.round,
-          "Indoor"       => data[:indoor],
-          "Source"       => data[:source],
-          "workout_uuid" => workout_id,
-        }.compact,
+        data:      health,
       )
       ::ActionEventNotifier.notify(user, event, :added, auth: :trigger, auth_id: user.id)
       ::ActionEventBroadcastWorker.perform_async(event.id)

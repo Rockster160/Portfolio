@@ -86,6 +86,63 @@ RSpec.describe "Buddy app submissions", type: :request do
       expect(events.first.data).to include("Calories" => 402, "Duration" => 31.5, "Distance" => 3.1, "Type" => "running")
     end
 
+    # Health sends its whole history once, and much of it was already logged by
+    # hand at the end of the workout, with no Health id to recognise it by.
+    it "fills in a workout already logged by hand rather than logging it again", :aggregate_failures do
+      logged = user.action_events.create!(
+        name:      "Workout",
+        notes:     "Climbing",
+        timestamp: Time.zone.parse("2024-08-27T04:37:24Z"),
+        data:      { "Calories" => "1080", "Distance" => "" },
+      )
+
+      submit(kind: "trigger", key: "ios_workout", data: {
+        uuid:             "w-climb",
+        type:             "mixed_cardio",
+        name:             "Mixed Cardio",
+        started_at:       "2024-08-27T02:13:32Z",
+        ended_at:         "2024-08-27T04:37:20Z",
+        duration_minutes: 143.8,
+        calories:         1072,
+        distance_miles:   0.4,
+      })
+
+      expect(user.action_events.where(name: "Workout").count).to eq(1)
+      expect(logged.reload).to have_attributes(notes: "Climbing")
+      expect(logged.data).to include(
+        "Calories"     => "1080",
+        "Distance"     => 0.4,
+        "Duration"     => 143.8,
+        "workout_uuid" => "w-climb",
+      )
+    end
+
+    it "matches each of two back-to-back sessions to its own log", :aggregate_failures do
+      first = user.action_events.create!(name: "Workout", notes: "Beat Saber", timestamp: Time.zone.parse("2024-08-25T04:05:28Z"))
+      second = user.action_events.create!(name: "Workout", notes: "Beat Saber", timestamp: Time.zone.parse("2024-08-25T05:13:48Z"))
+
+      submit(kind: "trigger", key: "ios_workout", data: {
+        uuid: "w-a", started_at: "2024-08-25T04:05:23Z", ended_at: "2024-08-25T04:23:23Z", calories: 137
+      })
+      submit(kind: "trigger", key: "ios_workout", data: {
+        uuid: "w-b", started_at: "2024-08-25T04:31:27Z", ended_at: "2024-08-25T05:18:33Z", calories: 341
+      })
+
+      expect(user.action_events.where(name: "Workout").count).to eq(2)
+      expect(first.reload.data).to include("workout_uuid" => "w-a")
+      expect(second.reload.data).to include("workout_uuid" => "w-b")
+    end
+
+    it "still logs a Health workout with no hand-logged one near it" do
+      user.action_events.create!(name: "Workout", notes: "Hike", timestamp: Time.zone.parse("2024-08-25T09:00:00Z"))
+
+      submit(kind: "trigger", key: "ios_workout", data: {
+        uuid: "w-run", started_at: "2024-08-25T14:00:00Z", ended_at: "2024-08-25T14:30:00Z", calories: 300
+      })
+
+      expect(user.action_events.where(name: "Workout").count).to eq(2)
+    end
+
     it "fires one trigger per change of a batched contact sync and stores none of them", :aggregate_failures do
       submit(kind: "trigger", key: "ios_contacts", data: {
         action:  "batch",
