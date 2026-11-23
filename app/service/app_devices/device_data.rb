@@ -93,10 +93,21 @@ module AppDevices
       }
     end
 
-    # What the person wrote stays; Health fills in only what they left out.
-    def self.adopt_workout!(event, health)
-      event.update!(data: event.data.to_h.merge(health) { |_key, mine, theirs| mine.presence || theirs })
+    # The person's title and numbers stay, and Health fills in what they left
+    # out. Duration is the exception: the Watch measured it, where a hand log
+    # guessed or typed it in one of several formats (`1:04:35`, `00:83:49`,
+    # a lowercase `duration` of `00:00:00`), so Health's replaces them all.
+    def self.adopt_workout!(event, health, title:)
+      mine = event.data.to_h
+      mine = mine.except("Duration", "duration") if health["Duration"]
+      event.notes = title if event.notes.blank?
+      event.update!(data: mine.merge(health) { |_key, kept, theirs| kept.presence || theirs })
       event
+    end
+
+    # Whole minutes, the unit every other Workout log stores.
+    def self.workout_minutes(minutes)
+      minutes&.to_f&.round
     end
 
     # The same event a Workout log has always been, so FitnessBroadcast and the
@@ -113,10 +124,13 @@ module AppDevices
       started = (Time.zone.parse(data[:started_at].to_s) rescue nil) || pressed_at
       ended = (Time.zone.parse(data[:ended_at].to_s) rescue nil)
       ended ||= started + data[:duration_minutes].to_f.minutes
+      # A workout from Health is taken as it is. Calories is always present,
+      # 0 when Health measured none, because a Workout without it is one the
+      # person gets asked to fill in.
       health = {
         "Type"         => data[:type],
-        "Duration"     => data[:duration_minutes]&.to_f&.round(1),
-        "Calories"     => data[:calories]&.to_f&.round,
+        "Duration"     => self.class.workout_minutes(data[:duration_minutes]),
+        "Calories"     => data[:calories].to_f.round,
         "Distance"     => data[:distance_miles]&.to_f&.round(2),
         "AvgHeartRate" => data[:avg_heart_rate]&.to_f&.round,
         "MaxHeartRate" => data[:max_heart_rate]&.to_f&.round,
@@ -125,9 +139,10 @@ module AppDevices
         "workout_uuid" => workout_id,
       }.compact
 
+      title = data[:name].presence || data[:type].to_s.titleize.presence
       logged = workout_id && self.class.logged_workout(user, started: started, ended: ended)
       if logged
-        self.class.adopt_workout!(logged, health)
+        self.class.adopt_workout!(logged, health, title: title)
         ::ActionEventNotifier.notify(user, logged, :changed, auth: :trigger, auth_id: user.id)
         data[:event_id] = logged.id
         return
@@ -136,7 +151,7 @@ module AppDevices
       event = ::ActionEvent.create!(
         user:      user,
         name:      "Workout",
-        notes:     data[:name].presence || data[:type].to_s.titleize.presence,
+        notes:     title,
         timestamp: started,
         data:      health,
       )

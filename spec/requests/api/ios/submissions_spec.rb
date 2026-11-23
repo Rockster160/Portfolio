@@ -83,7 +83,7 @@ RSpec.describe "Buddy app submissions", type: :request do
 
       events = user.action_events.where(name: "Workout")
       expect(events.count).to eq(1)
-      expect(events.first.data).to include("Calories" => 402, "Duration" => 31.5, "Distance" => 3.1, "Type" => "running")
+      expect(events.first.data).to include("Calories" => 402, "Duration" => 32, "Distance" => 3.1, "Type" => "running")
     end
 
     # Health sends its whole history once, and much of it was already logged by
@@ -112,9 +112,50 @@ RSpec.describe "Buddy app submissions", type: :request do
       expect(logged.data).to include(
         "Calories"     => "1080",
         "Distance"     => 0.4,
-        "Duration"     => 143.8,
+        "Duration"     => 144,
         "workout_uuid" => "w-climb",
       )
+    end
+
+    # A hand log's duration was typed, in whatever format, and often wrong (a
+    # mile split saved as the whole run); the Watch's is measured.
+    it "takes Health's duration over the one typed by hand, in whole minutes", :aggregate_failures do
+      logged = user.action_events.create!(
+        name:      "Workout",
+        notes:     "Mile Run",
+        timestamp: Time.zone.parse("2025-07-17T00:47:00Z"),
+        data:      { "Calories" => 155, "Duration" => "0:08:34", "duration" => "00:00:00" },
+      )
+
+      submit(kind: "trigger", key: "ios_workout", data: {
+        uuid: "w-run", type: "running", name: "Running", started_at: "2025-07-17T00:46:33Z",
+        duration_minutes: 15.6, calories: 160
+      })
+
+      expect(logged.reload.data).to include("Duration" => 16, "Calories" => 155)
+      expect(logged.data).not_to have_key("duration")
+      expect(logged.notes).to eq("Mile Run")
+    end
+
+    it "titles a hand log that has none with the workout Health recorded" do
+      logged = user.action_events.create!(name: "Workout", notes: "", timestamp: Time.zone.parse("2022-01-04T15:16:05Z"))
+
+      submit(kind: "trigger", key: "ios_workout", data: {
+        uuid: "w-mixed", type: "mixed_cardio", name: "Mixed Cardio", started_at: "2022-01-04T15:02:15Z",
+        duration_minutes: 53.9, calories: 542
+      })
+
+      expect(logged.reload.notes).to eq("Mixed Cardio")
+    end
+
+    # The Workout Calorie Tracker asks about any Workout logged without
+    # Calories, and a workout from Health is never one to ask about.
+    it "takes a Health workout with no calorie reading as zero rather than leaving it open" do
+      submit(kind: "trigger", key: "ios_workout", data: {
+        uuid: "w-short", type: "workout", started_at: "2025-08-23T22:35:36Z", duration_minutes: 0.2
+      })
+
+      expect(user.action_events.find_by(name: "Workout").data).to include("Calories" => 0)
     end
 
     it "matches each of two back-to-back sessions to its own log", :aggregate_failures do
