@@ -96,10 +96,14 @@ import { dash_colors } from "../vars"
         var warnDays = parseIntervalDays(m.warn)
         var warnColor = resolveColor(m.warn_color, dash_colors.orange)
 
+        // Stepping stops once the WARNING is off the grid, not the due date: a
+        // due just past the last row still has its warning on a day showing.
         var due = new Date(lastIso)
         due.setTime(due.getTime() + periodDays * DAY_MS)
-        while (due <= end) {
-          upsertMarker(newMap, dateKey(due), dueColor, 2)
+        while (due.getTime() - warnDays * DAY_MS <= end.getTime()) {
+          if (due <= end) {
+            upsertMarker(newMap, dateKey(due), dueColor, 2)
+          }
           if (warnDays > 0) {
             var warn = new Date(due.getTime() - warnDays * DAY_MS)
             if (warn >= start) {
