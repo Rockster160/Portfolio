@@ -1,0 +1,26 @@
+// The Buddy app's pages (/app/*, a device's settings and hot links). They're
+// built from the shared panel form (components/panel_form.scss); this only
+// adds what tells an in-app view from a browser and the few pieces the phone
+// fills in.
+//
+// `buddy-native` is set on <html> inside the app; `buddy-this-device` when the
+// page is about the very phone it's open on.
+
+// Only ever hides, so whatever is shown keeps its own display.
+html:not(.buddy-native) .buddy-app-only,
+html:not(.buddy-this-device) .buddy-app-this-device-only,
+html.buddy-native .buddy-app-elsewhere,
+html.buddy-this-device .buddy-app-elsewhere-device {
+  display: none !important;
+}
+
+.buddy-app-reply {
+  white-space: pre-wrap;
+}
+
+.buddy-app-shared-image {
+  border-radius: 12px;
+  max-width: 100%;
+  max-height: 240px;
+  align-self: center;
+}

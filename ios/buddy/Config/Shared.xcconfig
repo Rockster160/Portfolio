@@ -1,0 +1,10 @@
+// The one place to change identity. DEVELOPMENT_TEAM is the team that signs every
+// com.ardesian app (developer.apple.com → Membership); bin/testflight asks for it when blank.
+DEVELOPMENT_TEAM = 9FB25883J5
+BUDDY_BUNDLE_ID = com.ardesian.buddy
+BUDDY_APP_GROUP = group.com.ardesian.buddy
+// xcconfig treats "//" as a comment, so the scheme and host are joined through an empty variable.
+BUDDY_SLASH = /
+BUDDY_SERVER_URL = https:$(BUDDY_SLASH)/ardesian.com
+
+#include? "Local.xcconfig"

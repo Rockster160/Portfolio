@@ -27,6 +27,14 @@
               <%= link_to device_login_path, class: "list-item" do  %>
                 <span class="item-name">Log in on another device</span>
               <% end %>
+              <%= link_to app_devices_path, class: "list-item" do  %>
+                <span class="item-name">Buddy App Devices</span>
+              <% end %>
+              <% if AppDevice.install_url %>
+                <%= link_to AppDevice.install_url, class: "list-item", target: "_blank", rel: "noopener" do  %>
+                  <span class="item-name">Install Buddy for iPhone</span>
+                <% end %>
+              <% end %>
             <% end %>
           </div>
         </div>

@@ -96,6 +96,9 @@ class User < ApplicationRecord
   # has_one :user_dashboard, dependent: :destroy
   # def user_dashboard; super() || build_user_dashboard; end
   has_many :caches, class_name: "UserCache"
+  has_many :app_devices, dependent: :destroy
+  has_many :app_device_submissions, dependent: :delete_all
+  has_many :app_panels, dependent: :delete_all
   has_many :google_accounts, dependent: :destroy
   has_many :gpt_presets, class_name: "GPTPreset", dependent: :destroy
   has_many :secrets, class_name: "UserSecret", dependent: :destroy

@@ -39,7 +39,9 @@ module ByteNotifier
     # looking. With no subscriptions at all we carry on, so `send_to` logs the
     # "no registered subscription" warning — the one line that makes a silently
     # unregistered device findable.
-    return if subs.any? && targets.empty?
+    # The phone app has no presence heartbeat, and decides for itself whether to
+    # show a notification while it is open, so it is never the device skipped.
+    return if subs.any? && targets.empty? && !AppPush.any_for?(user, :byte)
 
     title, body = framing(message, meta, has_proposals)
 
@@ -54,7 +56,11 @@ module ByteNotifier
       # number on the app icon was permanently absent. It has to ride the PUSH
       # because that's the only thing that runs while the app is closed, which
       # is exactly when a badge is the whole point.
-      data:          { count: ByteConversation.unread_total_for(user) },
+      data:          {
+        count:           ByteConversation.unread_total_for(user),
+        conversation_id: message.byte_conversation_id,
+        **AppDevices::NotificationActions.for_message(message),
+      },
     )
   end
 

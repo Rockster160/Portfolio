@@ -1,0 +1,5 @@
+inherit_from: ../.rubocop.yml
+
+# The scripts here run on the Mac's own Ruby, with no Rails or ActiveSupport loaded.
+Rails:
+  Enabled: false

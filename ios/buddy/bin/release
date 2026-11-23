@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+# Sends a Buddy version to App Review and the App Store, pausing for anything
+# only a person can do (README.md, Shipping).
+require_relative "../app_store"
+require_relative "../../script/app_store/release"
+
+AppStore.main(AppStore::Release, AppStore::BUDDY)

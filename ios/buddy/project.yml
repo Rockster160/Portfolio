@@ -1,0 +1,260 @@
+name: Buddy
+options:
+  bundleIdPrefix: com.ardesian
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  # Marks the project as checked against this Xcode, so it stops offering the
+  # settings below as an upgrade. Raise it with Xcode and take what it offers here.
+  xcodeVersion: "27.2"
+
+configFiles:
+  Debug: Config/Shared.xcconfig
+  Release: Config/Shared.xcconfig
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  Buddy:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUDDY_BUNDLE_ID)
+        PRODUCT_NAME: Buddy
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_ENTITLEMENTS: App/Buddy.entitlements
+        INFOPLIST_FILE: App/Info.plist
+    entitlements:
+      path: App/Buddy.entitlements
+      properties:
+        aps-environment: development
+        com.apple.security.application-groups:
+          - $(BUDDY_APP_GROUP)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)$(BUDDY_BUNDLE_ID)
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
+        com.apple.developer.healthkit.access: []
+        com.apple.developer.usernotifications.time-sensitive: true
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Buddy
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        BuddyAppGroup: $(BUDDY_APP_GROUP)
+        BuddyServerURL: $(BUDDY_SERVER_URL)
+        BuddyKeychainGroup: $(AppIdentifierPrefix)$(BUDDY_BUNDLE_ID)
+        # Lets a Local.xcconfig point at a dev server on http (localhost, a LAN IP or
+        # .local name); anything public still needs HTTPS.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        # Answers export compliance for every build: HTTPS only, nothing of its own.
+        ITSAppUsesNonExemptEncryption: false
+        # The site's own domains. Only on these does the app's web view run service workers, which
+        # is what keeps a copy of the Buddy page on the phone to open with no signal.
+        WKAppBoundDomains:
+          - ardesian.com
+          - byte.ardesian.com
+          - localhost
+          - byte.localhost
+        UILaunchScreen: {}
+        UIAppFonts:
+          - terminess-reg.ttf
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: true
+        UIBackgroundModes:
+          - remote-notification
+          - fetch
+          - processing
+          - location
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.ardesian.buddy.refresh
+          - com.ardesian.buddy.flush
+        CFBundleURLTypes:
+          - CFBundleURLName: com.ardesian.buddy
+            CFBundleURLSchemes:
+              - buddy
+        NSLocationWhenInUseUsageDescription: Buddy sends your location to your own server so Jil tasks and Buddy can act on where you are.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Buddy keeps your server up to date with where you are, even when the app is closed, so arrivals, departures and travel automations fire on time.
+        NSHealthShareUsageDescription: Buddy reads your workouts and activity so they log to your server automatically, with type, duration and calories.
+        NSHealthUpdateUsageDescription: Buddy does not write health data.
+        NSCalendarsFullAccessUsageDescription: Buddy syncs your calendars to your server so your agenda and Jil tasks can see them.
+        NSRemindersFullAccessUsageDescription: Buddy syncs your reminders to your server so Jil tasks and lists can see them.
+        NSContactsUsageDescription: Buddy syncs your contacts to your server so Buddy and Jil tasks know who people are.
+        NSBluetoothAlwaysUsageDescription: Buddy reads the battery level of connected Bluetooth accessories to report them to your server.
+        NSAlarmKitUsageDescription: Buddy rings your timers and alarms like the Clock app, even on silent.
+        NSCameraUsageDescription: Buddy can attach a photo to a message.
+        NSPhotoLibraryUsageDescription: Buddy can attach a photo from your library to a message.
+        NSMicrophoneUsageDescription: Buddy can listen when you dictate a message.
+        NSSpeechRecognitionUsageDescription: Buddy turns your voice into a message.
+        NSUserActivityTypes:
+          - com.ardesian.buddy.command
+    dependencies:
+      - target: BuddyWidgets
+      - target: BuddyNotificationService
+      - target: BuddyShare
+      - sdk: WidgetKit.framework
+      - sdk: ActivityKit.framework
+      - sdk: AppIntents.framework
+      - sdk: HealthKit.framework
+      - sdk: EventKit.framework
+      - sdk: Contacts.framework
+      - sdk: CoreLocation.framework
+      - sdk: CoreBluetooth.framework
+      - sdk: BackgroundTasks.framework
+      - sdk: UserNotifications.framework
+      - sdk: WebKit.framework
+      - sdk: AlarmKit.framework
+
+  BuddyWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Widgets
+      - path: Shared
+        excludes:
+          - "Views/AppOnly*"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUDDY_BUNDLE_ID).widgets
+        PRODUCT_NAME: BuddyWidgets
+        CODE_SIGN_ENTITLEMENTS: Widgets/BuddyWidgets.entitlements
+        INFOPLIST_FILE: Widgets/Info.plist
+        SKIP_INSTALL: YES
+    entitlements:
+      path: Widgets/BuddyWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(BUDDY_APP_GROUP)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)$(BUDDY_BUNDLE_ID)
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Buddy
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        BuddyAppGroup: $(BUDDY_APP_GROUP)
+        BuddyServerURL: $(BUDDY_SERVER_URL)
+        BuddyKeychainGroup: $(AppIdentifierPrefix)$(BUDDY_BUNDLE_ID)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSSupportsLiveActivities: true
+        UIAppFonts:
+          - terminess-reg.ttf
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: ActivityKit.framework
+      - sdk: AppIntents.framework
+      - sdk: AlarmKit.framework
+
+  BuddyNotificationService:
+    type: app-extension
+    platform: iOS
+    # Linked only so the build's App Intents step finds the framework instead of warning.
+    dependencies:
+      - sdk: AppIntents.framework
+    sources:
+      - NotificationService
+      - path: Shared/Core
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUDDY_BUNDLE_ID).notification-service
+        PRODUCT_NAME: BuddyNotificationService
+        CODE_SIGN_ENTITLEMENTS: NotificationService/BuddyNotificationService.entitlements
+        INFOPLIST_FILE: NotificationService/Info.plist
+        SKIP_INSTALL: YES
+    entitlements:
+      path: NotificationService/BuddyNotificationService.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(BUDDY_APP_GROUP)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)$(BUDDY_BUNDLE_ID)
+    info:
+      path: NotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: Buddy Notifications
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        BuddyAppGroup: $(BUDDY_APP_GROUP)
+        BuddyServerURL: $(BUDDY_SERVER_URL)
+        BuddyKeychainGroup: $(AppIdentifierPrefix)$(BUDDY_BUNDLE_ID)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+
+  BuddyShare:
+    type: app-extension
+    platform: iOS
+    # Linked only so the build's App Intents step finds the framework instead of warning.
+    dependencies:
+      - sdk: AppIntents.framework
+    sources:
+      - Share
+      - path: Shared/Core
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUDDY_BUNDLE_ID).share
+        PRODUCT_NAME: BuddyShare
+        CODE_SIGN_ENTITLEMENTS: Share/BuddyShare.entitlements
+        INFOPLIST_FILE: Share/Info.plist
+        SKIP_INSTALL: YES
+    entitlements:
+      path: Share/BuddyShare.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(BUDDY_APP_GROUP)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)$(BUDDY_BUNDLE_ID)
+    info:
+      path: Share/Info.plist
+      properties:
+        CFBundleDisplayName: Buddy
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        BuddyAppGroup: $(BUDDY_APP_GROUP)
+        BuddyServerURL: $(BUDDY_SERVER_URL)
+        BuddyKeychainGroup: $(AppIdentifierPrefix)$(BUDDY_BUNDLE_ID)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule: >-
+              SUBQUERY (extensionItems, $extensionItem, SUBQUERY ($extensionItem.attachments,
+              $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image"
+              OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.url"
+              OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.plain-text"
+              OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.vcard"
+              OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.apple.mapkit.map-item"
+              ).@count > 0).@count > 0

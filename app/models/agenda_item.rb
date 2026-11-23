@@ -153,6 +153,42 @@ class AgendaItem < ApplicationRecord
 
   delegate :user, to: :agenda, allow_nil: true
 
+  # Narrows items already in hand through a scope — the search (`query`), the
+  # visibility preferences — so recurring occurrences with no row yet are read
+  # by the very same SQL as saved rows. The items are laid out as a table named
+  # agenda_items with every column, and the scope's WHERE runs against it.
+  #
+  #   AgendaItem.narrow(items) { |scope| scope.query("is:event -name:lunch") }
+  def self.narrow(items)
+    return items if items.empty?
+
+    fragment = yield(unscoped).stripped_sql
+    return items if fragment.blank?
+
+    kept = unscoped.from(in_hand_table(items)).where(fragment).pluck(:id).to_set
+    items.select.with_index { |_item, index| kept.include?(-(index + 1)) }
+  end
+
+  # (VALUES ...) AS agenda_items (...), one row per item, keyed by a negative
+  # position so saved and unsaved items can't collide.
+  def self.in_hand_table(items)
+    rows = items.each_with_index.map { |item, index|
+      values = columns.map { |column|
+        value = (
+          if column.name == primary_key
+            -(index + 1)
+          else
+            type_for_attribute(column.name).serialize(item.read_attribute(column.name))
+          end
+        )
+        "CAST(#{connection.quote(value)} AS #{column.sql_type})"
+      }
+      "(#{values.join(", ")})"
+    }
+    names = column_names.map { |name| connection.quote_column_name(name) }.join(", ")
+    "(VALUES #{rows.join(", ")}) AS #{quoted_table_name} (#{names})"
+  end
+
   # Resolves an id (digits) or a phantom_id ("p-{schedule_id}-{date}")
   # against an Agenda. Returns a persisted AgendaItem, an unsaved phantom,
   # or nil.

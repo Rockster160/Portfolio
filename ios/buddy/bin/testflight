@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+# Makes a Buddy build and puts it in the hands of the internal TestFlight
+# testers, pausing for anything only a person can do (README.md, Shipping).
+require_relative "../app_store"
+require_relative "../../script/app_store/testflight"
+
+AppStore.main(AppStore::TestFlight, AppStore::BUDDY)

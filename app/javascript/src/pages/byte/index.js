@@ -3596,9 +3596,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // The socket notices a dead network only on its next stale-ping check, so a
   // lost network marks the page down at once. Only `connected()` marks it up
   // again: being back online is not the same as the channel being back.
-  window.addEventListener("offline", () => {
+  // Opened with no signal at all (the app or home-screen app booting from its
+  // cached copy), the channel never connects, so nothing above ever puts Buddy
+  // to sleep: do it here, so what shows is a sleeping Buddy that still takes
+  // messages into the queue.
+  const sleepWhileOffline = () => {
     app.dataset.connection = "down";
-  });
+    buddySleep();
+    updateSleepChip();
+  };
+  window.addEventListener("offline", sleepWhileOffline);
+  if (!navigator.onLine) sleepWhileOffline();
 
   Monitor.subscribe(monitorChannel, {
     connected() {

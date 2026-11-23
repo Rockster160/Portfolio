@@ -106,3 +106,5 @@ group :development, :test do
 end
 
 gem "liquid", "~> 5.13"
+
+gem "net-http2", "~> 0.19"

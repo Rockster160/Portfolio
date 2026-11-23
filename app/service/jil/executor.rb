@@ -403,7 +403,7 @@ class Jil::Executor
       when :Timer, :TimerData then :Timer
       when :TimerPage, :TimerPageButtonData then :TimerPage
       when :Monitor, :MonitorData then :Monitor
-      when :PushNotification, :PushNotificationData then :PushNotification
+      when :PushNotification, :PushNotificationData, :PushNotificationButton then :PushNotification
       when :Prompt, :PromptQuestion then :Prompt
       when :Hash, :Keyval then :Hash
       when :String, :Text then :String

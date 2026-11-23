@@ -60,6 +60,8 @@ module ApplicationCable
       type, auth_string = raw_auth.split(" ", 2)
       token = auth_string.presence || type
 
+      return AppDevice.authenticate(token)&.user if AppDevice.token?(token)
+
       ApiKey.authenticate(token)&.user || user_from_basic(token)
     rescue StandardError
       # NoMethodError might get thrown if the raw_auth is not b64

@@ -27,7 +27,24 @@ function read() {
 function write(q) {
   try { localStorage.setItem(KEY, JSON.stringify(q)); }
   catch (e) {}
+  mirrorToApp(q);
 }
+
+// Inside the Buddy iPhone app, the phone keeps a held copy of this queue
+// under the same local_ids. The page sends as it always has while it's open;
+// once the app is backgrounded the phone sends whatever is still here, so a
+// message typed with no signal goes out without the app being opened again.
+// The server keeps one row per local_id, so whichever lands first wins and the
+// other is a no-op. Mirroring the whole queue each time is what drops a
+// cancelled entry from the phone too.
+function mirrorToApp(q) {
+  const handler = window.webkit?.messageHandlers?.buddy;
+  if (!window.BuddyNative || !handler) return;
+
+  handler.postMessage({ name: "byteQueue", args: { entries: q } }).catch(() => {});
+}
+
+mirrorToApp(read());
 
 export function readLegacyQueue() {
   try {

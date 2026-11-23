@@ -1,0 +1,35 @@
+// Long-form text pages: the privacy policy and support. Colors are left to the
+// body so the pages follow the site's light and dark themes.
+.legal-page {
+  padding: 10px 16px 60px;
+  line-height: 1.6;
+  font-size: 16px;
+
+  h1 {
+    margin-bottom: 0;
+  }
+
+  h2 {
+    margin-top: 32px;
+  }
+
+  h3 {
+    margin: 20px 0 4px;
+    font-size: 17px;
+  }
+
+  p,
+  li {
+    max-width: 70ch;
+  }
+
+  li {
+    margin-bottom: 6px;
+  }
+
+  .legal-updated {
+    margin-top: 4px;
+    opacity: 0.7;
+    font-size: 14px;
+  }
+}

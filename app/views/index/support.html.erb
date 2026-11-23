@@ -1,0 +1,72 @@
+<% content_for :title, "Support" %>
+<div class="wide-container legal-page">
+  <h1>Buddy Support</h1>
+
+  <p>
+    Buddy is the iPhone app for your ardesian.com account: your conversation with Buddy,
+    your lists, agenda and timers, notifications that don't expire, widgets, Siri, and your
+    automations a tap away.
+  </p>
+
+  <p>
+    Something not working, or a question? Email <%= mail_to "contact@ardesian.com" %> and say which
+    phone and what happened. You'll hear back within a couple of days.
+  </p>
+
+  <h2>Getting started</h2>
+  <ol>
+    <li><%= link_to "Create an account", register_path %> on ardesian.com, or use the one you have.
+      Accounts are made on the site; the app only signs in.</li>
+    <li>
+      Install Buddy<% if AppDevice.install_url %> from <%= link_to "this link", AppDevice.install_url %><% end %>,
+      open it and sign in with your username and password.
+    </li>
+    <li>Open <strong>Buddy for iPhone</strong> from Buddy's menu, or your device on the
+      <%= link_to "Buddy App Devices", app_devices_path %> page from any browser. Features that need a
+      permission from iOS (notifications, location, Apple Health, calendar, reminders, contacts,
+      Bluetooth) start off; tap <strong>Allow on this iPhone</strong> in the app first, and after
+      that they can be set up from anywhere. Each lists the Jil triggers its data arrives under.</li>
+    <li>Long-press the Home Screen to add Buddy's widgets, and long-press the Buddy icon for your
+      hot links.</li>
+  </ol>
+
+  <h2>Common questions</h2>
+  <h3>Notifications don't arrive</h3>
+  <p>
+    On your device's page, check Push notifications is on and the channel you expect is switched
+    on; the Test buttons there send one straight away. Then check the iPhone's Settings,
+    Notifications, Buddy, and any Focus that might be holding them.
+  </p>
+
+  <h3>A widget shows old information</h3>
+  <p>
+    Widgets refresh when their data changes, as long as Widgets is on for the device. A small cloud with a
+    line through it means the phone couldn't reach the site and is showing the last copy; it catches
+    up once there's a connection. Refresh all widgets, under Widgets on the device's page, forces it.
+  </p>
+
+  <h3>Something I pressed with no signal</h3>
+  <p>
+    Commands and messages are saved on the phone the moment they're pressed, with that time, and
+    sent when there's a connection again. The Commands tab lists anything still waiting, and anything
+    the site refused, which you can retry or delete.
+  </p>
+
+  <h3>Timers don't ring on silent</h3>
+  <p>
+    Allow "Ring like the Clock app" in the Buddy app, then switch on Timers under it.
+  </p>
+
+  <h2>Your devices and your account</h2>
+  <p>
+    Every phone signed in to Buddy is listed on the
+    <%= link_to "Buddy App Devices", app_devices_path %> page, where any of them can be signed out at
+    once. To close your account and delete its data, email the address above.
+  </p>
+
+  <h2>Privacy</h2>
+  <p>
+    What Buddy collects, and what happens to it, is in the
+    <%= link_to "Privacy Policy", privacy_policy_path %>.
+  </p>
+</div>
