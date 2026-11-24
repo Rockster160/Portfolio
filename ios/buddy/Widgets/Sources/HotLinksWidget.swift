@@ -181,7 +181,7 @@ struct HotLinksWidgetView: View {
     let links = Array(entry.links.prefix(columns * rows))
     return WidgetCircleGrid(count: links.count, columns: columns, rows: rows) { index in
       if let link = links[index] {
-        ActionButton(action: link.action, source: "widget_hot_links") {
+        ActionButton(action: link.pressed, source: "widget_hot_links") {
           WidgetCircleButton(label: link.title, icon: "sf:\(link.icon)", color: Color(css: link.color))
         }
       }

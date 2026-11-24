@@ -8,13 +8,11 @@ class AppPagesController < ApplicationController
   def commands; end
 
   # Opened by a hot link or widget that asks a question before it sends: the
-  # answer, after its prefix, goes as a command or a Buddy message.
+  # answer, after its prefix, goes as a command or a Buddy message. The page is
+  # the same for every question, so the app keeps one copy and opens it without
+  # a request.
   def compose
-    @send_as = params[:send_as].to_s == "command" ? :command : :buddy
-    @prefix = params[:prefix].to_s
-    @question = params[:placeholder].presence
-    @inline = ActiveModel::Type::Boolean.new.cast(params[:inline]) || @send_as == :command
-    @data = params[:data].presence
+    render layout: false
   end
 
   def share; end

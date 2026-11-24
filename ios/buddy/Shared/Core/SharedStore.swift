@@ -15,6 +15,7 @@ enum SharedStore {
     static let syncAnchors = "sync_anchors"
     static let darkMode = "dark_mode"
     static let webSession = "web_session"
+    static let composePage = "compose_page"
   }
 
   static let defaults: UserDefaults = UserDefaults(suiteName: BuddyConfig.appGroup) ?? .standard

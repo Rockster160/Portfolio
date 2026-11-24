@@ -161,6 +161,13 @@ struct HotLink: Codable, Equatable, Identifiable, Hashable {
   var color: String?
   var action: ButtonAction
 
+  /// What a press does, asking with the link's title when it doesn't set a question of its own.
+  var pressed: ButtonAction {
+    var pressed = action
+    if pressed.kind == .prompt && (pressed.placeholder ?? "").isEmpty { pressed.placeholder = title }
+    return pressed
+  }
+
   static var all: [HotLink] {
     get { SharedStore.load([HotLink].self, key: SharedStore.Key.hotLinks) ?? [] }
     set { SharedStore.save(newValue, key: SharedStore.Key.hotLinks) }

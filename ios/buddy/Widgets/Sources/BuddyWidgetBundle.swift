@@ -45,12 +45,17 @@ struct PerformHotLinkIntent: AppIntent {
   static let isDiscoverable = false
 
   @Parameter(title: "Hot link") var link: HotLinkEntity?
+  @Parameter(title: "Answer") var answer: String?
 
   init() {}
   init(link: HotLinkEntity?) { self.link = link }
 
   func perform() async throws -> some IntentResult & OpensIntent {
     guard let hotLink = link?.link else { return .result() }
+    if hotLink.action.kind == .prompt {
+      let fallback = await AskIntent.ask(hotLink.pressed, source: "control", answer: $answer)
+      return fallback.map { .result(opensIntent: OpenURLIntent($0)) } ?? .result()
+    }
     switch await ActionRunner.run(hotLink.action, source: "control") {
     case .open(let url):
       return .result(opensIntent: OpenURLIntent(url))
@@ -75,25 +80,17 @@ struct HotLinkControl: ControlWidget {
   }
 }
 
-/// Opens the compose sheet straight away, for "say something to Buddy" from anywhere.
+/// "Tell Buddy" from Control Center, the Lock Screen or the Action button, asked in place.
 struct CommandControl: ControlWidget {
+  static let tell = ButtonAction(kind: .prompt, sendAs: .buddy, placeholder: "Tell Buddy", inline: true)
+
   var body: some ControlWidgetConfiguration {
     StaticControlConfiguration(kind: "BuddyComposeControl") {
-      ControlWidgetButton(action: OpenComposeIntent()) {
+      ControlWidgetButton(action: AskIntent(Self.tell, source: "control")) {
         Label("Tell Buddy", systemImage: "bubble.left.and.text.bubble.right.fill")
       }
     }
     .displayName("Tell Buddy")
     .description("Type a command or a message to Buddy.")
-  }
-}
-
-struct OpenComposeIntent: AppIntent {
-  static let title: LocalizedStringResource = "Open Buddy Compose"
-  static let isDiscoverable = false
-  static let openAppWhenRun = true
-
-  func perform() async throws -> some IntentResult & OpensIntent {
-    .result(opensIntent: OpenURLIntent(DeepLink.compose(ButtonAction(kind: .prompt, sendAs: .buddy, placeholder: "Say something…", inline: true))))
   }
 }

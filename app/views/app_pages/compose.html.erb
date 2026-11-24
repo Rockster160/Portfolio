@@ -1,20 +1,134 @@
-<% content_for :title, @question || "Buddy" %>
-<div class="panel-app">
-  <form class="panel-page" data-buddy-compose="<%= {
-    send_as: @send_as,
-    prefix:  @prefix,
-    inline:  @inline,
-    data:    @data,
-  }.to_json %>">
-    <header class="panel-topbar">
-      <button type="button" class="panel-icon-btn" data-buddy-close aria-label="Close">‹</button>
-      <h1><%= @question || (@send_as == :command ? "Command" : "Buddy") %></h1>
+<%# The app keeps a copy and opens it with no request, so it carries its own styles and script,
+    and reads the question from its address. %>
+<!DOCTYPE html>
+<html class="<%= "dark-mode" if current_user.dark_mode? %>">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Buddy</title>
+  <style>
+    :root {
+      --bg: #F3F7FF; --surface: #ffffff; --surface-2: #eef3fb; --line: #d5e2f5;
+      --text: #1c2a3a; --text-2: #46586c; --accent: #0160FF;
+    }
+    html.dark-mode {
+      color-scheme: dark;
+      --bg: #00102B; --surface: #001a40; --surface-2: #0c2550; --line: #1f2a44;
+      --text: #ECF0F1; --text-2: #b4c2d3; --accent: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); }
+    body {
+      font: 16px/1.35 -apple-system, system-ui, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    form {
+      max-width: 560px; margin: 0 auto;
+      padding: calc(env(safe-area-inset-top) + 14px) 16px calc(32px + env(safe-area-inset-bottom));
+    }
+    header { display: flex; align-items: center; gap: 6px; min-height: 48px; margin: 0 -6px 10px; }
+    h1 {
+      flex: 1; min-width: 0; margin: 0; font-size: 22px; font-weight: 750;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    button { all: unset; box-sizing: border-box; cursor: pointer; text-align: center; }
+    .close {
+      width: 44px; height: 44px; border-radius: 12px; font-size: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .card {
+      display: flex; flex-direction: column; gap: 16px; padding: 14px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    }
+    textarea {
+      width: 100%; margin: 0; padding: 12px 14px; border-radius: 12px;
+      outline: none; resize: vertical;
+      background: var(--surface-2); border: 1px solid var(--line); color: var(--text);
+      font: inherit; font-size: 17px; line-height: 1.45;
+    }
+    textarea:focus { border-color: var(--accent); }
+    .send {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 52px; border-radius: 12px;
+      background: var(--accent); color: #ffffff; font-size: 17px; font-weight: 650;
+    }
+    .exchange { padding-top: 12px; border-top: 1px solid var(--line); }
+    .exchange div + div { margin-top: 4px; color: var(--text-2); white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <form>
+    <header>
+      <button type="button" class="close" aria-label="Close">‹</button>
+      <h1></h1>
     </header>
-
-    <div class="panel-settings">
-      <textarea name="text" rows="3" autofocus></textarea>
-      <button type="submit" class="panel-btn panel-btn-primary panel-btn-block panel-btn-lg buddy-app-only">Send</button>
-      <div class="panel-rows" data-buddy-exchanges></div>
+    <div class="card">
+      <textarea name="text" rows="3" autofocus enterkeyhint="send"></textarea>
+      <button type="submit" class="send">Send</button>
     </div>
   </form>
-</div>
+  <script>
+    (function() {
+      const params = new URLSearchParams(location.search)
+      const kind = params.get("send_as") === "command" ? "command" : "buddy"
+      const prefix = params.get("prefix") || ""
+      const title = params.get("placeholder") || (kind === "command" ? "Command" : "Buddy")
+      const form = document.querySelector("form")
+      const input = form.querySelector("textarea")
+      const card = form.querySelector(".card")
+
+      document.title = title
+      form.querySelector("h1").textContent = title
+      input.focus()
+
+      function line(text) {
+        const div = document.createElement("div")
+        div.textContent = text
+        return div
+      }
+
+      function submit() {
+        const text = input.value.trim()
+        if (!text) return
+
+        input.value = ""
+        const reply = line("Sending…")
+        const exchange = document.createElement("div")
+        exchange.className = "exchange"
+        exchange.append(line(prefix + text), reply)
+        card.append(exchange)
+        window.webkit.messageHandlers.buddy.postMessage({ name: "send", args: {
+          kind:   kind,
+          text:   text,
+          prefix: prefix,
+          inline: params.get("inline") === "true" || kind === "command",
+          data:   params.get("data") || undefined,
+        } }).then(function(result) {
+          const shown = { replied: result.reply || "Sent", sent: "Sent", opened: "Opened" }
+          reply.textContent = shown[result.status] || "Queued, sends when it can"
+        }).catch(function(error) {
+          reply.textContent = (error && error.message) || String(error)
+        })
+      }
+
+      form.addEventListener("submit", function(evt) {
+        evt.preventDefault()
+        submit()
+      })
+      input.addEventListener("keydown", function(evt) {
+        if (evt.key === "Enter" && !evt.shiftKey) {
+          evt.preventDefault()
+          submit()
+        }
+      })
+      form.querySelector(".close").addEventListener("click", function() {
+        if (history.length > 1) {
+          history.back()
+        } else {
+          location.href = "/byte"
+        }
+      })
+    })()
+  </script>
+</body>
+</html>

@@ -77,6 +77,7 @@ final class AppModel: ObservableObject {
       await DeviceSync.push()
       await FeatureManager.shared.syncAll(reason: "foreground")
       WidgetCenter.shared.reloadAllTimelines()
+      await WebShell.refreshComposePage()
     }
   }
 
@@ -155,7 +156,7 @@ final class AppModel: ObservableObject {
     case .checkIn(let id):
       Task { await openCheckIn(id: id) }
     case .compose(let action):
-      shell.load(Self.composePath(action))
+      shell.loadCompose(Self.composePath(action))
     case .queue:
       shell.load("/app/commands")
     case .settings:
@@ -164,7 +165,7 @@ final class AppModel: ObservableObject {
       shell.load("/app/settings#feature-\(feature.rawValue)")
     case .hotLink(let id):
       if let link = HotLink.all.first(where: { $0.id == id }) {
-        Task { await run(link.action, source: "hot_link") }
+        Task { await run(link.pressed, source: "hot_link") }
       }
     }
   }

@@ -302,7 +302,7 @@ enum QuickActions {
   @MainActor
   static func perform(_ item: UIApplicationShortcutItem) async {
     guard let id = item.userInfo?["id"] as? String, let link = HotLink.all.first(where: { $0.id == id }) else { return }
-    await AppModel.shared.run(link.action, source: "hot_link")
+    await AppModel.shared.run(link.pressed, source: "hot_link")
   }
 
   @MainActor

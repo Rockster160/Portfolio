@@ -347,8 +347,8 @@ struct WidgetProgressBar: View {
   }
 }
 
-/// A button in a widget: background kinds run in place through RunActionIntent, kinds that need the
-/// app open it through a link.
+/// A button in a widget: background kinds run in place through RunActionIntent, a question is
+/// asked in place through AskIntent, and kinds that need the app open it through a link.
 struct ActionButton<Label: View>: View {
   var action: ButtonAction?
   var source: String
@@ -358,6 +358,9 @@ struct ActionButton<Label: View>: View {
     if let action {
       if action.kind.runsInBackground {
         Button(intent: RunActionIntent(action, source: source)) { label() }
+          .buttonStyle(.plain)
+      } else if action.kind == .prompt {
+        Button(intent: AskIntent(action, source: source)) { label() }
           .buttonStyle(.plain)
       } else {
         Link(destination: destination(action)) { label() }
@@ -369,7 +372,6 @@ struct ActionButton<Label: View>: View {
 
   private func destination(_ action: ButtonAction) -> URL {
     switch action.kind {
-    case .prompt: return DeepLink.compose(action)
     case .checkIn: return DeepLink.url(host: "check-in", query: ["id": action.value])
     case .url: return URL(string: action.value ?? "") ?? DeepLink.web("/")
     default: return DeepLink.web(action.value ?? "/")

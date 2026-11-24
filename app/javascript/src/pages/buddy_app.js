@@ -387,38 +387,6 @@ $(document).ready(function() {
     renderOutbox()
   }
 
-  // The quick prompt a hot link or widget opens.
-  const compose = document.querySelector("[data-buddy-compose]")
-  if (compose) {
-    const options = JSON.parse(compose.dataset.buddyCompose)
-    const exchanges = compose.querySelector("[data-buddy-exchanges]")
-
-    compose.addEventListener("submit", function(evt) {
-      evt.preventDefault()
-      if (!BuddyApp.native()) return
-
-      const input = compose.querySelector("[name=text]")
-      const typed = input.value.trim()
-      if (!typed) return
-
-      input.value = ""
-      send({
-        kind:   options.send_as,
-        text:   typed,
-        prefix: options.prefix,
-        inline: options.inline,
-        data:   options.data,
-      }, exchanges)
-    })
-    compose.querySelector("[data-buddy-close]").addEventListener("click", function() {
-      if (window.history.length > 1) {
-        window.history.back()
-      } else {
-        window.location.href = "/byte"
-      }
-    })
-  }
-
   // The share sheet: what's being shared comes from the extension, and the
   // extension sends it once a destination is picked.
   const share = document.querySelector("[data-buddy-share]")

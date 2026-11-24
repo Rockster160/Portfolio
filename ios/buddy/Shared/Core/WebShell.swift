@@ -52,6 +52,7 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
     return bundle.hasSuffix(".share") ? "\(SharedStore.Key.webSession).share" : SharedStore.Key.webSession
   }
   private var retriedFromCache: Set<URL> = []
+  private let focusPolicy = FocusPolicy()
 
   init(bridge: @escaping Bridge) {
     self.bridge = bridge
@@ -71,6 +72,8 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
     webView.navigationDelegate = self
     webView.uiDelegate = self
     webView.allowsBackForwardNavigationGestures = true
+    let setInputDelegate = NSSelectorFromString("_setInputDelegate:")
+    if webView.responds(to: setInputDelegate) { webView.perform(setInputDelegate, with: focusPolicy) }
     webView.isOpaque = false
     webView.scrollView.refreshControl = UIRefreshControl()
     webView.scrollView.refreshControl?.addTarget(self, action: #selector(refresh(_:)), for: .valueChanged)
@@ -115,6 +118,28 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
     components?.queryItems = query.isEmpty ? nil : query.map { URLQueryItem(name: $0.key, value: $0.value) }
     guard let url = components?.url else { return }
     webView.load(URLRequest(url: url))
+  }
+
+  /// The quick prompt, from the copy kept on the phone when there is one: nothing to fetch, so
+  /// the field is ready as soon as the app is.
+  func loadCompose(_ path: String) {
+    guard let html = SharedStore.defaults.string(forKey: SharedStore.Key.composePage),
+          let url = URL(string: path, relativeTo: BuddyConfig.serverURL)?.absoluteURL else {
+      load(path)
+      return
+    }
+    lastPath = path
+    webView.loadHTMLString(html, baseURL: url)
+  }
+
+  /// Fetched each time the app comes to the front, so a change to the page is in the next copy.
+  static func refreshComposePage() async {
+    guard var request = try? APIClient.shared.request("GET", "app/compose") else { return }
+    request.setValue("text/html", forHTTPHeaderField: "Accept")
+    guard let data = try? await APIClient.shared.send(request),
+          let html = String(data: data, encoding: .utf8),
+          html.contains("<textarea name=\"text\"") else { return }
+    SharedStore.defaults.set(html, forKey: SharedStore.Key.composePage)
   }
 
   func forgetSession() {
@@ -265,6 +290,18 @@ final class WebShell: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMess
       openExternally(url)
     }
     return nil
+  }
+}
+
+/// Lets the quick prompt's field bring the keyboard up as the page opens. WebKit only shows the
+/// keyboard for a field that was tapped, unless the web view's input delegate (`_WKInputDelegate`,
+/// which isn't public) allows a focus from the page's own script.
+@MainActor
+private final class FocusPolicy: NSObject {
+  /// Answers with a `_WKFocusStartsInputSessionPolicy`: 0 decides as usual, 1 allows.
+  @objc(_webView:decidePolicyForFocusedElement:)
+  func decidePolicy(_ webView: WKWebView, focusedElement: AnyObject) -> Int {
+    webView.url?.path == "/app/compose" ? 1 : 0
   }
 }
 

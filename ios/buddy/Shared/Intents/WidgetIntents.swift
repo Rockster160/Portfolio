@@ -34,6 +34,55 @@ struct RunActionIntent: AppIntent {
   }
 }
 
+/// An "Ask, then send" from a widget or a control: asked where it was pressed, the way a shortcut
+/// asks. Where the system can't ask, the app opens straight to the same question.
+struct AskIntent: AppIntent {
+  static let title: LocalizedStringResource = "Ask, Then Send"
+  static let isDiscoverable = false
+
+  @Parameter(title: "Action") var payload: String
+  @Parameter(title: "Source") var source: String
+  @Parameter(title: "Answer") var answer: String?
+
+  init() {}
+
+  init(_ action: ButtonAction, source: String) {
+    let data = (try? SharedStore.encoder.encode(action)) ?? Data()
+    payload = String(data: data, encoding: .utf8) ?? "{}"
+    self.source = source
+  }
+
+  func perform() async throws -> some IntentResult & OpensIntent {
+    guard let data = payload.data(using: .utf8),
+          let action = try? SharedStore.decoder.decode(ButtonAction.self, from: data) else {
+      return .result()
+    }
+    if let fallback = await Self.ask(action, source: source, answer: $answer) {
+      return .result(opensIntent: OpenURLIntent(fallback))
+    }
+    return .result()
+  }
+
+  /// Asks, then sends what was typed; a reply that was waited for comes as a notification. Returns
+  /// the prompt page to open instead when the system can't ask here.
+  static func ask(_ action: ButtonAction, source: String, answer: IntentParameter<String?>) async -> URL? {
+    let question = action.placeholder ?? (action.sendAs == .command ? "Command" : "Buddy")
+    let typed: String?
+    do {
+      typed = try await answer.requestValue(IntentDialog(stringLiteral: question))
+    } catch {
+      if error is CancellationError || Task.isCancelled { return nil }
+      return DeepLink.compose(action)
+    }
+    guard let typed, !typed.isEmpty else { return nil }
+    let send = ButtonAction(kind: action.sendAs ?? .buddy, prefix: action.prefix, data: action.data, inline: action.inline)
+    if case .replied(let reply) = await ActionRunner.run(send, typed: typed, source: source) {
+      await ActionRunner.notify(reply, title: question)
+    }
+    return nil
+  }
+}
+
 /// Checks a list item off from the widget without opening anything.
 struct ToggleListItemIntent: AppIntent {
   static let title: LocalizedStringResource = "Toggle List Item"
