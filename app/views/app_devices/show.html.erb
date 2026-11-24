@@ -30,9 +30,9 @@
             <span class="panel-setting-title"><%= feature.title %></span><%= render "app_devices/info", label: feature.title, text: feature.info %>
             <% unless permitted %>
               <% if @device.permission(feature.key) == :denied %>
-                <span class="panel-setting-sub">Denied in iOS Settings</span>
+                <span class="panel-setting-sub" data-buddy-permission-note>Denied in iOS Settings</span>
               <% else %>
-                <span class="panel-setting-sub buddy-app-elsewhere-device">Allow in the app first</span>
+                <span class="panel-setting-sub buddy-app-elsewhere-device" data-buddy-permission-note>Allow in the app first</span>
               <% end %>
             <% end %>
           </span>
@@ -45,7 +45,8 @@
             data-buddy-allow="<%= feature.key %>">Allow</button>
         <% end %>
 
-        <% if permitted %>
+        <%# Shown before iOS answers, so Allow opens the options straight away. %>
+        <div class="buddy-app-feature-options" data-buddy-options <%= "hidden" unless permitted %>>
           <% feature.options.each do |option| %>
             <% value = @device.preference(option.key) %>
             <% name = "preferences[#{option.key}]" %>
@@ -115,7 +116,7 @@
               <% end %>
             </div>
           <% end %>
-        <% end %>
+        </div>
 
         <% if feature.triggers.any? %>
           <details class="panel-advanced">

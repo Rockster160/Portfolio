@@ -91,11 +91,11 @@ struct AgendaWidgetView: View {
     }
   }
 
+  /// Lines the widget holds under its header, a day's label taking one like an item does.
   private var capacity: Int {
     switch family {
-    case .systemSmall: return 3
-    case .systemMedium: return 4
-    case .systemLarge, .systemExtraLarge: return 9
+    case .systemSmall, .systemMedium: return 6
+    case .systemLarge, .systemExtraLarge: return 16
     case .accessoryRectangular: return 2
     default: return 1
     }
@@ -126,23 +126,20 @@ struct AgendaWidgetView: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     default:
-      VStack(alignment: .leading, spacing: 5) {
+      VStack(alignment: .leading, spacing: 2) {
         WidgetHeader(title: title, icon: "ti-fa-calendar", stale: entry.stale)
         if items.isEmpty {
-          Spacer()
           Text("Nothing scheduled")
-            .font(SiteFont.arial(13).italic())
-            .foregroundStyle(theme.site.text.opacity(0.45))
-            .frame(maxWidth: .infinity)
-          Spacer()
+            .font(SiteFont.arial(13))
+            .foregroundStyle(theme.muted)
+          Spacer(minLength: 0)
         } else {
-          ForEach(groups(Array(items.prefix(capacity))), id: \.0) { day, dayItems in
-            if family != .systemSmall && entry.configuration.days > 1 {
+          ForEach(fitted, id: \.0) { day, dayItems in
+            if entry.configuration.days > 1 {
               Text(day)
                 .font(SiteFont.arial(11, bold: true))
-                .tracking(0.66)
-                .textCase(.uppercase)
-                .foregroundStyle(theme.site.text.opacity(0.55))
+                .foregroundStyle(theme.muted)
+                .padding(.top, 2)
             }
             ForEach(dayItems) { row($0) }
           }
@@ -152,34 +149,61 @@ struct AgendaWidgetView: View {
     }
   }
 
-  private func row(_ item: AgendaWidgetData.Item) -> some View {
-    HStack(alignment: .top, spacing: 6) {
-      RoundedRectangle(cornerRadius: 2)
-        .fill(Color(css: item.color) ?? theme.site.button)
-        .frame(width: 3)
-      VStack(alignment: .leading, spacing: 0) {
-        HStack(spacing: 4) {
-          if let icon = item.icon { BuddyIcon(name: icon, size: 11, color: theme.site.text) }
-          Text(item.title).font(SiteFont.arial(13)).foregroundStyle(theme.site.text).lineLimit(1)
-        }
-        HStack(spacing: 4) {
-          Text(time(item))
-          if entry.configuration.showLocations, family != .systemSmall, let location = item.location, !location.isEmpty {
-            Text("· \(location)").lineLimit(1)
-          }
-        }
-        .font(SiteFont.arial(11).monospacedDigit())
-        .foregroundStyle(theme.muted)
-      }
+  /// The days and their items that fit in `capacity` lines.
+  private var fitted: [(String, [AgendaWidgetData.Item])] {
+    var lines = 0
+    var shown: [(String, [AgendaWidgetData.Item])] = []
+    for (day, dayItems) in groups(items) {
+      let label = entry.configuration.days > 1 ? 1 : 0
+      let room = capacity - lines - label
+      guard room > 0 else { break }
+      let taken = Array(dayItems.prefix(room))
+      shown.append((day, taken))
+      lines += label + taken.count
     }
-    .fixedSize(horizontal: false, vertical: true)
+    return shown
+  }
+
+  /// One line: the item's color as a dot, when it starts, and its title, the location after it
+  /// when there's room.
+  private func row(_ item: AgendaWidgetData.Item) -> some View {
+    let location = item.location.flatMap { $0.isEmpty ? nil : $0 }
+    let place = entry.configuration.showLocations && family != .systemSmall ? location : nil
+    return HStack(spacing: 5) {
+      Circle()
+        .fill(Color(css: item.color) ?? theme.site.button)
+        .frame(width: 7, height: 7)
+      Text(time(item))
+        .font(SiteFont.arial(12).monospacedDigit())
+        .foregroundStyle(theme.muted)
+      let title = Text(item.title).foregroundStyle(theme.site.text)
+      let after = Text(place.map { " · \($0)" } ?? "").foregroundStyle(theme.muted)
+      Text("\(title)\(after)")
+        .font(SiteFont.arial(13))
+        .lineLimit(1)
+    }
   }
 
   private func time(_ item: AgendaWidgetData.Item) -> String {
     if item.allDay == true { return "All day" }
     guard let start = item.startsAt else { return "" }
-    if start <= entry.date, let end = item.endsAt { return "Now – \(end.formatted(date: .omitted, time: .shortened))" }
-    return start.formatted(date: .omitted, time: .shortened)
+    if start <= entry.date, let end = item.endsAt { return "Now–\(Self.clock(end))" }
+    return Self.clock(start)
+  }
+
+  private static let formatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.setLocalizedDateFormatFromTemplate("jmm")
+    formatter.amSymbol = "am"
+    formatter.pmSymbol = "pm"
+    return formatter
+  }()
+
+  /// "8:30am", "8pm", or "20:00" where the clock is 24-hour.
+  private static func clock(_ date: Date) -> String {
+    let text = formatter.string(from: date).replacingOccurrences(of: " ", with: "")
+    guard text.hasSuffix("am") || text.hasSuffix("pm") else { return text }
+    return text.replacingOccurrences(of: ":00", with: "")
   }
 
   private func groups(_ items: [AgendaWidgetData.Item]) -> [(String, [AgendaWidgetData.Item])] {

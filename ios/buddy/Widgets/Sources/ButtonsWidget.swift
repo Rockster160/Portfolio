@@ -79,27 +79,6 @@ struct ButtonsWidgetView: View {
   var entry: ButtonsEntry
   @Environment(\.widgetFamily) private var family
 
-  private var capacity: Int {
-    switch family {
-    case .systemSmall: return 4
-    case .systemMedium: return 8
-    case .systemLarge: return 16
-    case .systemExtraLarge: return 24
-    case .accessoryRectangular: return 3
-    default: return 1
-    }
-  }
-
-  private var columns: Int {
-    switch family {
-    case .systemSmall: return 2
-    case .systemMedium: return 4
-    case .systemExtraLarge: return 6
-    case .accessoryRectangular: return 3
-    default: return 4
-    }
-  }
-
   var body: some View {
     Group {
       if !entry.signedIn {
@@ -114,19 +93,23 @@ struct ButtonsWidgetView: View {
           }
         }
       } else {
-        VStack(spacing: 6) {
-          if entry.showTitle, let title = entry.title, family != .accessoryRectangular {
+        let titled = entry.showTitle && entry.title != nil && family != .accessoryRectangular
+        let grid = family.circleGrid(titled: titled)
+        let items = Array(entry.items.prefix(grid.columns * grid.rows))
+        VStack(spacing: 4) {
+          if titled, let title = entry.title {
             WidgetHeader(title: title, icon: "ti-fa-th_large", stale: entry.stale)
           }
-          let shown = Array(entry.items.prefix(capacity))
-          let rows = stride(from: 0, to: shown.count, by: columns).map { Array(shown[$0..<min($0 + columns, shown.count)]) }
-          ForEach(rows.indices, id: \.self) { index in
-            HStack(spacing: 6) {
-              ForEach(rows[index]) { item in
-                ActionButton(action: item.action, source: "widget_buttons") {
-                  WidgetButtonFace(label: item.label, style: item.style, on: item.on, compact: family != .systemLarge)
-                }
-              }
+          WidgetCircleGrid(count: items.count, columns: grid.columns, rows: grid.rows) { index in
+            let item = items[index]
+            ActionButton(action: item.action, source: "widget_buttons") {
+              WidgetCircleButton(
+                label: item.label,
+                style: item.style,
+                on: item.on,
+                size: family == .accessoryRectangular ? 34 : WidgetCircleButton.size,
+                showsLabel: family != .accessoryRectangular,
+              )
             }
           }
         }

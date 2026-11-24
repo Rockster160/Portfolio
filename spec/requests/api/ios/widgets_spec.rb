@@ -15,6 +15,21 @@ RSpec.describe "Buddy app widgets", type: :request do
     expect(response.parsed_body).to include("name" => "Groceries", "items" => [hash_including("name" => "Milk")])
   end
 
+  it "draws a board's pet with its face picture and its color, not a bare expression", :aggregate_failures do
+    board = user.byte_conversations.create!(
+      mode:            :buddy,
+      name:            "Home",
+      last_message_at: Time.current,
+      metadata:        { "board" => true },
+    )
+
+    get "/api/ios/widgets/board/#{board.id}", headers: headers
+
+    pet = response.parsed_body["pets"].first
+    expect(pet["image_url"]).to match(%r{/buddy/byte/face_\w+.*\.png})
+    expect(pet["color"]).to eq(Buddy::Themes.for(:byte)[:color])
+  end
+
   it "shows a panel a Jil task wrote, with its SVG as a PNG url", :aggregate_failures do
     allow(AppWidgetReloadWorker).to receive(:perform_in)
     token

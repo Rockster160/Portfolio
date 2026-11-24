@@ -37,6 +37,7 @@ RSpec.describe AppPush::Timers do
       "attributes-type": "TimerActivityAttributes",
       attributes:        hash_including(timer_id: timer.id, name: "Pasta"),
       "content-state":   hash_including(state: "running", ends_at: timer.end_at.to_f),
+      "relevance-score": 10_000_000_000 - timer.end_at.to_f,
     )
   end
 
@@ -46,7 +47,11 @@ RSpec.describe AppPush::Timers do
     timer.pause!
     described_class.sync(timer, :paused)
     expect(sent.last).to include(token: "live-1")
-    expect(sent.last[:payload][:aps]).to include(event: "update", "content-state": hash_including(state: "paused"))
+    expect(sent.last[:payload][:aps]).to include(
+      event:             "update",
+      "content-state":   hash_including(state: "paused"),
+      "relevance-score": 1,
+    )
 
     Buddy::Timers.stop!(timer)
     described_class.sync(timer, :archived)

@@ -5,12 +5,13 @@ import WidgetKit
 @main
 struct BuddyWidgetBundle: WidgetBundle {
   var body: some Widget {
+    // The order the widget gallery lists them in.
+    HotLinksWidget()
     ListWidget()
     AgendaWidget()
-    BoardWidget()
     ButtonsWidget()
+    BoardWidget()
     PanelWidget()
-    HotLinksWidget()
     TimerLiveActivity()
     HotLinkControl()
     CommandControl()

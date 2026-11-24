@@ -149,7 +149,8 @@ struct HotLinksWidgetView: View {
       } else if !entry.hasLinks {
         WidgetNote(text: "No hot links yet")
       } else {
-        grid(columns: family == .systemSmall ? 2 : 4, rows: family == .systemLarge ? 4 : 2)
+        let layout = family.circleGrid()
+        grid(columns: layout.columns, rows: layout.rows)
       }
     }
     .widgetBackground()
@@ -175,23 +176,13 @@ struct HotLinksWidgetView: View {
     }
   }
 
-  /// The links in even rows, an empty slot keeping each the same size while there are fewer links
-  /// than the space holds.
+  /// The links in their slots, each a circle in its own color, an empty slot left empty.
   private func grid(columns: Int, rows: Int) -> some View {
     let links = Array(entry.links.prefix(columns * rows))
-    return VStack(spacing: 6) {
-      ForEach(0..<rows, id: \.self) { row in
-        HStack(spacing: 6) {
-          ForEach(0..<columns, id: \.self) { column in
-            let index = row * columns + column
-            if index < links.count, let link = links[index] {
-              ActionButton(action: link.action, source: "widget_hot_links") {
-                WidgetButtonFace(label: link.title, style: Styled(icon: "sf:\(link.icon)"), compact: true)
-              }
-            } else {
-              Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-          }
+    return WidgetCircleGrid(count: links.count, columns: columns, rows: rows) { index in
+      if let link = links[index] {
+        ActionButton(action: link.action, source: "widget_hot_links") {
+          WidgetCircleButton(label: link.title, icon: "sf:\(link.icon)", color: Color(css: link.color))
         }
       }
     }
@@ -228,6 +219,7 @@ struct HotLinksWidget: Widget {
       HotLinksWidgetView(entry: entry)
     }
     .configurationDisplayName("Hot links")
+    .description("Hot links, and a panel's chart if one is picked.")
     .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
   }
 }

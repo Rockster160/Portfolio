@@ -186,26 +186,61 @@ $(document).ready(function() {
     }
     remember(settings)
 
-    // Asking happens on the phone, which has told the server iOS's answer by
-    // the time it replies. The feature's panel is then fetched again and put
-    // in place of the old one, so nothing else on the page moves.
+    // Swaps `node` for `fresh` without moving what's on screen: a card above
+    // the view that grows or shrinks would otherwise push everything below it,
+    // and the app's web view doesn't anchor the scroll by itself.
+    function replaceInPlace(node, fresh) {
+      const before = node.getBoundingClientRect().bottom
+      node.replaceWith(fresh)
+      if (before > 0) return
+
+      window.scrollBy(0, fresh.getBoundingClientRect().bottom - before)
+    }
+
+    // The feature shows as on, its options open, the moment Allow is tapped;
+    // iOS can take a while to answer (Location asks twice). Refused, it goes
+    // back. Allowed, only the options are fetched again, for what the phone
+    // has just sent (its calendars and lists).
     $(settings).on("click", "[data-buddy-allow]", function() {
       const button = this
       const key = button.dataset.buddyAllow
-      button.disabled = true
-      BuddyApp.call("requestPermission", { feature: key }).then(function() {
-        return fetch(window.location.href, { headers: { "Accept": "text/html" } })
-      }).then(function(response) {
-        return response.text()
-      }).then(function(page) {
-        const fresh = new DOMParser().parseFromString(page, "text/html").getElementById("feature-" + key)
-        const current = document.getElementById("feature-" + key)
-        if (!fresh || !current) return
+      const panel = document.getElementById("feature-" + key)
+      const toggle = panel.querySelector("[name='features[]']")
+      const options = panel.querySelector("[data-buddy-options]")
+      const note = panel.querySelector("[data-buddy-permission-note]")
 
-        current.replaceWith(fresh)
-        remember(fresh)
+      function show(allowed) {
+        button.hidden = allowed
+        if (note) note.hidden = allowed
+        options.hidden = !allowed
+        toggle.disabled = !allowed
+        toggle.checked = allowed
+      }
+
+      show(true)
+      BuddyApp.call("requestPermission", { feature: key }).then(function(reply) {
+        if (reply && reply.state !== "granted") {
+          show(false)
+          if (reply.state === "denied") {
+            button.remove()
+            if (note) note.textContent = "Denied in iOS Settings"
+          }
+          return
+        }
+
+        return fetch(window.location.href, { headers: { "Accept": "text/html" } }).then(function(response) {
+          return response.text()
+        }).then(function(page) {
+          const fresh = new DOMParser().parseFromString(page, "text/html")
+          const freshOptions = fresh.querySelector("#feature-" + key + " [data-buddy-options]")
+          const current = panel.querySelector("[data-buddy-options]")
+          if (!freshOptions || !current || freshOptions.innerHTML === current.innerHTML) return
+
+          replaceInPlace(current, freshOptions)
+          remember(freshOptions)
+        })
       }).catch(function(error) {
-        button.disabled = false
+        show(false)
         failed(error)
       })
     })
@@ -493,10 +528,10 @@ $(document).ready(function() {
         const name = this.dataset.pick
         const input = field.parentNode.querySelector("[data-hot-link-icon]")
         input.value = name
-        input.dispatchEvent(new Event("change", { bubbles: true }))
         field.querySelector("[data-symbol]").dataset.symbol = name
         field.querySelector("[data-symbol-name]").textContent = symbols[name] || name
         paint(field)
+        input.dispatchEvent(new Event("change", { bubbles: true }))
         hideModal(modal)
       })
       modal.on("modal.hidden", function() { setTimeout(function() { modal.remove() }, 400) })
@@ -546,6 +581,7 @@ $(document).ready(function() {
     // part of it. A row with no title is still being filled in and waits. A
     // change made while a save is out goes in the next one.
     const form = hotLinks.closest("form")
+    const saved = hotLinks.querySelector("[data-hot-links-saved]")
     const blankRow = hotLinks.querySelector("[data-hot-link-new]")
     const template = blankRow && blankRow.cloneNode(true)
     let saving = false
@@ -563,8 +599,41 @@ $(document).ready(function() {
       return buttons
     }
 
-    // A new row that saved becomes an ordinary one, and a fresh blank row
-    // takes its place at the end while there's room.
+    // A saved link's row says what it is: its icon on its color, its title,
+    // and what a tap does. It follows the fields as they're edited.
+    function summarize(row) {
+      const summary = row.querySelector("[data-hot-link-toggle]")
+      if (!summary) return
+
+      const kind = row.querySelector("[data-hot-link-kind]")
+      summary.querySelector("[data-hot-link-summary-title]").textContent = row.querySelector("[name$='[title]']").value
+      summary.querySelector("[data-hot-link-summary-kind]").textContent = kind.options[kind.selectedIndex].text
+      row.style.setProperty("--hot-link-color", row.querySelector("[data-hot-link-color]").value)
+      const icon = row.querySelector("[data-hot-link-icon-pick] [data-symbol]")
+      summary.querySelector("[data-symbol]").replaceWith(icon.cloneNode(true))
+    }
+
+    function summaryFor(row) {
+      const summary = element("button", "buddy-app-hot-link-summary")
+      summary.type = "button"
+      summary.dataset.hotLinkToggle = ""
+      summary.setAttribute("aria-expanded", "false")
+      const badge = element("span", "buddy-app-hot-link-badge")
+      badge.appendChild(element("span", "panel-symbol"))
+      badge.firstChild.dataset.symbol = ""
+      const text = element("span", "panel-setting-text")
+      const title = element("span", "panel-setting-title")
+      title.dataset.hotLinkSummaryTitle = ""
+      const kind = element("span", "panel-setting-sub")
+      kind.dataset.hotLinkSummaryKind = ""
+      text.append(title, kind)
+      summary.append(badge, text)
+      row.prepend(summary)
+      summarize(row)
+    }
+
+    // A new row that saved folds into the list as a row of its own, and a
+    // fresh blank form takes its place while there's room.
     function settle(links) {
       const titled = Array.from(hotLinks.querySelectorAll("[data-hot-link]")).filter(function(row) {
         return row.querySelector("[name$='[title]']").value.trim() !== ""
@@ -576,9 +645,15 @@ $(document).ready(function() {
         if (!row.hasAttribute("data-hot-link-new")) return
 
         row.removeAttribute("data-hot-link-new")
-        const heading = row.querySelector(".panel-setting-title")
+        row.className = "buddy-app-hot-link"
+        const heading = row.querySelector(":scope > .panel-setting-title")
         if (heading) heading.remove()
-        row.appendChild(rowButtons())
+        const editor = row.querySelector("[data-hot-link-editor]")
+        editor.appendChild(rowButtons())
+        editor.hidden = true
+        summaryFor(row)
+        saved.appendChild(row)
+        saved.hidden = false
         if (template && links.length < Number(hotLinks.dataset.hotLinksMax)) {
           const fresh = template.cloneNode(true)
           const index = "hot_links[" + Date.now() + "]"
@@ -615,11 +690,19 @@ $(document).ready(function() {
       save()
     })
     $(hotLinks).on("change", "input, select, textarea", function() {
-      if (this.matches("[data-hot-link-kind]")) showFields(this.closest("[data-hot-link]"))
+      const row = this.closest("[data-hot-link]")
+      if (this.matches("[data-hot-link-kind]")) showFields(row)
+      summarize(row)
       save(this)
+    })
+    $(hotLinks).on("click", "[data-hot-link-toggle]", function() {
+      const open = this.getAttribute("aria-expanded") !== "true"
+      this.setAttribute("aria-expanded", String(open))
+      this.closest("[data-hot-link]").querySelector("[data-hot-link-editor]").hidden = !open
     })
     $(hotLinks).on("click", "[data-hot-link-remove]", function() {
       this.closest("[data-hot-link]").remove()
+      saved.hidden = !saved.querySelector("[data-hot-link]")
       save()
     })
     $(hotLinks).on("click", "[data-hot-link-up]", function() {

@@ -19,6 +19,8 @@ module AppDevices
     # iOS shows the first four on the app icon; the rest still reach widgets,
     # Control Center and Shortcuts.
     MAX = 12
+    # A link's color until one is picked: the board's task buttons' own.
+    DEFAULT_COLOR = "#0EA5E9".freeze
     # What each kind has to name before it can run, and what to call it when it's missing.
     NEEDS_VALUE = {
       task:        "a task",
@@ -185,6 +187,7 @@ module AppDevices
           title:    title,
           subtitle: link["subtitle"].to_s.strip.presence,
           icon:     link["icon"].to_s.strip.presence || "bolt.fill",
+          color:    link["color"].to_s[/\A#\h{6}\z/],
           action:   clean_action(action, title),
         }.compact
       }

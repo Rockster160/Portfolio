@@ -132,10 +132,22 @@ module AppPush
 
     def aps(timer, event:)
       {
-        timestamp:       Time.current.to_i,
-        event:           event.to_s,
-        "content-state": content_state(timer),
+        timestamp:         Time.current.to_i,
+        event:             event.to_s,
+        "content-state":   content_state(timer),
+        "relevance-score": relevance(timer),
       }
+    end
+
+    # Which of a phone's timers iOS puts in the Dynamic Island, highest first:
+    # one ringing, then the running one that ends soonest, then the paused ones.
+    # The app scores its own updates the same way (ContentState.relevance).
+    def relevance(timer)
+      case state_of(timer)
+      when :fired then 20_000_000_000
+      when :running then timer.end_at ? 10_000_000_000 - timer.end_at.to_f : 1
+      else 1
+      end
     end
 
     def attributes(timer)

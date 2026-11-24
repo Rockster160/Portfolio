@@ -100,12 +100,13 @@ enum TimerSync {
       let alert = timer.state == "fired" && existing.content.state.state != "fired"
         ? AlertConfiguration(title: "\(timer.name)", body: "Time's up", sound: timer.alertSound)
         : nil
-      await existing.update(ActivityContent(state: state, staleDate: stale), alertConfiguration: alert)
+      await existing.update(ActivityContent(state: state, staleDate: stale, relevanceScore: state.relevance), alertConfiguration: alert)
       return
     }
     guard ActivityAuthorizationInfo().areActivitiesEnabled, timer.state != "fired" else { return }
     let attributes = TimerActivityAttributes(timerId: timer.id, name: timer.name, icon: timer.icon, color: timer.color, kind: timer.kind)
-    _ = try? Activity.request(attributes: attributes, content: ActivityContent(state: state, staleDate: stale), pushType: .token)
+    let content = ActivityContent(state: state, staleDate: stale, relevanceScore: state.relevance)
+    _ = try? Activity.request(attributes: attributes, content: content, pushType: .token)
   }
 }
 

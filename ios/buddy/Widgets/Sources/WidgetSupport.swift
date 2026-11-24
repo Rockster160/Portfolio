@@ -40,17 +40,9 @@ struct WidgetTheme {
   var accent: Color { dark ? site.text : site.cardTitle }
   /// Times, counts and other second-rank text, as the agenda's `.agenda-item-time` fades them.
   var muted: Color { site.text.opacity(0.7) }
-  /// `.list-item` in pages/list.scss: `$blue-l5` on a light page, `$blue-d5` on a dark one.
-  var listItem: Color { dark ? WidgetTheme.blueD5 : site.card }
 
   /// `$blue-l2`: a tint that still reads on the Dynamic Island's black.
   static let blueL2 = Color(css: "#5695FF") ?? .blue
-  /// `$blue-d4`: the `.list-item` shadow.
-  static let blueD4 = Color(css: "#002055") ?? .blue
-  /// `$blue-d5`: the dark `.list-item` background.
-  static let blueD5 = Color(css: "#00102B") ?? .black
-  /// `$blue-l5`: the dark `.list-item` border.
-  static let blueL5 = Color(css: "#D5E5FF") ?? .white
   /// `gold`: `.list-item-config .important` in pages/list.scss.
   static let important = Color(css: "#FFD700") ?? .yellow
   /// `$base-complementary`: the site's one warm accent, for something waiting on attention.
@@ -160,21 +152,20 @@ struct WidgetHeader: View {
   var body: some View {
     let band = color ?? WidgetTheme.current(scheme).site.cardTitle
     let ink = color?.contrastingText ?? .white
-    HStack(spacing: 6) {
-      if let icon { BuddyIcon(name: icon, size: 15, color: ink) }
-      Text(title).font(SiteFont.arial(15)).foregroundStyle(ink).lineLimit(1)
+    HStack(spacing: 5) {
+      if let icon { BuddyIcon(name: icon, size: 12, color: ink) }
+      Text(title).font(SiteFont.arial(13, bold: true)).foregroundStyle(ink).lineLimit(1)
       Spacer(minLength: 2)
       StaleBadge(stale: stale, color: ink)
       if let trailing {
-        Text(trailing).font(SiteFont.arial(12, bold: true)).foregroundStyle(ink.opacity(0.85))
+        Text(trailing).font(SiteFont.arial(11, bold: true)).foregroundStyle(ink.opacity(0.85))
       }
     }
-    .padding(.vertical, 7)
+    .padding(.vertical, 4)
     .background {
       band.padding(EdgeInsets(top: -margins.top, leading: -margins.leading, bottom: 0, trailing: -margins.trailing))
     }
     .padding(.top, -margins.top)
-    .padding(.bottom, 2)
   }
 }
 
@@ -215,6 +206,111 @@ struct WidgetButtonFace: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(RoundedRectangle(cornerRadius: 6).fill(background))
     .background(RoundedRectangle(cornerRadius: 6).fill(edge).offset(y: 1))
+  }
+}
+
+/// A task button the way the board draws one (`.byte-board-circle` in pages/byte.scss): a flat dark
+/// disc washed with the button's color, a ring of it, the icon in the middle and the name under it.
+/// It's always the one size, like an app icon, so a bigger widget holds more of them rather than
+/// bigger ones.
+struct WidgetCircleButton: View {
+  var label: String?
+  var icon: String?
+  var image: String?
+  var color: Color?
+  var on: Bool?
+  var size: CGFloat = WidgetCircleButton.size
+  var showsLabel = true
+  @Environment(\.colorScheme) private var scheme
+
+  /// Two rows of these with their names fill a medium widget's height.
+  static let size: CGFloat = 46
+  /// `.byte-board-circle`'s fill.
+  static let disc = Color(css: "#0F1B33") ?? .black
+  /// `.byte-board-cell[data-kind="task"]`'s color, for a button with none of its own.
+  static let task = Color(css: "#0EA5E9") ?? .blue
+
+  /// A Jil task's button, wearing its monitor's last icon and color.
+  init(label: String?, style: Styled?, on: Bool?, size: CGFloat = WidgetCircleButton.size, showsLabel: Bool = true) {
+    self.label = label
+    icon = style?.icon
+    image = style?.image
+    color = Color(css: style?.background) ?? Color(css: style?.color)
+    self.on = on
+    self.size = size
+    self.showsLabel = showsLabel
+  }
+
+  init(label: String?, icon: String?, color: Color?, size: CGFloat = WidgetCircleButton.size) {
+    self.label = label
+    self.icon = icon
+    self.color = color
+    self.size = size
+  }
+
+  var body: some View {
+    let tint = color ?? (on == true ? WidgetTheme.on : WidgetCircleButton.task)
+    let ink = SitePalette.dark.text
+    VStack(spacing: 3) {
+      ZStack {
+        Circle().fill(WidgetCircleButton.disc)
+        Circle().fill(tint.opacity(on == true ? 0.4 : 0.16))
+        Circle().strokeBorder(tint.opacity(on == false ? 0.3 : 0.75), lineWidth: max(size / 18, 1.5))
+        if let image {
+          RemoteImage(urlString: image).frame(width: size * 0.56, height: size * 0.56)
+        } else {
+          BuddyIcon(name: icon, fallbackText: label, size: size * 0.46, color: ink)
+        }
+      }
+      .frame(width: size, height: size)
+      if showsLabel, let label, !label.isEmpty {
+        Text(label)
+          .font(SiteFont.arial(10, bold: true))
+          .foregroundStyle(WidgetTheme.current(scheme).site.text)
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+      }
+    }
+  }
+}
+
+/// Circle buttons placed the way the Home Screen places icons: a fixed grid, each in its own
+/// spot, an empty spot left empty rather than the rest stretching into it.
+struct WidgetCircleGrid<Cell: View>: View {
+  var count: Int
+  var columns: Int
+  var rows: Int
+  @ViewBuilder var cell: (Int) -> Cell
+
+  var body: some View {
+    VStack(spacing: 0) {
+      ForEach(0..<rows, id: \.self) { row in
+        HStack(spacing: 0) {
+          ForEach(0..<columns, id: \.self) { column in
+            let index = row * columns + column
+            Group {
+              if index < count { cell(index) } else { Color.clear }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+          }
+        }
+      }
+    }
+  }
+}
+
+extension WidgetFamily {
+  /// How many circle buttons across and down a widget of this size holds; one row fewer under a
+  /// title in the two smaller sizes.
+  func circleGrid(titled: Bool = false) -> (columns: Int, rows: Int) {
+    switch self {
+    case .systemSmall: return (2, titled ? 1 : 2)
+    case .systemMedium: return (4, titled ? 1 : 2)
+    case .systemLarge: return (4, 4)
+    case .systemExtraLarge: return (8, 4)
+    case .accessoryRectangular: return (3, 1)
+    default: return (1, 1)
+    }
   }
 }
 

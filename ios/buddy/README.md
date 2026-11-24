@@ -43,7 +43,7 @@ Widgets and Live Activities can't be web pages, so they draw with the site's pal
 
 ## First build
 
-1. `brew install xcodegen` (once), then `ios/buddy/bin/xcode` from anywhere in the repo. It
+1. `brew install xcodegen` (once), then `bin/buddy` from the repo root. It
    regenerates the project and opens it; run it again after a pull that adds or moves files.
 2. `Config/Shared.xcconfig` names the signing team (`DEVELOPMENT_TEAM`, the same Ardesian team
    that signs Astra); a gitignored `Config/Local.xcconfig` overrides it per machine.
@@ -102,7 +102,7 @@ its own settings and the App Group); App Store Connect refuses an upload without
 new such API needs its reason there. `ITSAppUsesNonExemptEncryption` in the app's `Info.plist`
 answers export compliance for every build.
 
-By hand, if ever needed: raise `CURRENT_PROJECT_VERSION`, run `ios/buddy/bin/xcode`, then in
+By hand, if ever needed: raise `CURRENT_PROJECT_VERSION`, run `bin/buddy`, then in
 Xcode choose Any iOS Device, Product, Archive, and in the Organizer Distribute App, App Store
 Connect, Upload.
 

@@ -76,15 +76,20 @@ struct ListWidgetView: View {
     .widgetURL(entry.data.map { DeepLink.web($0.url ?? "/lists/\($0.id)") })
   }
 
+  /// Rows a column holds, the header and a row of buttons taken out.
   private var capacity: Int {
+    let buttons = showsButtons ? 2 : 0
     switch family {
-    case .systemSmall: return 5
-    case .systemMedium: return 5
-    case .systemLarge: return 13
-    case .systemExtraLarge: return 13
+    case .systemSmall: return 7
+    case .systemMedium: return 7 - buttons
+    case .systemLarge, .systemExtraLarge: return 19 - buttons
     case .accessoryRectangular: return 3
     default: return 4
     }
+  }
+
+  private var showsButtons: Bool {
+    family != .systemSmall && entry.configuration.showButtons && !(entry.data?.buttons ?? []).isEmpty
   }
 
   @ViewBuilder
@@ -104,31 +109,35 @@ struct ListWidgetView: View {
     } else if family == .accessoryInline {
       Text("\(data.name): \(open.count)")
     } else {
-      VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: 3) {
         WidgetHeader(title: data.name, icon: "ti-fa-list_ul", stale: entry.stale, trailing: "\(open.count)")
-        if entry.configuration.showButtons, let buttons = data.buttons, !buttons.isEmpty, family != .systemSmall {
-          HStack(spacing: 6) {
-            ForEach(buttons.prefix(family == .systemMedium ? 4 : 6)) { button in
+        if showsButtons, let buttons = data.buttons {
+          HStack(spacing: 8) {
+            ForEach(buttons.prefix(family == .systemMedium ? 8 : 12)) { button in
               ActionButton(action: button.action, source: "widget_list") {
-                WidgetButtonFace(label: button.name, style: button.style, on: button.on, compact: true)
+                WidgetCircleButton(label: button.name, style: button.style, on: button.on, size: 26, showsLabel: false)
               }
             }
           }
-          .frame(height: 44)
+          .padding(.vertical, 2)
         }
         if open.isEmpty {
           Spacer()
-          Text("All done ✨").font(SiteFont.arial(14, bold: true)).foregroundStyle(theme.muted).frame(maxWidth: .infinity)
+          Text("All done").font(SiteFont.arial(13, bold: true)).foregroundStyle(theme.muted).frame(maxWidth: .infinity)
           Spacer()
         } else {
           let columns = family == .systemMedium || family == .systemExtraLarge ? 2 : 1
           let shown = Array(open.prefix(capacity * columns))
-          LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: columns), alignment: .leading, spacing: 4) {
+          LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .leading), count: columns),
+            alignment: .leading,
+            spacing: 2,
+          ) {
             ForEach(shown) { item in row(item, list: data) }
           }
           Spacer(minLength: 0)
           if open.count > shown.count {
-            Text("+\(open.count - shown.count) more").font(SiteFont.arial(11)).foregroundStyle(theme.muted)
+            Text("+\(open.count - shown.count) more").font(SiteFont.arial(10)).foregroundStyle(theme.muted)
           }
         }
       }
@@ -141,43 +150,29 @@ struct ListWidgetView: View {
     return open.filter { $0.important == true } + open.filter { $0.important != true }
   }
 
+  /// One line, as the list reads on a Lock Screen: a box to tick, the item's icon and its name, an
+  /// important item's box in gold.
   @ViewBuilder
   private func row(_ item: ListWidgetData.Item, list: ListWidgetData) -> some View {
-    let mark = item.important == true ? WidgetTheme.important : theme.site.text.opacity(0.6)
+    let mark = item.important == true ? WidgetTheme.important : theme.site.text.opacity(0.5)
     let label = HStack(spacing: 5) {
-      ZStack {
-        RoundedRectangle(cornerRadius: 3).strokeBorder(mark, lineWidth: 1.5)
-        if item.checked == true {
-          RoundedRectangle(cornerRadius: 3).fill(mark)
-        }
-      }
-      .frame(width: 12, height: 12)
-      if let icon = item.icon { BuddyIcon(name: icon, size: 12, color: theme.site.text) }
+      RoundedRectangle(cornerRadius: 2.5)
+        .strokeBorder(mark, lineWidth: 1.5)
+        .frame(width: 10, height: 10)
+      if let icon = item.icon { BuddyIcon(name: icon, size: 11, color: theme.site.text) }
       Text(item.name)
-        .font(SiteFont.arial(13, bold: true))
+        .font(SiteFont.arial(13))
         .lineLimit(1)
         .foregroundStyle(Color(css: item.color) ?? theme.site.text)
     }
-    .padding(.horizontal, 6)
-    .padding(.vertical, 2)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(itemCard)
+    .contentShape(Rectangle())
     if entry.configuration.tapToCheck {
       Button(intent: ToggleListItemIntent(listId: list.id, itemId: item.id, name: item.name, checked: item.checked != true)) { label }
         .buttonStyle(.plain)
     } else {
       label
     }
-  }
-
-  /// `.list-item` in pages/list.scss: a card with a soft `$blue-d4` shadow on a light page, and a
-  /// thin `$blue-l5` outline on a dark one, where the card and page are the same color.
-  private var itemCard: some View {
-    let shape = RoundedRectangle(cornerRadius: 5)
-    return shape
-      .fill(theme.listItem)
-      .overlay(shape.strokeBorder(WidgetTheme.blueL5.opacity(theme.dark ? 1 : 0), lineWidth: 1))
-      .shadow(color: WidgetTheme.blueD4.opacity(theme.dark ? 0 : 0.5), radius: 1.5, x: 1, y: 1)
   }
 }
 

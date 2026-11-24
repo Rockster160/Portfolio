@@ -146,6 +146,8 @@ struct HotLink: Codable, Equatable, Identifiable, Hashable {
   var subtitle: String?
   /// An SF Symbol name.
   var icon: String = "bolt.fill"
+  /// The ring around its button in a widget, as a CSS hex color.
+  var color: String?
   var action: ButtonAction
 
   static var all: [HotLink] {

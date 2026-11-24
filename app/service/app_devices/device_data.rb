@@ -156,7 +156,6 @@ module AppDevices
         data:      health,
       )
       ::ActionEventNotifier.notify(user, event, :added, auth: :trigger, auth_id: user.id)
-      ::ActionEventBroadcastWorker.perform_async(event.id)
       data[:event_id] = event.id
     end
 

@@ -68,10 +68,10 @@ struct BoardWidgetView: View {
   private func content(_ data: BoardWidgetData) -> some View {
     switch family {
     case .accessoryCircular:
-      face(data.pets[0], size: 44)
+      face(data.pets[0])
     case .accessoryRectangular:
       HStack(spacing: 6) {
-        face(data.pets[0], size: 40)
+        face(data.pets[0]).frame(width: 44)
         VStack(alignment: .leading) {
           Text(data.pets[0].name).font(SiteFont.arial(15, bold: true))
           if let thinking = data.pets[0].thinking { Text(thinking).font(SiteFont.arial(12)).lineLimit(2) }
@@ -80,38 +80,71 @@ struct BoardWidgetView: View {
     case .accessoryInline:
       Text("\(data.pets[0].name): \(data.pets[0].thinking ?? data.pets[0].mood ?? "")")
     case .systemSmall:
-      petCard(data.pets[0], faceSize: 70)
+      VStack(spacing: 0) {
+        petArt(data.pets[0])
+        PetBanner(name: data.pets[0].name, color: Color(css: data.pets[0].color), edgeToEdge: true)
+      }
     default:
-      HStack(spacing: 10) {
+      HStack(spacing: 8) {
         ForEach(data.pets.prefix(family == .systemMedium ? 2 : 4)) { pet in
           Link(destination: DeepLink.web(pet.url ?? data.url ?? "/board")) {
-            petCard(pet, faceSize: family == .systemMedium ? 64 : 90)
+            VStack(spacing: 0) {
+              petArt(pet)
+              PetBanner(name: pet.name, color: Color(css: pet.color), edgeToEdge: false)
+            }
           }
         }
       }
     }
   }
 
-  private func petCard(_ pet: BoardWidgetData.Pet, faceSize: CGFloat) -> some View {
-    VStack(spacing: 4) {
+  /// The pet as big as the space allows, what it's thinking over it.
+  private func petArt(_ pet: BoardWidgetData.Pet) -> some View {
+    VStack(spacing: 2) {
       if entry.configuration.showThinking, let thinking = pet.thinking, !thinking.isEmpty {
         ThoughtBubble(text: thinking, icon: pet.thinkingIcon, color: Color(css: pet.color))
       }
-      face(pet, size: faceSize)
-      Text(pet.name)
-        .font(SiteFont.arial(12, bold: true))
-        .foregroundStyle(WidgetTheme.current(scheme).site.text)
-        .lineLimit(1)
+      face(pet).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
+  /// The pet's picture for its current face. With none, as in the widget gallery's preview, the
+  /// bundled picture of Byte stands in.
   @ViewBuilder
-  private func face(_ pet: BoardWidgetData.Pet, size: CGFloat) -> some View {
+  private func face(_ pet: BoardWidgetData.Pet) -> some View {
     if let url = pet.imageUrl {
-      RemoteImage(urlString: url).frame(width: size, height: size)
+      RemoteImage(urlString: url)
+    } else if let preview = UIImage(named: "pet-preview") {
+      Image(uiImage: preview).resizable().scaledToFit()
+    }
+  }
+}
+
+/// The pet's name on a band of its color across the bottom: the widget's whole width in a small
+/// widget, the pet's own column when several share one.
+struct PetBanner: View {
+  var name: String
+  var color: Color?
+  var edgeToEdge: Bool
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.widgetContentMargins) private var margins
+
+  var body: some View {
+    let band = color ?? WidgetTheme.current(scheme).site.cardTitle
+    let label = Text(name)
+      .font(SiteFont.arial(12, bold: true))
+      .foregroundStyle(band.contrastingText)
+      .lineLimit(1)
+      .frame(maxWidth: .infinity)
+      .padding(.vertical, 4)
+    if edgeToEdge {
+      label
+        .background {
+          band.padding(EdgeInsets(top: 0, leading: -margins.leading, bottom: -margins.bottom, trailing: -margins.trailing))
+        }
+        .padding(.bottom, -margins.bottom)
     } else {
-      Text(pet.expression ?? "🙂").font(.system(size: size * 0.7))
+      label.background(band, in: RoundedRectangle(cornerRadius: 6))
     }
   }
 }
@@ -161,6 +194,6 @@ extension BoardWidgetData {
     id: "0",
     name: "Board",
     url: "/board",
-    pets: [Pet(id: "byte", name: "Byte", mood: "happy", expression: "😊", thinking: "Laundry's done!", color: "#6c6bf4")],
+    pets: [Pet(id: "byte", name: "Byte", mood: "content", thinking: "Laundry's done!", color: "#0E1930")],
   )
 }

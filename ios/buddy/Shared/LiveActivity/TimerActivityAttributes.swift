@@ -29,6 +29,15 @@ struct TimerActivityAttributes: ActivityAttributes {
     var isPaused: Bool { state == "paused" }
     var isFired: Bool { state == "fired" }
 
+    /// Which activity iOS puts in the Dynamic Island and first on the Lock Screen, highest first:
+    /// one ringing, then the running one that ends soonest, then the paused ones. The server sends
+    /// the same with each push (AppPush::Timers.relevance).
+    var relevance: Double {
+      if isFired { return 20_000_000_000 }
+      guard !isPaused, let endsAt else { return 1 }
+      return 10_000_000_000 - endsAt
+    }
+
     /// The span a countdown text or progress bar should run over.
     var interval: ClosedRange<Date>? {
       guard let end = endDate else { return nil }

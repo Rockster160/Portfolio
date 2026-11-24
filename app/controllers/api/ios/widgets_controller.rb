@@ -1,8 +1,6 @@
 # What the phone's widgets draw. Each answer is small and complete on its own:
 # a widget asks, draws, and is told by a push when to ask again.
 class Api::Ios::WidgetsController < Api::Ios::BaseController
-  include ByteHelper
-
   AGENDA_DAYS = 14
   AGENDA_LIMIT = 12
   LIST_LIMIT = 30
@@ -145,12 +143,14 @@ class Api::Ios::WidgetsController < Api::Ios::BaseController
       image_url:     face_image_url(board.buddy_theme, expression),
       thinking:      thinking_about(board),
       thinking_icon: thinking_icon(board),
+      color:         Buddy::Themes.for(board.buddy_theme)[:color],
       url:           byte_url("/board/#{board.id}"),
     }.compact
   end
 
   def face_image_url(theme, expression)
-    path = buddy_face_url(theme, expression)
+    # Through `helpers`: the face paths come from the asset pipeline's view helpers.
+    path = helpers.buddy_face_url(theme, expression)
     return if path.blank?
     return absolute(path) unless path.to_s.end_with?(".svg")
 

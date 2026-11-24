@@ -19,98 +19,13 @@
     </header>
 
     <div data-hot-links data-hot-links-max="<%= AppDevices::HotLinks::MAX %>">
-      <% rows = @hot_links.size < AppDevices::HotLinks::MAX ? @hot_links + [{}] : @hot_links %>
-      <% rows.each_with_index do |link, index| %>
-        <% action = link["action"].to_h %>
-        <% name = "hot_links[#{index}]" %>
-        <% icon = link["icon"].presence || "bolt.fill" %>
-        <div class="panel-settings" data-hot-link<%= " data-hot-link-new" if link.empty? %>>
-          <% if link.empty? %>
-            <div class="panel-setting-title">New hot link</div>
-          <% end %>
-          <%= hidden_field_tag "#{name}[id]", link["id"], id: nil %>
-          <div>
-            <div class="panel-setting-label">Title</div>
-            <%= text_field_tag "#{name}[title]", link["title"], id: nil %>
-          </div>
-          <div>
-            <div class="panel-setting-label">Subtitle<%= render "app_devices/info", label: "Subtitle", text: "Shown under the title in the app icon's long-press menu." %></div>
-            <%= text_field_tag "#{name}[subtitle]", link["subtitle"], id: nil %>
-          </div>
-          <div>
-            <div class="panel-setting-label">Icon<%= render "app_devices/info", label: "Icon", text: "Shown in the Hot Links widget and the app icon's long-press menu." %></div>
-            <%= hidden_field_tag "#{name}[icon]", icon, id: nil, data: { hot_link_icon: true } %>
-            <button type="button" class="panel-btn panel-symbol-field" data-hot-link-icon-pick>
-              <span class="panel-symbol" data-symbol="<%= icon %>"></span>
-              <span data-symbol-name><%= AppDevices::HotLinks::SYMBOLS[icon] || icon %></span>
-            </button>
-          </div>
-          <div>
-            <div class="panel-setting-label">When pressed<%= render "app_devices/info", label: "When pressed", text: "What a tap does. All but opening a page or link run without opening the app, and wait in the queue when there's no signal." %></div>
-            <%= select_tag "#{name}[action][kind]",
-              options_for_select(kinds.map { |key, text| [text, key] }, action["kind"] || "command"),
-              id: nil, data: { hot_link_kind: true } %>
-          </div>
-
-          <div data-hot-link-for="command buddy trigger check_in open url">
-            <div class="panel-setting-label" data-hot-link-label></div>
-            <%= text_field_tag "#{name}[action][value]", action["value"], id: nil, autocapitalize: "none" %>
-          </div>
-          <div data-hot-link-for="task">
-            <div class="panel-setting-label">Task</div>
-            <%= select_tag "#{name}[action][value]",
-              options_for_select(@catalog[:tasks].map { |task| [task.name, task.id.to_s] }, action["value"]),
-              id: nil, include_blank: "Choose…" %>
-          </div>
-          <div data-hot-link-for="routine">
-            <div class="panel-setting-label">Routine</div>
-            <%= select_tag "#{name}[action][value]",
-              options_for_select(@catalog[:routines].map { |routine| [routine.name, routine.id.to_s] }, action["value"]),
-              id: nil, include_blank: "Choose…" %>
-          </div>
-          <div data-hot-link-for="list_toggle">
-            <div class="panel-setting-label">List</div>
-            <%= select_tag "#{name}[action][value]",
-              options_for_select(@catalog[:lists].map { |list| [list.name, list.id.to_s] }, action["value"]),
-              id: nil, include_blank: "Choose…" %>
-          </div>
-          <div data-hot-link-for="list_toggle">
-            <div class="panel-setting-label">Item<%= render "app_devices/info", label: "Item", text: "Checked off, or unchecked if it already is. Added when the list doesn't have it." %></div>
-            <%= text_field_tag "#{name}[action][item]", action.dig("data", "item"), id: nil %>
-          </div>
-          <div data-hot-link-for="prompt">
-            <div class="panel-setting-label">Send to</div>
-            <div class="panel-segmented">
-              <% [["buddy", "Buddy"], ["command", "Command"]].each do |value, text| %>
-                <label><%= radio_button_tag "#{name}[action][send_as]", value, (action["send_as"] || "buddy") == value, id: nil %><span><%= text %></span></label>
-              <% end %>
-            </div>
-          </div>
-          <div data-hot-link-for="prompt">
-            <div class="panel-setting-label">Question<%= render "app_devices/info", label: "Question", text: "Asked when the hot link is tapped. The answer is what's sent." %></div>
-            <%= text_field_tag "#{name}[action][placeholder]", action["placeholder"], id: nil %>
-          </div>
-          <div data-hot-link-for="prompt">
-            <div class="panel-setting-label">Prefix<%= render "app_devices/info", label: "Prefix", text: "Added before the answer: with \"Remind me to \", answering \"call Mom\" sends \"Remind me to call Mom\"." %></div>
-            <%= text_field_tag "#{name}[action][prefix]", action["prefix"], id: nil %>
-          </div>
-          <div data-hot-link-for="task trigger">
-            <div class="panel-setting-label">Data (JSON)<%= render "app_devices/info", label: "Data", text: "Handed to the task or trigger, like {\"room\": \"office\"}." %></div>
-            <%= text_area_tag "#{name}[action][data]", action["data"].presence&.to_json, id: nil, rows: 2 %>
-          </div>
-          <label class="panel-setting" data-hot-link-for="command buddy prompt">
-            <span class="panel-setting-text">Wait for the reply<%= render "app_devices/info", label: "Wait for the reply", text: "Waits for the answer and shows it. Off, it sends without waiting." %></span>
-            <%= hidden_field_tag "#{name}[action][inline]", false, id: nil %>
-            <%= check_box_tag "#{name}[action][inline]", true, action["inline"].to_s == "true", id: nil, class: "panel-switch" %>
-          </label>
-
-          <% unless link.empty? %>
-            <div class="panel-buttons">
-              <button type="button" class="panel-btn" data-hot-link-up>Move up</button>
-              <button type="button" class="panel-btn panel-btn-danger" data-hot-link-remove>Remove</button>
-            </div>
-          <% end %>
-        </div>
+      <div class="panel-settings buddy-app-hot-links" data-hot-links-saved<%= " hidden" if @hot_links.empty? %>>
+        <% @hot_links.each_with_index do |link, index| %>
+          <%= render "app_hot_links/link", link: link, index: index, kinds: kinds %>
+        <% end %>
+      </div>
+      <% if @hot_links.size < AppDevices::HotLinks::MAX %>
+        <%= render "app_hot_links/link", link: {}, index: @hot_links.size, kinds: kinds %>
       <% end %>
     </div>
   <% end %>

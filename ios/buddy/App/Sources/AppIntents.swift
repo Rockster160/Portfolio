@@ -145,7 +145,10 @@ struct OpenBuddyScreenIntent: AppIntent {
 struct RunHotLinkIntent: AppIntent {
   static let title: LocalizedStringResource = "Run Hot Link"
   @Parameter(title: "Hot link") var link: HotLinkEntity
-  @Parameter(title: "Answer") var answer: String?
+  @Parameter(
+    title: "Answer",
+    description: "For a hot link that asks a question: what to send. Empty, the question is asked when it runs.",
+  ) var answer: String?
 
   func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog & OpensIntent {
     guard let hotLink = link.link else { return .result(value: "", dialog: "") }
@@ -177,8 +180,11 @@ struct AskAndSendIntent: AppIntent {
   @Parameter(title: "Question") var question: String
   @Parameter(title: "Prefix") var prefix: String?
   @Parameter(title: "Send to", default: .buddy) var target: SendTarget
-  @Parameter(title: "Show the reply", default: true) var wait: Bool
-  @Parameter(title: "Answer") var answer: String?
+  @Parameter(title: "Wait for the reply", default: true) var wait: Bool
+  @Parameter(
+    title: "Answer",
+    description: "What to send. Empty, the question is asked when it runs.",
+  ) var answer: String?
 
   static var parameterSummary: some ParameterSummary {
     Summary("Ask \(\.$question) and send to \(\.$target)") {
