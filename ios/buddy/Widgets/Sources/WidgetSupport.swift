@@ -356,7 +356,7 @@ struct ActionButton<Label: View>: View {
 
   var body: some View {
     if let action {
-      if action.kind.runsInBackground && action.inline != true {
+      if action.kind.runsInBackground {
         Button(intent: RunActionIntent(action, source: source)) { label() }
           .buttonStyle(.plain)
       } else {
@@ -372,8 +372,7 @@ struct ActionButton<Label: View>: View {
     case .prompt: return DeepLink.compose(action)
     case .checkIn: return DeepLink.url(host: "check-in", query: ["id": action.value])
     case .url: return URL(string: action.value ?? "") ?? DeepLink.web("/")
-    case .open: return DeepLink.web(action.value ?? "/")
-    default: return DeepLink.compose(ButtonAction(kind: .prompt, sendAs: action.kind, prefix: action.value, inline: true))
+    default: return DeepLink.web(action.value ?? "/")
     }
   }
 }

@@ -24,7 +24,9 @@ struct RunActionIntent: AppIntent {
           let action = try? SharedStore.decoder.decode(ButtonAction.self, from: data) else {
       return .result()
     }
-    await ActionRunner.run(action, source: source)
+    if case .replied(let reply) = await ActionRunner.run(action, source: source) {
+      await ActionRunner.notify(reply, title: action.value ?? "Buddy")
+    }
     // A press usually changes what the widget shows (a toggle, a state); ask for fresh data now.
     try? await Task.sleep(nanoseconds: 1_200_000_000)
     WidgetCenter.shared.reloadAllTimelines()

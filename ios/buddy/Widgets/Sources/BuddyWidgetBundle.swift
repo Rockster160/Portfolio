@@ -51,11 +51,15 @@ struct PerformHotLinkIntent: AppIntent {
 
   func perform() async throws -> some IntentResult & OpensIntent {
     guard let hotLink = link?.link else { return .result() }
-    let outcome = await ActionRunner.run(hotLink.action, source: "control")
-    if case .open(let url) = outcome {
+    switch await ActionRunner.run(hotLink.action, source: "control") {
+    case .open(let url):
       return .result(opensIntent: OpenURLIntent(url))
+    case .replied(let reply):
+      await ActionRunner.notify(reply, title: hotLink.title)
+      return .result()
+    case .queued:
+      return .result()
     }
-    return .result()
   }
 }
 

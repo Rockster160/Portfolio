@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 /// Carries out a ButtonAction from whichever process was pressed: the app, a widget button, a
 /// notification action, a hot link or an intent. Anything that needs the server goes through the
@@ -58,6 +59,16 @@ enum ActionRunner {
     let saved = Outbox.enqueue(item)
     await Outbox.flush()
     return saved
+  }
+
+  /// A reply to a press made outside the app (a widget, a control), shown as a notification so the
+  /// app never has to open to show it.
+  static func notify(_ reply: String, title: String) async {
+    let content = UNMutableNotificationContent()
+    content.title = title
+    content.body = reply
+    let request = UNNotificationRequest(identifier: "reply-\(UUID().uuidString)", content: content, trigger: nil)
+    try? await UNUserNotificationCenter.current().add(request)
   }
 }
 

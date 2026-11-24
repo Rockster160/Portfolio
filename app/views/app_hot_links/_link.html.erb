@@ -89,7 +89,7 @@
       <%= text_area_tag "#{name}[action][data]", action["data"].presence&.to_json, id: nil, rows: 2 %>
     </div>
     <label class="panel-setting" data-hot-link-for="command buddy prompt">
-      <span class="panel-setting-text">Wait for the reply<%= render "app_devices/info", label: "Wait for the reply", text: "Waits for the answer and shows it. Off, it sends without waiting." %></span>
+      <span class="panel-setting-text">Wait for the reply<%= render "app_devices/info", label: "Wait for the reply", text: "Waits for the answer and shows it, as a notification from a widget or Control Center. Off, it sends without waiting." %></span>
       <%= hidden_field_tag "#{name}[action][inline]", false, id: nil %>
       <%= check_box_tag "#{name}[action][inline]", true, action["inline"].to_s == "true", id: nil, class: "panel-switch" %>
     </label>
