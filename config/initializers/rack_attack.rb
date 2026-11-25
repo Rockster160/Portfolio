@@ -99,6 +99,14 @@ class Rack::Attack
     req.path == "/recipes/print" && req.cookies["_Portfolio_session"].blank?
   }
 
+  ### Block Crawler Ranges ###
+
+  # Meta's AI crawler (meta-externalagent) ignores robots.txt and spreads across
+  # this /24, so neither robots.txt nor the per-IP throttle holds it. Nothing
+  # else uses the block; Meta's link-preview fetcher works from its neighboring
+  # /24s, which stay open.
+  blocklist_ip("57.141.20.0/24")
+
   ### Custom Throttle Response ###
 
   # By default, Rack::Attack returns an HTTP 429 for throttled responses,
