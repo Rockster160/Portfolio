@@ -1,0 +1,8 @@
+<div class="invoice-item" data-invoice-item>
+  <input type="text" data-field="description" value="<%= item["description"] %>" placeholder="Description">
+  <div class="invoice-item-numbers">
+    <input type="text" inputmode="decimal" data-field="quantity" value="<%= item["quantity"] %>" placeholder="Qty">
+    <input type="text" inputmode="decimal" data-field="rate" value="<%= item["rate"] %>" placeholder="Rate">
+    <button type="button" class="panel-row-action" data-invoice-item-remove aria-label="Remove line">×</button>
+  </div>
+</div>

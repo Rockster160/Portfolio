@@ -1,0 +1,61 @@
+<% lines = @invoice.lines.reject { |line| line[:description].blank? && line[:amount].zero? } %>
+<% date = ->(day) { day&.strftime("%B %-d, %Y") } %>
+<% broken = ->(text) { safe_join(text.to_s.lines.map(&:strip).reject(&:blank?), tag.br) } %>
+<article class="invoice-sheet">
+  <header class="invoice-head">
+    <div class="invoice-from">
+      <div class="invoice-from-name"><%= @invoice.sender_name %></div>
+      <div class="invoice-lines"><%= broken.call(@invoice.sender.to_s.lines.drop(1).join) %></div>
+    </div>
+    <div class="invoice-heading">
+      <h1>Invoice</h1>
+      <dl class="invoice-meta">
+        <dt>Number</dt><dd><%= @invoice.number %></dd>
+        <dt>Issued</dt><dd><%= date.call(@invoice.issued_on) %></dd>
+        <% if @invoice.due_on %>
+          <dt>Due</dt><dd><%= date.call(@invoice.due_on) %></dd>
+        <% end %>
+      </dl>
+    </div>
+  </header>
+
+  <section class="invoice-to">
+    <div class="invoice-label">Bill to</div>
+    <div class="invoice-lines"><%= broken.call(@invoice.recipient) %></div>
+  </section>
+
+  <table class="invoice-items">
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th class="invoice-num">Qty</th>
+        <th class="invoice-num">Rate</th>
+        <th class="invoice-num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% lines.each do |line| %>
+        <tr>
+          <td><%= line[:description] %></td>
+          <td class="invoice-num">
+            <%= number_with_precision(line[:quantity], precision: 2, strip_insignificant_zeros: true) %>
+          </td>
+          <td class="invoice-num"><%= number_to_currency(line[:rate]) %></td>
+          <td class="invoice-num"><%= number_to_currency(line[:amount]) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+
+  <div class="invoice-total">
+    <span>Total due</span>
+    <strong><%= number_to_currency(@invoice.total) %></strong>
+  </div>
+
+  <% if @invoice.notes.present? %>
+    <section class="invoice-notes">
+      <div class="invoice-label">Notes</div>
+      <div class="invoice-lines"><%= broken.call(@invoice.notes) %></div>
+    </section>
+  <% end %>
+</article>

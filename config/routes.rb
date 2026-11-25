@@ -742,6 +742,7 @@ Rails.application.routes.draw do
   resources :anonicons, only: [:index, :show], constraints: { id: /[0-9.a-zA-Z]+/ }
   resources :qr_labels, only: [:index, :show]
   resources :short_links, only: [:index, :create, :destroy], path: :links
+  resources :invoices, except: [:new]
   get :"svg-editor", controller: :svg_editors, action: :show
 
   resource :rlcraft, only: [:show, :update]

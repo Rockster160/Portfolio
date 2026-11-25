@@ -84,6 +84,7 @@ class User < ApplicationRecord
   has_many :meal_builders, dependent: :destroy
   has_many :list_builders, dependent: :destroy
   has_many :boxes, dependent: :destroy
+  has_many :invoices, dependent: :destroy
   has_many :short_links, dependent: :destroy
   has_many :task_folders, dependent: :destroy
   has_many :tasks, dependent: :destroy

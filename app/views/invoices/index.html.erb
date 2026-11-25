@@ -1,0 +1,31 @@
+<% content_for :title, "Invoices" %>
+<div class="panel-app">
+  <div class="panel-page">
+    <header class="panel-topbar">
+      <h1>Invoices</h1>
+      <span class="panel-info-anchor">
+        <%= button_to "New invoice", invoices_path, class: "panel-btn panel-btn-primary", form: { class: "basic" } %>
+        <%= render(
+          "app_devices/info",
+          label: "New invoice",
+          text:  "Starts from the last invoice: the same sender, client, notes and payment terms, numbered as that client's next invoice.",
+        ) %>
+      </span>
+    </header>
+
+    <% if @invoices.any? %>
+      <div class="panel-card panel-rows">
+        <% @invoices.each do |invoice| %>
+          <a class="panel-row" href="<%= edit_invoice_path(invoice) %>">
+            <span class="panel-row-title"><%= [invoice.number, invoice.recipient_name].compact.join(" · ") %></span>
+            <span class="panel-row-detail">
+              <%= invoice.issued_on.strftime("%b %-d, %Y") %> · <%= number_to_currency(invoice.total) %>
+            </span>
+          </a>
+        <% end %>
+      </div>
+    <% else %>
+      <div class="panel-empty">No invoices</div>
+    <% end %>
+  </div>
+</div>

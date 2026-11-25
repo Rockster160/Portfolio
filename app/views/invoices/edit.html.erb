@@ -1,0 +1,72 @@
+<% content_for :title, "Invoice #{@invoice.number}" %>
+<div class="panel-app">
+  <div class="panel-page invoice-editor">
+    <header class="panel-topbar">
+      <a class="panel-icon-btn" href="<%= invoices_path %>" aria-label="Invoices">‹</a>
+      <h1>Invoice</h1>
+      <a class="panel-btn panel-btn-primary" href="<%= invoice_path(@invoice) %>" data-invoice-print>Print</a>
+    </header>
+
+    <div class="invoice-editor-columns">
+      <form class="basic invoice-form" data-invoice-form="<%= invoice_path(@invoice) %>">
+        <div class="invoice-dates">
+          <label class="panel-field">
+            <span class="panel-field-label panel-info-anchor">
+              Number
+              <%= render(
+                "app_devices/info",
+                label: "Number",
+                text:  "Year, client initials, then that client's invoice count, as 2026-ABM-002. Follows Bill to until a number is typed in; clear it to go back.",
+              ) %>
+            </span>
+            <input type="text" name="number" value="<%= @invoice.number %>">
+          </label>
+          <label class="panel-field">
+            <span class="panel-field-label">Issued</span>
+            <input type="date" name="issued_on" value="<%= @invoice.issued_on %>">
+          </label>
+          <label class="panel-field">
+            <span class="panel-field-label">Due</span>
+            <input type="date" name="due_on" value="<%= @invoice.due_on %>">
+          </label>
+        </div>
+
+        <label class="panel-field">
+          <span class="panel-field-label">From</span>
+          <textarea name="sender" rows="5" placeholder="Name&#10;Address&#10;Email"><%= @invoice.sender %></textarea>
+        </label>
+
+        <label class="panel-field">
+          <span class="panel-field-label">Bill to</span>
+          <textarea name="recipient" rows="5" placeholder="Company&#10;Attn&#10;Address"><%= @invoice.recipient %></textarea>
+        </label>
+
+        <div class="panel-field">
+          <span class="panel-field-label">Lines</span>
+          <div class="invoice-items-edit" data-invoice-items>
+            <% Array(@invoice.items).each do |item| %>
+              <%= render "invoices/item", item: item %>
+            <% end %>
+          </div>
+          <template data-invoice-item-template><%= render "invoices/item", item: { "quantity" => 1 } %></template>
+          <button type="button" class="panel-btn panel-gap" data-invoice-item-add>Add line</button>
+        </div>
+
+        <label class="panel-field">
+          <span class="panel-field-label">Notes</span>
+          <textarea name="notes" rows="3"><%= @invoice.notes %></textarea>
+        </label>
+
+        <%= link_to(
+          "Delete invoice",
+          invoice_path(@invoice),
+          method: :delete,
+          class:  "panel-btn panel-btn-danger",
+          data:   { confirm: "Delete invoice #{@invoice.number}?" },
+        ) %>
+      </form>
+
+      <div class="invoice-preview" data-invoice-sheet><%= render "invoices/sheet" %></div>
+    </div>
+  </div>
+</div>

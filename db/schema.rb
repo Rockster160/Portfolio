@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_11_23_223811) do
+ActiveRecord::Schema[8.0].define(version: 2026_11_24_193014) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_stat_statements"
@@ -1520,6 +1520,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_23_223811) do
     t.index ["job_application_id"], name: "index_interview_preps_on_job_application_id"
   end
 
+  create_table "invoices", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "number", null: false
+    t.date "issued_on", null: false
+    t.date "due_on"
+    t.text "sender"
+    t.text "recipient"
+    t.jsonb "items", default: [], null: false
+    t.text "notes"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_invoices_on_user_id"
+  end
+
   create_table "ip_visits", force: :cascade do |t|
     t.string "ip_address", null: false
     t.integer "visit_count", default: 0, null: false
@@ -2433,6 +2447,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_23_223811) do
   add_foreign_key "interview_preps", "agenda_items"
   add_foreign_key "interview_preps", "byte_messages", on_delete: :nullify
   add_foreign_key "interview_preps", "job_applications"
+  add_foreign_key "invoices", "users"
   add_foreign_key "job_applications", "users"
   add_foreign_key "job_notes", "job_applications"
   add_foreign_key "job_transcripts", "job_applications"

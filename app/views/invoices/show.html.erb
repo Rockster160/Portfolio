@@ -1,0 +1,8 @@
+<% content_for :title, ["Invoice #{@invoice.number}", @invoice.sender_name].compact.join(" - ") %>
+<div class="invoice-print">
+  <nav class="invoice-print-bar">
+    <a href="<%= edit_invoice_path(@invoice) %>">‹ Edit</a>
+    <button type="button" data-invoice-print-now>Print</button>
+  </nav>
+  <div class="invoice-paper"><%= render "invoices/sheet" %></div>
+</div>

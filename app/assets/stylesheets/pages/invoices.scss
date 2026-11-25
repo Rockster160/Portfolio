@@ -1,0 +1,106 @@
+// The invoice itself is paper whatever the account's theme: white, dark ink,
+// sized in inches so the printed page and the PDF match the screen.
+.invoice-sheet {
+  background: #fff;
+  color: #1f2933;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 0.75in;
+
+  h1 { margin: 0; }
+  dl, dd { margin: 0; }
+
+  .invoice-head { display: flex; justify-content: space-between; gap: 32px; align-items: flex-start; }
+  .invoice-from-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .invoice-lines { color: #52606d; }
+
+  .invoice-heading {
+    text-align: right;
+    h1 { font-size: 30px; font-weight: 300; letter-spacing: 0.12em; text-transform: uppercase; color: #1f2933; }
+  }
+  .invoice-meta {
+    display: grid; grid-template-columns: auto auto; gap: 2px 14px; justify-content: end; margin-top: 10px;
+    dt { color: #7b8794; }
+    dd { font-weight: 600; }
+  }
+
+  .invoice-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8794;
+    margin-bottom: 4px;
+  }
+  .invoice-to { margin-top: 40px; }
+
+  .invoice-items {
+    width: 100%; border-collapse: collapse; margin-top: 36px;
+    th {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8794;
+      text-align: left; padding: 0 0 8px; border-bottom: 2px solid #1f2933;
+    }
+    td { padding: 12px 0; border-bottom: 1px solid #e4e7eb; vertical-align: top; }
+    th + th, td + td { padding-left: 16px; }
+  }
+  .invoice-num { text-align: right !important; white-space: nowrap; width: 1%; }
+
+  .invoice-total {
+    display: flex; justify-content: flex-end; align-items: baseline; gap: 24px; margin-top: 18px;
+    span { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #7b8794; }
+    strong { font-size: 24px; font-weight: 700; }
+  }
+
+  .invoice-notes { margin-top: 48px; }
+}
+
+.panel-app .invoice-editor { max-width: 1180px; }
+.invoice-editor-columns {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start;
+  > * { min-width: 0; }
+}
+.invoice-dates {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px;
+  > * { min-width: 0; }
+  > :first-child { grid-column: 1 / -1; }
+}
+.invoice-items-edit { display: flex; flex-direction: column; gap: 10px; }
+.invoice-item {
+  display: flex; flex-direction: column; gap: 6px; padding: 10px;
+  background: var(--panel-surface); border: 1px solid var(--panel-line); border-radius: 14px;
+}
+.invoice-item-numbers {
+  display: grid; grid-template-columns: 1fr 2fr auto; gap: 6px; align-items: center;
+  .panel-row-action { margin: 0; }
+}
+.invoice-preview {
+  border-radius: 6px; overflow: hidden; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+  .invoice-sheet { padding: 32px; }
+}
+
+@media (min-width: 1000px) {
+  .invoice-editor-columns { grid-template-columns: 420px minmax(0, 1fr); }
+  .invoice-preview { position: sticky; top: 16px; }
+}
+
+html.html-ctr-invoices.html-act-show {
+  &, body { background: #e4e7eb; margin: 0; }
+}
+.invoice-print-bar {
+  display: flex; justify-content: space-between; align-items: center; max-width: 8.5in; margin: 0 auto;
+  padding: 14px 4px; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  a { color: #1f2933; text-decoration: none; font-weight: 600; }
+  button { border-radius: 10px; padding: 8px 18px; font-weight: 650; }
+}
+.invoice-paper {
+  width: 8.5in; max-width: 100%; min-height: 11in; margin: 0 auto 40px; background: #fff;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+  page: invoice;
+}
+
+@page invoice { size: letter; margin: 0; }
+
+@media print {
+  html.html-ctr-invoices.html-act-show {
+    &, body { background: #fff; }
+    body > :not(.invoice-print), .invoice-print-bar { display: none !important; }
+    .invoice-paper { width: auto; min-height: 0; margin: 0; box-shadow: none; }
+  }
+}
