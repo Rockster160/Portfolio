@@ -59,7 +59,10 @@ class Timer < ApplicationRecord
   # A deleted timer broadcasts nothing of its own, and a Live Activity or an
   # alarm on a phone would otherwise run on to zero and ring.
   after_destroy_commit {
-    AppTimerPushWorker.perform_async(id, "destroyed", user_id) if AppDevice.active.exists?
+    if AppDevice.active.exists?
+      rings_at = end_at.iso8601 if running? && end_at&.future?
+      AppTimerPushWorker.perform_async(id, "destroyed", user_id, name, rings_at)
+    end
   }
 
   scope :live,    -> { where(archived_at: nil) }

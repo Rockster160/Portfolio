@@ -2,7 +2,8 @@ import UserNotifications
 
 /// Runs on every alert push before it's shown. It turns the server's `actions` list into real
 /// notification buttons (iOS only offers buttons from a registered category, so each distinct set
-/// of answers gets a category of its own), and attaches any image.
+/// of answers gets a category of its own), attaches any image, and cancels the alarm of a timer
+/// cancelled elsewhere.
 final class NotificationService: UNNotificationServiceExtension {
   private var contentHandler: ((UNNotificationContent) -> Void)?
   private var bestAttempt: UNMutableNotificationContent?
@@ -14,6 +15,10 @@ final class NotificationService: UNNotificationServiceExtension {
       return
     }
     bestAttempt = content
+
+    // A timer cancelled before it rang: its alarm goes now, since the app may not be running to
+    // hear about it.
+    if let timerId = content.userInfo["cancel_timer"] as? Int { AlarmIds.cancel(timerId: timerId) }
 
     Task {
       if let actions = NotificationActions.parse(content.userInfo["actions"]), !actions.isEmpty {

@@ -60,7 +60,9 @@ class Apns
         log_only(token, push_type, payload)
         return Result.new(status: 200, reason: :Logged)
       end
-      return Result.new(status: 0, reason: :NotConfigured) unless configured?(env)
+      unless configured?(env)
+        return reported(env, push_type, Result.new(status: 0, reason: :NotConfigured))
+      end
 
       headers = {
         "authorization"   => "bearer #{provider_token(env)}",
@@ -71,10 +73,20 @@ class Apns
         "content-type"    => "application/json",
       }
       headers["apns-collapse-id"] = collapse_id.to_s.first(64) if collapse_id.present?
-      call(env, "/3/device/#{token}", headers, payload.to_json)
+      reported(env, push_type, call(env, "/3/device/#{token}", headers, payload.to_json))
     end
 
     private
+
+    # A push that never reached the phone leaves a line saying why, since the phone can't.
+    def reported(env, push_type, result)
+      return result if result.ok?
+
+      Rails.logger.warn(
+        "[APNS] #{push_type} push to #{env} not sent: #{result.status} #{result.reason}",
+      )
+      result
+    end
 
     def default_expiration(push_type)
       keep = KEEP_FOR[push_type.to_sym]

@@ -116,14 +116,6 @@ enum AlarmBridge {
     var timerId: Int
   }
 
-  private static let mapKey = "alarm_ids"
-
-  /// Server timer id → the AlarmKit id scheduled for it.
-  private static var ids: [String: String] {
-    get { SharedStore.load([String: String].self, key: mapKey) ?? [:] }
-    set { SharedStore.save(newValue, key: mapKey) }
-  }
-
   static func requestAuthorization() async -> Bool {
     let state = (try? await AlarmManager.shared.requestAuthorization()) ?? .denied
     return state == .authorized
@@ -139,7 +131,7 @@ enum AlarmBridge {
 
   static func sync(_ timer: TimerData) async {
     let key = String(timer.id)
-    let existing = ids[key].flatMap(UUID.init(uuidString:))
+    let existing = AlarmIds.all[key].flatMap(UUID.init(uuidString:))
     switch timer.state {
     case "running":
       guard let end = timer.endsAt, end > Date() else { return }
@@ -173,7 +165,7 @@ enum AlarmBridge {
       )
       do {
         _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
-        ids[key] = id.uuidString
+        AlarmIds.all[key] = id.uuidString
       } catch {
         ActivityLog.add("Couldn't schedule alarm for \(timer.name): \(error.localizedDescription)")
       }
@@ -182,15 +174,14 @@ enum AlarmBridge {
     default:
       if let existing {
         try? AlarmManager.shared.cancel(id: existing)
-        ids[key] = nil
+        AlarmIds.all[key] = nil
       }
     }
   }
 
   static func cancelMissing(keeping live: Set<Int>) async {
-    for (key, raw) in ids where !live.contains(Int(key) ?? -1) {
-      if let id = UUID(uuidString: raw) { try? AlarmManager.shared.cancel(id: id) }
-      ids[key] = nil
+    for key in AlarmIds.all.keys where !live.contains(Int(key) ?? -1) {
+      AlarmIds.cancel(timerId: Int(key) ?? -1)
     }
   }
 }

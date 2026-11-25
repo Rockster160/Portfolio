@@ -59,6 +59,55 @@ RSpec.describe AppPush::Timers do
     expect(AppLiveActivity.find_by(activity_id: "A1").ended_at).to be_present
   end
 
+  describe "a timer cancelled before it rings" do
+    let(:ringing) {
+      AppDevice.issue!(
+        user,
+        name:        "Alarm phone",
+        apns_token:  "ring",
+        features:    ["alarms"],
+        preferences: { alarms_ring_timers: true },
+      ).first
+    }
+    let(:notes) { sent.select { |push| push[:payload][:cancel_timer] } }
+
+    before { ringing }
+
+    it "tells a phone that rings timers with a quiet note that cancels it", :aggregate_failures do
+      Buddy::Timers.stop!(timer)
+      described_class.sync(timer, :archived)
+
+      expect(notes.length).to eq(1)
+      expect(notes.first).to include(token: "ring", push_type: :alert, expiration: timer.end_at)
+      expect(notes.first[:payload]).to include(cancel_timer: timer.id)
+      expect(notes.first[:payload][:aps]).to include(
+        alert:                { title: "Pasta", body: "Cancelled" },
+        "mutable-content":    1,
+        "interruption-level": :passive,
+      )
+    end
+
+    it "says nothing once it has rung, or to a phone not ringing timers", :aggregate_failures do
+      travel_to(timer.end_at + 1.minute) {
+        Buddy::Timers.stop!(timer)
+        described_class.sync(timer, :archived)
+      }
+      expect(notes).to be_empty
+
+      ringing.update!(preferences: { alarms_ring_timers: false })
+      other = Buddy::Timers.create!(user: user, seconds: 300, label: "Tea")
+      Buddy::Timers.stop!(other)
+      described_class.sync(other, :archived)
+      expect(notes).to be_empty
+    end
+
+    it "tells it when the timer is deleted instead" do
+      described_class.gone(timer.id, user.id, "Pasta", timer.end_at.iso8601)
+
+      expect(notes.first[:payload][:aps][:alert]).to eq(title: "Pasta", body: "Cancelled")
+    end
+  end
+
   it "leaves a device alone that turned Live Activities off for timers" do
     device.update!(preferences: { live_activities_for_timers: false })
     described_class.sync(timer, :created)

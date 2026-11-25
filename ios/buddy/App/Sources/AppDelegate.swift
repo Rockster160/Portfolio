@@ -49,6 +49,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
   func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
     let info = notification.request.content.userInfo
     NotificationLedger.record(identifier: notification.request.identifier, userInfo: info)
+    if let timerId = info["cancel_timer"] as? Int {
+      AlarmIds.cancel(timerId: timerId)
+      return [.list]
+    }
     // A Byte message for the conversation already on screen doesn't need a banner over it.
     if (info["channel"] as? String) == "byte", AppModel.shared.isShowingBuddy {
       return [.list]

@@ -24,8 +24,8 @@ esac
 
 PROD_QUERY_FLAGS="-A -t" bash .claude/prod-query.sh "
   SELECT count(*) || 'x  ' ||
-         to_char(min(error_reports.created_at) AT TIME ZONE 'America/Denver', 'Mon DD HH12:MI AM') || ' to ' ||
-         to_char(max(error_reports.created_at) AT TIME ZONE 'America/Denver', 'Mon DD HH12:MI AM') ||
+         to_char(min(error_reports.created_at) AT TIME ZONE 'UTC' AT TIME ZONE 'America/Denver', 'Mon DD HH12:MI AM') || ' to ' ||
+         to_char(max(error_reports.created_at) AT TIME ZONE 'UTC' AT TIME ZONE 'America/Denver', 'Mon DD HH12:MI AM') ||
          '  ' || CASE min(layer) WHEN 'frontend' THEN 'FE' ELSE 'BE' END || '/' || coalesce(min(tag), '?') ||
          '  [' || min(section) || '] ' ||
          coalesce(min(error_class) || ': ', '') ||
@@ -35,6 +35,6 @@ PROD_QUERY_FLAGS="-A -t" bash .claude/prod-query.sh "
          coalesce('  ' || upper(CASE min(s.status) WHEN 0 THEN 'resolved' WHEN 1 THEN 'ignored' END), '')
   FROM error_reports
   LEFT JOIN error_statuses s USING (fingerprint)
-  WHERE error_reports.created_at > now() - interval '${HOURS} hours'
+  WHERE error_reports.created_at > (now() AT TIME ZONE 'UTC') - interval '${HOURS} hours'
   GROUP BY fingerprint
   ORDER BY count(*) DESC, max(error_reports.created_at) DESC;"

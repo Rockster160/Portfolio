@@ -25,18 +25,25 @@ module AppPush
             AppPush.background(timer: wire(timer).merge(reason: reason.to_s)),
             push_type: :background,
           )
+          if state_of(timer) == :done && timer.end_at&.future? && rings?(device, timer)
+            cancel_alarm(device, timer.id, timer.name.presence || "Timer", timer.end_at)
+          end
         }
       }
     end
 
     # The timer is deleted, so who could see it is no longer known: every phone
     # in its owner's household that rings alarms checks its list again.
-    def gone(timer_id, user_id=nil)
+    # A timer deleted before it rang also sends its name and when it would have
+    # rung, so a phone holding its alarm can be told even with the app closed.
+    def gone(timer_id, user_id=nil, name=nil, rings_at=nil)
       household = User.find_by(id: user_id)&.chore_household_user_ids
+      rings_at = Time.zone.parse(rings_at.to_s) if rings_at.present?
       User.where(id: household.to_a).find_each { |user|
         AppPush.devices(user, feature: :alarms).each { |device|
           changed = AppPush.background(timers_changed: true)
           AppPush.deliver_to(device, changed, push_type: :background)
+          cancel_alarm(device, timer_id, name.presence || "Timer", rings_at) if rings_at&.future?
         }
       }
       AppLiveActivity.for_ref(:timer, timer_id).includes(:app_device).find_each { |activity|
@@ -78,6 +85,31 @@ module AppPush
       end
     rescue StandardError => e
       Rails.logger.warn("[APP_PUSH] timer #{timer&.id} (#{reason}): #{e.class}: #{e.message}")
+    end
+
+    # The silent push above wakes the app to cancel its alarm, but iOS doesn't
+    # deliver one to an app swiped away, so the cancel also goes as a quiet
+    # notification: the phone's notification extension runs for every one and
+    # cancels the alarm itself. It expires when the alarm would have rung.
+    def cancel_alarm(device, timer_id, name, rings_at)
+      payload = {
+        aps:          {
+          alert:                { title: name, body: "Cancelled" },
+          "mutable-content":    1,
+          "interruption-level": :passive,
+          "thread-id":          :timers,
+        },
+        cancel_timer: timer_id,
+      }
+      AppPush.deliver_to(device, payload, push_type: :alert, expiration: rings_at)
+    end
+
+    # Whether the phone holds an alarm for the timer: it rings timers or alarms
+    # only when set to, and never a wait.
+    def rings?(device, timer)
+      return false if ::Buddy::Timers.wait?(timer)
+
+      device.preference?(alarm?(timer) ? :alarms_ring_alarms : :alarms_ring_timers)
     end
 
     def wanted?(device, timer)

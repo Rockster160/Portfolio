@@ -53,16 +53,20 @@ RSpec.describe Apns do
   end
 
   # A push with no key to sign it never reached Apple, so it isn't reported as sent.
-  it "reports a push it has no key for as not sent", :aggregate_failures do
+  it "reports a push it has no key for as not sent, and logs why", :aggregate_failures do
     allow(Rails.env).to receive(:local?).and_return(false)
     allow(described_class).to receive(:call)
     allow(ENV).to receive(:fetch).with("PORTFOLIO_APNS_TEAM_ID", anything).and_return(nil)
+    allow(Rails.logger).to receive(:warn)
 
-    result = described_class.deliver(token: "cafe", payload: { aps: {} })
+    result = described_class.deliver(token: "cafe", payload: { aps: {} }, push_type: :background)
 
     expect(result).not_to be_ok
     expect(result.reason).to eq(:NotConfigured)
     expect(described_class).not_to have_received(:call)
+    expect(Rails.logger).to have_received(:warn).with(
+      "[APNS] background push to production not sent: 0 NotConfigured",
+    )
   end
 
   describe "how long Apple keeps trying an unreachable phone" do
